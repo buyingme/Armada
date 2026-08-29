@@ -5,10 +5,41 @@
 ## G4 Network Plan: §3 — G4.1 tests
 extends GutTest
 
-func before_each() -> void:
-	NetworkManager.connection_state = NetworkManager.ConnectionState.DISCONNECTED
-	NetworkManager.role = NetworkManager.Role.NONE
 
+var _fresh_resume_endpoint_payload: Array[int] = []
+var _fresh_resume_player_payload: Array[int] = []
+
+func before_each() -> void:
+	_reset_network_fixture()
+	_fresh_resume_endpoint_payload = []
+	_fresh_resume_player_payload = []
+
+
+func after_each() -> void:
+	_reset_network_fixture()
+
+
+## Tests can deliberately stage a resume in LOBBY.  Use the production
+## disconnect lifecycle so that aggregate execution cannot leak that session
+## into later UI tests.
+func _reset_network_fixture() -> void:
+	if NetworkManager.connection_state != NetworkManager.ConnectionState.DISCONNECTED:
+		NetworkManager.disconnect_from_server()
+	NetworkManager.peers.clear()
+	NetworkManager._last_heartbeat.clear()
+	NetworkManager._pending_game_config = {}
+	NetworkManager._resume_attempt = {}
+	NetworkManager._post_publication_fresh_attempt_id = ""
+	NetworkManager._client_staged_resume = {}
+	NetworkManager._host_match_principal_id = ""
+	NetworkManager._local_player_index = -1
+	NetworkManager._principal_command_admission_enabled = true
+	NetworkManager._captured_rejection_command = null
+	NetworkManager._captured_rejection_reason = ""
+	NetworkManager._lobby_password = ""
+	NetworkManager._active_port = 0
+	NetworkManager.role = NetworkManager.Role.NONE
+	NetworkManager.connection_state = NetworkManager.ConnectionState.DISCONNECTED
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -17,6 +48,10 @@ func before_each() -> void:
 func test_protocol_version_is_positive() -> void:
 	assert_gt(NetworkManager.PROTOCOL_VERSION, 0,
 			"Protocol version should be positive.")
+
+
+func test_protocol_version_is_match_003_cutover_four() -> void:
+	assert_eq(NetworkManager.PROTOCOL_VERSION, 4)
 
 
 func test_heartbeat_interval_is_positive() -> void:
@@ -247,6 +282,8 @@ func test_cleanup_resets_all_state() -> void:
 	assert_eq(NetworkManager.connection_state,
 			NetworkManager.ConnectionState.DISCONNECTED,
 			"State should be DISCONNECTED.")
+	assert_false(NetworkManager._sync_gate.is_active(),
+			"A discarded session must not retain Command Phase admission state.")
 
 
 # ---------------------------------------------------------------------------
@@ -543,3 +580,77 @@ func _network_roster(fleet_id: String,
 		"squadrons": [],
 		"objectives": {},
 	}
+
+
+# ---------------------------------------------------------------------------
+# MATCH-003 explicit assignment and admission
+# ---------------------------------------------------------------------------
+
+func _two_human_state() -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_two_human())
+	return state
+
+
+func _resume_meta() -> SaveGameMetadata:
+	var meta := SaveGameMetadata.new()
+	meta.scenario_id = "learning_scenario"
+	meta.game_mode = SaveGameMetadata.MODE_NETWORK
+	meta.next_command_sequence = 0
+	return meta
+
+
+func _capture_fresh_resume_assignment_payload(_attempt_id: String,
+		expected_endpoints: Array[int], available_players: Array[int]) -> void:
+	_fresh_resume_endpoint_payload = expected_endpoints
+	_fresh_resume_player_payload = available_players
+
+
+func test_fresh_resume_stages_without_automatic_assignment() -> void:
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager.connection_state = NetworkManager.ConnectionState.LOBBY
+	NetworkManager.peers[22] = {"authenticated": true, "player_index": 1}
+	assert_true(NetworkManager.begin_fresh_session_resume(_two_human_state(), _resume_meta()))
+	assert_eq(NetworkManager._resume_attempt.get("phase", ""), "CANDIDATE_STAGED")
+	assert_true((NetworkManager._resume_attempt.get("proposals", {}) as Dictionary).is_empty())
+	assert_false(NetworkManager.is_player_command_admission_enabled())
+
+
+func test_fresh_resume_emits_typed_endpoint_and_saved_side_payload() -> void:
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager.connection_state = NetworkManager.ConnectionState.LOBBY
+	NetworkManager.peers[22] = {"authenticated": true, "player_index": 1}
+	NetworkManager.fresh_resume_assignment_ready.connect(
+			_capture_fresh_resume_assignment_payload, CONNECT_ONE_SHOT)
+
+	assert_true(NetworkManager.begin_fresh_session_resume(_two_human_state(), _resume_meta()))
+	assert_eq(_fresh_resume_endpoint_payload, [1, 22])
+	assert_eq(_fresh_resume_player_payload, [0, 1])
+
+
+func test_explicit_assignment_requires_both_distinct_sides() -> void:
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager.connection_state = NetworkManager.ConnectionState.LOBBY
+	NetworkManager.peers[22] = {"authenticated": true, "player_index": 1}
+	var state := _two_human_state()
+	assert_true(NetworkManager.begin_fresh_session_resume(state, _resume_meta()))
+	assert_false(NetworkManager.submit_fresh_resume_assignment({1: 0}))
+	assert_false(NetworkManager.submit_fresh_resume_assignment({1: 0, 22: 0}))
+	assert_true(NetworkManager.submit_fresh_resume_assignment({1: 1, 22: 0}))
+	assert_eq(NetworkManager._local_player_index, 1)
+	assert_eq(NetworkManager.peers[22].player_index, 0)
+	assert_false(NetworkManager.is_player_command_admission_enabled())
+
+
+func test_malformed_snapshot_ack_fails_closed() -> void:
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager.connection_state = NetworkManager.ConnectionState.LOBBY
+	NetworkManager.peers[22] = {"authenticated": true, "player_index": 1}
+	assert_true(NetworkManager.begin_fresh_session_resume(_two_human_state(), _resume_meta()))
+	assert_true(NetworkManager.submit_fresh_resume_assignment({1: 0, 22: 1}))
+	NetworkManager._resume_attempt["phase"] = "STAGING_SNAPSHOT"
+	NetworkManager._acknowledge_resume_snapshot(
+			NetworkManager._resume_attempt["attempt_id"], false, -1)
+	assert_true(NetworkManager._resume_attempt.is_empty())
+	assert_true(NetworkManager.is_player_command_admission_enabled())

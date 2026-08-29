@@ -145,12 +145,8 @@ row updates to *Peers: 1* as well.
 
 ### Save and resume a Network match
 
-> **Architecture update (2026-08-27):** Fresh-session Network resume no
-> longer requires a resume credential or proof that the same human returned.
-> Credential-based MATCH-002 controls still present in the current working tree
-> are transitional implementation evidence, not the accepted product workflow.
-> Treat fresh-session resume as unavailable until the replacement assignment
-> flow is implemented and accepted.
+Fresh-session resume uses an explicit host-selected side assignment. It does
+not use a credential, account, transfer code, or proof of the prior human.
 
 #### Save while the match is live
 
@@ -235,14 +231,6 @@ the new assignment is rejected and the incumbent stays in control.
   absent-player continuation, shared control, and bot substitution are not
   part of this decision.
 
-#### Current UI limits
-
-The accepted assignment workflow is not implemented or manually accepted yet.
-The current working tree may still show credential-related controls and status
-such as **Resume Capabilities**, **Import Capability**, or **Waiting for
-entitlement**. Those belong to the superseded MATCH-002 design and should not be
-treated as the final fresh-resume UX.
-
 ---
 
 ## 9. Troubleshooting
@@ -256,8 +244,7 @@ treated as the final fresh-resume UX.
 | Host sees "(no LAN IP)" in lobby | No active LAN interface (Wi-Fi off, Ethernet unplugged) | Connect to Wi-Fi or plug in Ethernet, then re-host. |
 | "Invalid port (1–65535)" toast | Empty or out-of-range port field | Re-enter a valid number; default is `7350`. |
 | Both connect but ships look out of sync | Mixed app versions | Re-install identical builds on both Macs. |
-| Network save is shown as not resumable | The accepted explicit-assignment flow is not implemented, the save is unsupported, or the save is on a foreign installation | Use same-live-match load where applicable. Treat fresh-session resume as unavailable until the replacement flow is implemented and accepted. |
-| **Waiting for entitlement** / capability controls appear | The current working tree still contains the superseded MATCH-002 credential workflow | Do not rely on that workflow as the accepted product behavior. No credential is required by the amended architecture. |
+| Network save is shown as not resumable | The save is unsupported, malformed, or on a foreign installation | Use same-live-match load where applicable. Fresh resume remains limited to the original save-owning installation. |
 | Reconnect assignment is rejected | The old endpoint is still associated, disconnect is not confirmed, or the side already has a controller | Keep the incumbent or wait for confirmed association loss before explicit reassignment. |
 
 ---
@@ -271,7 +258,7 @@ treated as the final fresh-resume UX.
 | Network protocol | ENet over UDP, protocol 4 |
 | Required machines | 2 Macs on the same LAN subnet |
 | Session save | Host machine only, under `saves/` |
-| Fresh-resume authority | Explicit host assignment of each connected human to one saved side before publication; implementation pending |
+| Fresh-resume authority | Explicit host assignment of each connected human to one saved side before publication |
 
 ---
 

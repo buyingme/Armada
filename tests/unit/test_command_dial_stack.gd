@@ -248,6 +248,29 @@ func test_spend_revealed_empty_returns_empty() -> void:
 			"Cannot spend from empty stack")
 
 
+func test_filtered_opponent_dial_hydrates_when_authority_reveals_it() -> void:
+	var filtered: CommandDialStack = CommandDialStack.deserialize({
+		"command_value": 1,
+		"dials": [{"round": 1, "state": CommandDialStack.STATE_HIDDEN}],
+		"spent_history": [],
+	})
+	var before_reveal: Dictionary = filtered.get_display_state()
+	assert_eq((before_reveal["hidden_dials"] as Array).size(), 1,
+			"A redacted hidden dial must still render as one facedown dial")
+	assert_eq(int(before_reveal["top_command"]), -1,
+			"A redacted hidden dial must not expose its command face")
+
+	filtered.reveal_top()
+	assert_true(filtered.hydrate_revealed_command(Constants.CommandType.NAVIGATE),
+			"Only the accepted authoritative reveal result may add the public face")
+	var spent: Dictionary = filtered.spend_revealed()
+	assert_eq(int(spent.get("command", -1)), Constants.CommandType.NAVIGATE,
+			"The public revealed command must survive the subsequent spend")
+	assert_eq(int(filtered.get_spent_history()[0].get("command", -1)),
+			Constants.CommandType.NAVIGATE,
+			"The activation marker must use the now-public command face")
+
+
 # --- get_display_state() ---
 
 func test_get_display_state_empty() -> void:

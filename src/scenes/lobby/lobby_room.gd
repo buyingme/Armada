@@ -64,6 +64,8 @@ var _ready_button: Button
 var _start_button: Button
 var _load_button: Button
 var _leave_button: Button
+var _resume_cancel_button: Button
+var _resume_assignment_dialog: NetworkSideAssignmentDialog
 var _status_label: Label
 var _scenario_option: OptionButton
 var _setup_section: VBoxContainer
@@ -105,6 +107,9 @@ func _connect_signals() -> void:
 	LobbyManager.lobby_created.connect(_on_lobby_created)
 	LobbyManager.game_starting.connect(_on_game_starting)
 	LobbyManager.lobby_error.connect(_on_lobby_error)
+	LobbyManager.resume_assignment_required.connect(_on_resume_assignment_required)
+	LobbyManager.resume_attempt_finished.connect(_on_resume_attempt_finished)
+	NetworkManager.resume_status_changed.connect(_on_resume_status_changed)
 
 
 ## Handles Escape key to leave lobby.
@@ -378,6 +383,14 @@ func _build_buttons(parent: VBoxContainer) -> void:
 	_leave_button.pressed.connect(_on_leave_pressed)
 	btn_box.add_child(_leave_button)
 
+	var resume_box: VBoxContainer = VBoxContainer.new()
+	resume_box.add_theme_constant_override("separation", 6)
+	parent.add_child(resume_box)
+	_resume_cancel_button = Button.new()
+	_resume_cancel_button.text = "Cancel Staged Resume"
+	_resume_cancel_button.visible = false
+	_resume_cancel_button.pressed.connect(_on_resume_cancel_pressed)
+	resume_box.add_child(_resume_cancel_button)
 
 # ---------------------------------------------------------------------------
 # Display updates
@@ -713,6 +726,12 @@ func _on_load_pressed() -> void:
 	dialog.show_modal()
 
 
+func _on_resume_cancel_pressed() -> void:
+	LobbyManager.cancel_fresh_session_resume()
+
+
+
+
 ## Leaves the lobby and returns to the main menu.
 func _on_leave_pressed() -> void:
 	LobbyManager.leave_lobby()
@@ -743,6 +762,41 @@ func _on_lobby_error(message: String) -> void:
 	_status_label.text = message
 	_status_label.add_theme_color_override("font_color",
 			UIStyleHelper.ERROR_RED)
+
+
+func _on_resume_status_changed(status: String) -> void:
+	_status_label.text = status
+	_resume_cancel_button.visible = LobbyManager.is_fresh_session_resume_pending()
+
+
+func _on_resume_assignment_required(_attempt_id: String,
+		expected_endpoints: Array[int], available_players: Array[int]) -> void:
+	if not LobbyManager.is_host():
+		return
+	if _resume_assignment_dialog == null:
+		_resume_assignment_dialog = NetworkSideAssignmentDialog.new()
+		add_child(_resume_assignment_dialog)
+		_resume_assignment_dialog.assignment_confirmed.connect(
+			func(proposals: Dictionary) -> void:
+				LobbyManager.submit_fresh_session_assignment(proposals))
+		_resume_assignment_dialog.cancelled.connect(
+			func() -> void: LobbyManager.cancel_fresh_session_resume())
+	var labels: Dictionary = {1: "Host endpoint"}
+	for endpoint_id: int in expected_endpoints:
+		if endpoint_id != 1 and NetworkManager.peers.has(endpoint_id):
+			labels[endpoint_id] = str((NetworkManager.peers[endpoint_id] as Dictionary).get(
+					"display_name", "Connected endpoint"))
+	_resume_assignment_dialog.configure(labels, expected_endpoints, available_players,
+			LobbyManager.fresh_resume_side_labels(available_players))
+	_resume_assignment_dialog.show_modal()
+	_resume_cancel_button.visible = true
+	_status_label.text = "Choose a saved side for each endpoint."
+
+
+func _on_resume_attempt_finished() -> void:
+	_resume_cancel_button.visible = false
+
+
 
 
 ## Re-centres the panel when the lobby becomes visible.

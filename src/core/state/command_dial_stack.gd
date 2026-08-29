@@ -137,10 +137,10 @@ func spend_revealed() -> Dictionary:
 		_log.warn("Top dial is not revealed — state is %s" % _dials[0]["state"])
 		return {}
 	var dial: Dictionary = _dials.pop_front()
-	_spent_history.append({
-		"command": dial["command"],
-		"round": dial["round"],
-	})
+	var spent: Dictionary = {"round": int(dial.get("round", 0))}
+	if dial.has("command"):
+		spent["command"] = int(dial.get("command", -1))
+	_spent_history.append(spent)
 	return dial
 
 
@@ -163,6 +163,19 @@ func unreveal_top() -> Dictionary:
 		return {}
 	_dials[0]["state"] = STATE_HIDDEN
 	return _dials[0]
+
+
+## Adds the public command face to a revealed dial reconstructed from a
+## filtered opponent snapshot.  Hidden dials deliberately remain redacted;
+## callers may only hydrate the face supplied by an accepted authoritative
+## reveal or activation result.
+func hydrate_revealed_command(command: int) -> bool:
+	if command < 0 or _dials.is_empty():
+		return false
+	if str(_dials[0].get("state", "")) != STATE_REVEALED:
+		return false
+	_dials[0]["command"] = command
+	return true
 
 
 ## Returns the full spent history for the Command Dial Order modal.
@@ -221,11 +234,12 @@ func get_display_state() -> Dictionary:
 
 	for i: int in range(_dials.size()):
 		var dial: Dictionary = _dials[i]
-		if dial["state"] == STATE_HIDDEN:
-			hidden_commands.append(int(dial["command"]))
+		if str(dial.get("state", "")) == STATE_HIDDEN:
+			var command: int = int(dial.get("command", -1))
+			hidden_commands.append(command)
 			if top_cmd == -1:
-				top_cmd = int(dial["command"])
-		elif dial["state"] == STATE_REVEALED:
+				top_cmd = command
+		elif str(dial.get("state", "")) == STATE_REVEALED:
 			revealed = dial
 
 	# The most recent spent dial (activation marker for current round).

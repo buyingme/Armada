@@ -2240,8 +2240,10 @@ func _has_unactivated_ships(player_index: int) -> bool:
 ## simply resetting to [member GameState.initiative_player] would let
 ## the wrong peer act when the initiative player has already activated.
 ##
-## Derives from canonical phase/activation owners; InteractionFlow remains a
-## replaceable presentation route and never restores controller authority.
+## Derives from canonical phase/activation owners.  A command-produced
+## InteractionFlow is itself canonical state: when a save was taken between
+## ship activations, its controller records the player who owns the next
+## decision and must survive installation unchanged.
 func _derive_active_player_from_state(state: GameState) -> int:
 	if state == null:
 		return 0
@@ -2256,6 +2258,16 @@ func _derive_active_player_from_state(state: GameState) -> int:
 				if raw_ship is ShipInstance \
 						and (raw_ship as ShipInstance).has_active_ship_activation():
 					return (raw_ship as ShipInstance).owner_player
+	var flow: InteractionFlow = state.interaction_flow
+	if state.current_phase == Constants.GamePhase.SHIP \
+			and flow != null \
+			and flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION \
+			and flow.step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT \
+			and flow.controller_player >= 0 \
+			and flow.controller_player < state.player_states.size() \
+			and FlowSpec.controller_role(flow.flow_type, flow.step_id) \
+					== Constants.ControllerRole.ACTIVE_PLAYER:
+		return flow.controller_player
 	return state.initiative_player
 
 
@@ -2705,7 +2717,7 @@ func _handle_remote_command_effects(
 		"convert_dial_to_token":
 			_handle_remote_convert_dial_to_token(cmd, result)
 		"reveal_dial", "spend_dial":
-			_handle_remote_dial_change(cmd)
+			_handle_remote_dial_change(cmd, result)
 		"set_speed":
 			pass # GameState mutated by execute(); no GM side effects.
 		"execute_maneuver":
@@ -2851,10 +2863,11 @@ func _handle_remote_advance_phase(cmd: GameCommand) -> void:
 
 ## B4: Mirror activate_ship side effects on client.
 func _handle_remote_activate_ship(
-		cmd: GameCommand, _result: Dictionary) -> void:
+		cmd: GameCommand, result: Dictionary) -> void:
 	var ship: ShipInstance = _find_ship_from_command(cmd)
 	if ship == null:
 		return
+	_hydrate_revealed_dial_from_result(ship, result)
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
 	# Notify the passive peer (host or client) so it can open the activation
@@ -2930,10 +2943,25 @@ func _emit_remote_tarkin_grant(
 
 
 ## B6: Mirror reveal_dial / spend_dial side effects on client.
-func _handle_remote_dial_change(cmd: GameCommand) -> void:
+func _handle_remote_dial_change(cmd: GameCommand, result: Dictionary) -> void:
 	var ship: ShipInstance = _find_ship_from_command(cmd)
 	if ship:
+		if cmd.command_type == "reveal_dial":
+			_hydrate_revealed_dial_from_result(ship, result)
 		EventBus.command_dials_changed.emit(ship)
+
+
+## Filtered opponent snapshots intentionally omit the face of hidden dials.
+## Once the authority accepts reveal/activation, the command result makes that
+## face public and is the sole source used to hydrate the local mirror.
+func _hydrate_revealed_dial_from_result(
+		ship: ShipInstance, result: Dictionary) -> void:
+	if ship == null or ship.command_dial_stack == null:
+		return
+	var command: int = int(result.get("command", -1))
+	if command < 0:
+		return
+	ship.command_dial_stack.hydrate_revealed_command(command)
 
 
 ## BF-2: Mirror execute_maneuver — snap visual token on client.

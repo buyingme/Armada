@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://tests/acceptance/network_resume/driver.gd" type="Script" id="1"]
+
+[node name="NetworkResumeAcceptanceDriver" type="Node"]
+script = ExtResource("1")

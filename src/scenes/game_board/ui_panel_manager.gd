@@ -570,6 +570,15 @@ func _on_ship_hull_score_projection_changed(
 ## ships in J4). UI-034.
 func _on_quit_confirmed(_save_first: bool = false) -> void:
 	GameManager.auto_save_replay()
+	# An explicit return to the main menu ends the live Network session.  This
+	# must not be confused with an in-game disconnect, which remains eligible
+	# for MATCH-003 reconnect handling while the board stays live.
+	if NetworkManager.is_connected_to_network():
+		LobbyManager.leave_lobby()
+	_transition_to_main_menu()
+
+
+func _transition_to_main_menu() -> void:
 	get_tree().change_scene_to_file(
 			"res://src/scenes/main_menu/main_menu.tscn")
 

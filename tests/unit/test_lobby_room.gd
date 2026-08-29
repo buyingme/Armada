@@ -12,6 +12,7 @@ var _library_manager_script: GDScript = preload(
 var _room: LobbyRoom = null
 var _previous_lobby: LobbyState = null
 var _previous_role: NetworkManager.Role = NetworkManager.Role.NONE
+var _previous_pending_resume: Dictionary = {}
 var _original_library_dir: String = ""
 var _test_library_dir: String = "user://test_lobby_room_library"
 
@@ -19,12 +20,14 @@ var _test_library_dir: String = "user://test_lobby_room_library"
 func before_each() -> void:
 	_previous_lobby = LobbyManager.current_lobby
 	_previous_role = NetworkManager.role
+	_previous_pending_resume = LobbyManager._pending_resume
 	_original_library_dir = _library_manager_script.LIBRARY_DIR
 	_library_manager_script.LIBRARY_DIR = _test_library_dir
 	_cleanup_test_dir()
 	_save_valid_roster()
 	NetworkManager.role = NetworkManager.Role.SERVER
 	LobbyManager.current_lobby = null
+	LobbyManager._pending_resume = {}
 	_room = LobbyRoom.new()
 	add_child_autofree(_room)
 
@@ -32,6 +35,7 @@ func before_each() -> void:
 func after_each() -> void:
 	LobbyManager.current_lobby = _previous_lobby
 	NetworkManager.role = _previous_role
+	LobbyManager._pending_resume = _previous_pending_resume
 	_cleanup_test_dir()
 	_library_manager_script.LIBRARY_DIR = _original_library_dir
 
@@ -48,6 +52,39 @@ func test_scenario_picker_contains_debug_scenario() -> void:
 			"Lobby New Game picker should include the learning scenario.")
 	assert_true(ids.has(LobbyState.SCENARIO_DEBUG_ID),
 			"Lobby New Game picker should include debug_scenario.")
+
+
+func test_resume_controls_are_explicit_and_offer_no_host_grant() -> void:
+	assert_false(_room._resume_cancel_button.visible)
+	for child: Node in _room.find_children("*", "Button", true, false):
+		assert_false((child as Button).text.to_lower().contains("grant"))
+		assert_false((child as Button).text.to_lower().contains("takeover"))
+		assert_false((child as Button).text.to_lower().contains("capability"))
+
+
+func test_fresh_resume_assignment_payload_configures_typed_side_dialog() -> void:
+	var endpoint_ids: Array[int] = [1, 42]
+	var available_players: Array[int] = [0, 1]
+	NetworkManager.peers[42] = {"display_name": "Client endpoint"}
+	var saved_state := GameState.new()
+	saved_state.initialize()
+	saved_state.get_player_state(0).faction = Constants.Faction.REBEL_ALLIANCE
+	saved_state.get_player_state(1).faction = Constants.Faction.GALACTIC_EMPIRE
+	LobbyManager._pending_resume = {"state": saved_state}
+
+	_room._on_resume_assignment_required(
+			"attempt", endpoint_ids, available_players)
+
+	assert_not_null(_room._resume_assignment_dialog,
+			"The production fresh-resume payload should configure the dialog.")
+	assert_eq(_room._resume_assignment_dialog._selectors.keys().size(), 2)
+	assert_true(_room._resume_assignment_dialog._selectors.has(1))
+	assert_true(_room._resume_assignment_dialog._selectors.has(42))
+	assert_true(_room._resume_assignment_dialog._confirm.disabled,
+			"Explicit side selection must remain incomplete until both rows differ.")
+	var selector: OptionButton = _room._resume_assignment_dialog._selectors[1]
+	assert_eq(selector.get_item_text(1), "Rebel Alliance — Unnamed Fleet")
+	assert_eq(selector.get_item_text(2), "Galactic Empire — Unnamed Fleet")
 
 
 func test_update_display_selects_debug_scenario_from_lobby() -> void:

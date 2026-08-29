@@ -64,6 +64,8 @@ func test_network_host_mode_shows_all_four_buttons() -> void:
 			"Save Game should be visible for network host")
 	assert_true(_find_button(_modal, "Load Game").visible,
 			"Load Game should be visible for network host")
+	assert_false(_find_button(_modal, "Assign Reconnected Player").visible,
+			"The host must wait for an explicitly unassigned endpoint.")
 
 
 func test_network_client_mode_hides_save_and_load() -> void:
@@ -76,6 +78,12 @@ func test_network_client_mode_hides_save_and_load() -> void:
 			"Resume should still be present for clients")
 	assert_not_null(_find_button(_modal, "Quit Game"),
 			"Quit Game should still be present for clients")
+	assert_false(_find_button(_modal, "Assign Reconnected Player").visible)
+
+
+func test_hot_seat_hides_network_reconnect_control() -> void:
+	_modal.set_mode(GameMenuModal.Mode.HOT_SEAT)
+	assert_false(_find_button(_modal, "Assign Reconnected Player").visible)
 
 
 func test_save_button_disabled_without_active_game_load_enabled() -> void:

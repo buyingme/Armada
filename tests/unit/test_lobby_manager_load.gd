@@ -7,11 +7,13 @@ extends GutTest
 
 
 var _prev_role: int = NetworkManager.Role.NONE
+var _prev_connection_state: int = NetworkManager.ConnectionState.DISCONNECTED
 var _prev_log_level: int = GameLogger.Level.DEBUG
 
 
 func before_each() -> void:
 	_prev_role = NetworkManager.role
+	_prev_connection_state = NetworkManager.connection_state
 	_prev_log_level = GameLogger.min_level
 	# Suppress warn-level logs (host_load_save warns when guards trip).
 	GameLogger.min_level = GameLogger.Level.ERROR + 1
@@ -19,6 +21,9 @@ func before_each() -> void:
 
 func after_each() -> void:
 	NetworkManager.role = _prev_role
+	NetworkManager.connection_state = _prev_connection_state
+	NetworkManager.peers.clear()
+	NetworkManager._resume_attempt = {}
 	GameLogger.min_level = _prev_log_level
 	LobbyManager.current_lobby = null
 
@@ -87,6 +92,32 @@ func test_load_state_received_signal_emittable() -> void:
 			"display_name": "network-load",
 		})
 	assert_signal_emitted(LobbyManager, "lobby_error",
-			"Synthetic RPC delivery without a live same-match entitlement must fail closed.")
+			"Synthetic RPC delivery without a live same-match association must fail closed.")
 	assert_signal_not_emitted(LobbyManager, "load_state_received")
+	assert_signal_not_emitted(LobbyManager, "game_starting")
+
+
+func test_fresh_lobby_network_save_stages_before_explicit_assignment() -> void:
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager.connection_state = NetworkManager.ConnectionState.LOBBY
+	NetworkManager.peers[22] = {
+		"authenticated": true,
+		"player_index": 1,
+	}
+	var lobby := LobbyState.new()
+	lobby.add_player(1, "Host", 0)
+	lobby.add_player(22, "Client", 1)
+	lobby.set_player_ready(1, true)
+	lobby.set_player_ready(22, true)
+	LobbyManager.current_lobby = lobby
+	var state := GameState.new()
+	state.initialize()
+	state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human())
+	var meta := SaveGameMetadata.new()
+	meta.scenario_id = "learning_scenario"
+	meta.game_mode = SaveGameMetadata.MODE_NETWORK
+	watch_signals(LobbyManager)
+	LobbyManager.host_load_save(state, meta)
+	assert_true(LobbyManager.is_fresh_session_resume_pending())
 	assert_signal_not_emitted(LobbyManager, "game_starting")

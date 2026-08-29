@@ -56,10 +56,14 @@ var dirty_override: int = -1
 var _btn_resume: Button = null
 var _btn_save: Button = null
 var _btn_load: Button = null
+var _btn_reconnect_assignment: Button = null
 var _btn_quit: Button = null
 var _save_on_quit_dialog: SaveOnQuitDialog = null
 var _save_game_dialog: SaveGameDialog = null
 var _load_game_dialog: LoadGameDialog = null
+var _reconnect_dialog: NetworkSideAssignmentDialog = null
+var _pending_reconnect_endpoint: int = -1
+var _pending_reconnect_players: Array[int] = []
 ## When true, a successful save in the [SaveGameDialog] is followed by
 ## emitting [signal quit_requested].  Used by the dirty-quit flow.
 var _save_then_quit: bool = false
@@ -69,6 +73,7 @@ func _init() -> void:
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build_ui()
+	NetworkManager.reconnect_assignment_ready.connect(_on_reconnect_assignment_ready)
 
 
 ## Sets the mode and rebuilds button visibility / disabled state.
@@ -129,6 +134,10 @@ func _build_ui() -> void:
 	_btn_load = _make_button("Load Game")
 	_btn_load.pressed.connect(_on_load_pressed)
 	vbox.add_child(_btn_load)
+	_btn_reconnect_assignment = _make_button("Assign Reconnected Player")
+	_btn_reconnect_assignment.pressed.connect(_on_reconnect_assignment_pressed)
+	_btn_reconnect_assignment.visible = false
+	vbox.add_child(_btn_reconnect_assignment)
 	_btn_quit = _make_button("Quit Game")
 	_btn_quit.pressed.connect(_on_quit_pressed)
 	vbox.add_child(_btn_quit)
@@ -158,6 +167,8 @@ func _apply_mode_visibility() -> void:
 	var save_load_visible: bool = mode != Mode.NETWORK_CLIENT
 	_btn_save.visible = save_load_visible
 	_btn_load.visible = save_load_visible
+	_btn_reconnect_assignment.visible = mode == Mode.NETWORK_HOST \
+			and _pending_reconnect_endpoint >= 0
 	_apply_save_button_state()
 	_btn_load.disabled = false
 	_btn_load.tooltip_text = ""
@@ -233,6 +244,42 @@ func _on_load_pressed() -> void:
 	hide_modal()
 	_open_load_dialog()
 	load_requested.emit()
+
+
+func _on_reconnect_assignment_ready(endpoint_id: int,
+		available_players: Array) -> void:
+	_pending_reconnect_endpoint = endpoint_id
+	_pending_reconnect_players = available_players.duplicate()
+	_apply_mode_visibility()
+
+
+func _on_reconnect_assignment_pressed() -> void:
+	if _pending_reconnect_endpoint < 0:
+		return
+	hide_modal()
+	if _reconnect_dialog == null:
+		_reconnect_dialog = NetworkSideAssignmentDialog.new()
+		var host: Node = get_parent()
+		(host if host != null else self).add_child(_reconnect_dialog)
+		_reconnect_dialog.assignment_confirmed.connect(_submit_reconnect_assignment)
+		_reconnect_dialog.cancelled.connect(show_modal)
+	var labels := {_pending_reconnect_endpoint: "Reconnected endpoint"}
+	_reconnect_dialog.configure(labels, [_pending_reconnect_endpoint],
+			_pending_reconnect_players,
+			LobbyManager.saved_side_labels_for_state(GameManager.current_game_state,
+					_pending_reconnect_players))
+	_reconnect_dialog.show_modal()
+
+
+func _submit_reconnect_assignment(proposals: Dictionary) -> void:
+	var player_index: int = int(proposals.get(_pending_reconnect_endpoint, -1))
+	if NetworkManager.begin_reconnect_assignment(
+			_pending_reconnect_endpoint, player_index):
+		_pending_reconnect_endpoint = -1
+		_pending_reconnect_players = []
+	_apply_mode_visibility()
+
+
 
 
 func _on_quit_pressed() -> void:

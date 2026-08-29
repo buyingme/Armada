@@ -26,7 +26,7 @@ extends Node
 # ---------------------------------------------------------------------------
 
 ## Current protocol version.  Incremented whenever the message format changes.
-const PROTOCOL_VERSION: int = 3
+const PROTOCOL_VERSION: int = 4
 
 ## Interval (seconds) between keepalive pings.
 const HEARTBEAT_INTERVAL_SEC: float = 5.0
@@ -39,6 +39,10 @@ const MAX_CLIENTS: int = 8
 
 ## Default channel count for ENet (reliable + unreliable + keepalive).
 const ENET_CHANNELS: int = 3
+
+## Bound staging/install waits so a lost acknowledgement cannot strand the
+## host or an admitted incumbent.
+const RESUME_ACK_TIMEOUT_MSEC: int = 15000
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +110,20 @@ signal command_rejection_received(
 ## listens for this and shows a toast.  Phase J6.
 signal save_notification_received(display_name: String)
 
+## Purpose-specific explicit-assignment orchestration signals consumed by
+## LobbyManager and the narrow assignment presentation.  They carry no
+## persistent identity assertion.
+signal fresh_resume_assignment_ready(attempt_id: String,
+		expected_endpoints: Array[int], available_players: Array[int])
+signal fresh_resume_ready_to_commit(attempt_id: String)
+signal fresh_resume_published(attempt_id: String)
+signal fresh_resume_failed(reason: String)
+signal resume_commit_received(state: GameState, meta: SaveGameMetadata,
+		principal_id: String, player_index: int, attempt_id: String)
+signal reconnect_assignment_ready(endpoint_id: int, available_players: Array)
+signal reconnect_client_released(attempt_id: String)
+signal resume_status_changed(status: String)
+
 
 # ---------------------------------------------------------------------------
 # State
@@ -172,6 +190,16 @@ var _sync_gate: CommandSyncGate = CommandSyncGate.new()
 ## connected to (client).  0 when disconnected.  Transient.
 var _active_port: int = 0
 
+## Purpose-specific fresh-resume/reconnect coordinators.  These are transient
+## associations only; the canonical player/principal binding stays in GameState.
+var _resume_attempt: Dictionary = {}
+var _client_staged_resume: Dictionary = {}
+var _post_publication_fresh_attempt_id: String = ""
+
+## Player-originated admission gate. Normal new games and same-live loads keep
+## this open; fresh resume/reconnect opens it only after installation ACK.
+var _principal_command_admission_enabled: bool = true
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -184,6 +212,18 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+
+
+func _process(_delta: float) -> void:
+	if _resume_attempt.is_empty():
+		return
+	var phase: String = str(_resume_attempt.get("phase", ""))
+	if phase not in ["STAGING_SNAPSHOT", "AWAITING_INSTALL_ACKS"]:
+		return
+	if Time.get_ticks_msec() - int(_resume_attempt.get("phase_started_msec", 0)) \
+			<= RESUME_ACK_TIMEOUT_MSEC:
+		return
+	_timeout_resume_attempt(phase)
 
 
 # ---------------------------------------------------------------------------
@@ -331,12 +371,18 @@ func consume_pending_game_config() -> Dictionary:
 	return config
 
 
-## Associates the initial complete lobby with an already-created binding.
+func is_player_command_admission_enabled() -> bool:
+	return _principal_command_admission_enabled
+
+
+## Establishes ordinary new-match associations from the already accepted lobby
+## slots.  This is not used for saved-match resume and creates no persistent
+## credential or recovery material.
 func establish_initial_match_principal_associations(
 		binding: MatchPlayerControlBinding, lobby: LobbyState) -> bool:
 	if connection_state != ConnectionState.LOBBY or binding == null \
 			or not binding.is_valid() or lobby == null or not lobby.can_start() \
-			or not _host_match_principal_id.is_empty() or peers.is_empty():
+			or not _host_match_principal_id.is_empty():
 		return false
 	var slots: Dictionary = {}
 	for player: Dictionary in lobby.players:
@@ -348,23 +394,694 @@ func establish_initial_match_principal_associations(
 		slots[player_index] = peer_id
 	if slots.size() != Constants.PLAYER_COUNT:
 		return false
-	var host_principal: String = binding.principal_id_for_player(_local_player_index)
-	if host_principal.is_empty():
-		return false
-	var updated_peer_ids: Array[int] = []
 	for player_index: int in range(Constants.PLAYER_COUNT):
-		var peer_id: int = int(slots[player_index])
-		if peer_id == 1:
-			continue
-		if not peers.has(peer_id) or peers[peer_id].has("match_principal_id"):
-			return false
+		var endpoint_id: int = int(slots[player_index])
 		var principal_id: String = binding.principal_id_for_player(player_index)
 		if principal_id.is_empty():
+			clear_match_principal_associations()
 			return false
-		peers[peer_id]["match_principal_id"] = principal_id
-		updated_peer_ids.append(peer_id)
-	_host_match_principal_id = host_principal
+		if endpoint_id == 1:
+			_host_match_principal_id = principal_id
+			_local_player_index = player_index
+		elif peers.has(endpoint_id):
+			peers[endpoint_id]["match_principal_id"] = principal_id
+			peers[endpoint_id]["command_admission_enabled"] = true
+		else:
+			clear_match_principal_associations()
+			return false
+	_principal_command_admission_enabled = true
 	return true
+
+
+func resume_availability_for_state(state: GameState) -> Dictionary:
+	if state == null or not state.validate_for_live_installation():
+		return {"resumable": false, "reason": "schema_invalid"}
+	var binding: MatchPlayerControlBinding = _binding_for_state(state)
+	if binding == null:
+		return {"resumable": false, "reason": "schema_invalid"}
+	var humans: Array[String] = binding.distinct_principal_ids(
+			MatchPlayerControlBinding.KIND_HUMAN)
+	if humans.size() != Constants.PLAYER_COUNT:
+		return {"resumable": false, "reason": "unsupported_network_binding"}
+	for player_index: int in range(Constants.PLAYER_COUNT):
+		var principal_id: String = binding.principal_id_for_player(player_index)
+		if principal_id.is_empty() or binding.principal_kind(principal_id) != \
+				MatchPlayerControlBinding.KIND_HUMAN:
+			return {"resumable": false, "reason": "unsupported_network_binding"}
+	return {"resumable": true, "reason": ""}
+
+
+# ---------------------------------------------------------------------------
+# MATCH-003 explicit side assignment and filtered installation
+# ---------------------------------------------------------------------------
+
+func current_authenticated_lobby_peer_ids() -> Array[int]:
+	var result: Array[int] = []
+	for peer_value: Variant in peers.keys():
+		var peer_id: int = int(peer_value)
+		var info: Dictionary = peers[peer_id] as Dictionary
+		if bool(info.get("authenticated", false)) \
+				and int(info.get("player_index", -1)) >= 0:
+			result.append(peer_id)
+	result.sort()
+	return result
+
+
+func begin_fresh_session_resume(state: GameState, meta: SaveGameMetadata) -> bool:
+	if role != Role.SERVER or connection_state != ConnectionState.LOBBY \
+			or state == null or meta == null or not _resume_attempt.is_empty():
+		return false
+	var availability: Dictionary = resume_availability_for_state(state)
+	if not bool(availability.get("resumable", false)):
+		fresh_resume_failed.emit(str(availability.get("reason", "invalid_candidate")))
+		return false
+	var remote_ids: Array[int] = current_authenticated_lobby_peer_ids()
+	if remote_ids.size() != 1:
+		fresh_resume_failed.emit("Exactly one authenticated client is required.")
+		return false
+	var binding: MatchPlayerControlBinding = _binding_for_state(state)
+	var attempt_id: String = _new_random_hex()
+	var expected_endpoints: Array[int] = [1, remote_ids[0]]
+	var available_players: Array[int] = [0, 1]
+	_resume_attempt = {
+		"attempt_id": attempt_id,
+		"operation": "fresh_session_resume",
+		"phase": "CANDIDATE_STAGED",
+		"binding_data": binding.serialize(),
+		"candidate_fingerprint": CanonicalJson.hash(state.serialize()),
+		"cursor": meta.next_command_sequence,
+		"expected_endpoints": expected_endpoints,
+		"proposals": {},
+		"associations": {},
+		"ready": {},
+		"installed": {},
+		"metadata": meta.to_dict(),
+		"phase_started_msec": Time.get_ticks_msec(),
+		"old_host_principal": _host_match_principal_id,
+		"old_host_player_index": _local_player_index,
+		"old_peer_state": _peer_resume_state_snapshot(),
+	}
+	_principal_command_admission_enabled = false
+	resume_status_changed.emit("Awaiting explicit side assignment")
+	fresh_resume_assignment_ready.emit(attempt_id, expected_endpoints, available_players)
+	return true
+
+
+## Host-only, non-RPC proposal commit.  The UI supplies player indices only;
+## principal identities are derived exclusively from the immutable binding.
+func submit_fresh_resume_assignment(proposals: Dictionary) -> bool:
+	if role != Role.SERVER or _resume_attempt.get("operation", "") != \
+			"fresh_session_resume" or _resume_attempt.get("phase", "") != \
+			"CANDIDATE_STAGED":
+		return false
+	var binding: MatchPlayerControlBinding = MatchPlayerControlBinding.deserialize(
+			_resume_attempt.get("binding_data", {}))
+	if binding == null or not _validate_explicit_assignment(proposals, binding):
+		return false
+	var expected: Array = _resume_attempt["expected_endpoints"] as Array
+	var associations: Dictionary = {}
+	for endpoint_value: Variant in expected:
+		var endpoint_id: int = int(endpoint_value)
+		var player_index: int = int(proposals[endpoint_id])
+		var principal_id: String = binding.principal_id_for_player(player_index)
+		if principal_id.is_empty() or _active_principal_has_other_endpoint(
+				principal_id, endpoint_id):
+			return false
+		associations[endpoint_id] = principal_id
+	# Commit the complete transient association set atomically and keep all
+	# player-originated admission closed until installation acknowledgements.
+	_host_match_principal_id = str(associations[1])
+	_local_player_index = int(proposals[1])
+	for peer_value: Variant in peers.keys():
+		(peers[peer_value] as Dictionary).erase("match_principal_id")
+	for endpoint_value: Variant in expected:
+		var endpoint_id: int = int(endpoint_value)
+		if endpoint_id != 1 and peers.has(endpoint_id):
+			peers[endpoint_id]["match_principal_id"] = associations[endpoint_id]
+			peers[endpoint_id]["player_index"] = int(proposals[endpoint_id])
+			peers[endpoint_id]["command_admission_enabled"] = false
+	_resume_attempt["proposals"] = proposals.duplicate(true)
+	_resume_attempt["associations"] = associations
+	_resume_attempt["phase"] = "ASSOCIATIONS_COMMITTED_ADMISSION_CLOSED"
+	resume_status_changed.emit("Assignment committed; staging filtered view")
+	return true
+
+
+func stage_fresh_resume_snapshots(state: GameState, meta: SaveGameMetadata) -> bool:
+	if role != Role.SERVER or _resume_attempt.get("operation", "") != \
+			"fresh_session_resume" or _resume_attempt.get("phase", "") != \
+			"ASSOCIATIONS_COMMITTED_ADMISSION_CLOSED":
+		return false
+	var binding: MatchPlayerControlBinding = _binding_for_state(state)
+	if not _resume_candidate_matches(state, meta, binding):
+		_abort_resume("The staged save changed before distribution.")
+		return false
+	var expected: Array = _resume_attempt["expected_endpoints"] as Array
+	var proposals: Dictionary = _resume_attempt["proposals"] as Dictionary
+	for endpoint_value: Variant in expected:
+		var endpoint_id: int = int(endpoint_value)
+		if endpoint_id == 1:
+			continue
+		if not peers.has(endpoint_id):
+			_abort_resume("The assigned client disconnected before staging.")
+			return false
+		var player_index: int = int(proposals[endpoint_id])
+		var principal_id: String = binding.principal_id_for_player(player_index)
+		var filtered: Dictionary = StateFilter.filter_for_player(
+				state.serialize(), player_index)
+		_receive_resume_snapshot.rpc_id(endpoint_id, "fresh_session_resume",
+				_resume_attempt["attempt_id"], filtered, meta.to_dict(), principal_id,
+				player_index, int(_resume_attempt["cursor"]))
+	_resume_attempt["ready"] = {1: true}
+	_resume_attempt["phase"] = "STAGING_SNAPSHOT"
+	_resume_attempt["phase_started_msec"] = Time.get_ticks_msec()
+	return true
+
+
+func commit_fresh_resume_associations(state: GameState, meta: SaveGameMetadata) -> bool:
+	if role != Role.SERVER or _resume_attempt.get("phase", "") != \
+			"READY_TO_COMMIT":
+		return false
+	# Publication is permitted only while the same complete lobby remains in its
+	# pre-game state.  This keeps a staged snapshot from crossing an unrelated
+	# connection or lobby transition.
+	if connection_state != ConnectionState.LOBBY:
+		_abort_resume("Lobby state changed before publication.")
+		return false
+	var binding: MatchPlayerControlBinding = _binding_for_state(state)
+	if not _resume_candidate_matches(state, meta, binding) \
+			or not _revalidate_explicit_assignment(binding):
+		_abort_resume("Resume changed during publication revalidation.")
+		return false
+	_resume_attempt["phase"] = "COMMITTING"
+	return true
+
+
+func rollback_fresh_resume_associations() -> void:
+	if _resume_attempt.is_empty():
+		return
+	_restore_prepublication_attempt_state()
+	_abort_resume("Host installation failed.")
+
+
+func mark_fresh_resume_host_state_live(attempt_id: String) -> bool:
+	if role != Role.SERVER or _resume_attempt.get("phase", "") != "COMMITTING" \
+			or _resume_attempt.get("attempt_id", "") != attempt_id:
+		return false
+	if connection_state != ConnectionState.IN_GAME:
+		_set_state(ConnectionState.IN_GAME)
+	return true
+
+
+func publish_fresh_resume_after_host_install(state: GameState,
+		meta: SaveGameMetadata) -> bool:
+	if role != Role.SERVER or _resume_attempt.get("phase", "") != "COMMITTING" \
+			or not _resume_candidate_matches(state, meta, _binding_for_state(state)):
+		return false
+	_resume_attempt["phase"] = "AWAITING_INSTALL_ACKS"
+	_resume_attempt["installed"] = {1: true}
+	_resume_attempt["phase_started_msec"] = Time.get_ticks_msec()
+	for endpoint_value: Variant in (_resume_attempt["expected_endpoints"] as Array):
+		var endpoint_id: int = int(endpoint_value)
+		if endpoint_id != 1:
+			_commit_resume_snapshot.rpc_id(endpoint_id, _resume_attempt["attempt_id"])
+	return true
+
+
+func acknowledge_resume_installation(attempt_id: String) -> void:
+	if role != Role.CLIENT or _client_staged_resume.get("attempt_id", "") != \
+			attempt_id or bool(_client_staged_resume.get("acknowledged", false)):
+		return
+	_client_staged_resume["acknowledged"] = true
+	if connection_state != ConnectionState.IN_GAME:
+		_set_state(ConnectionState.IN_GAME)
+	_acknowledge_resume_installation.rpc_id(1, attempt_id,
+			int(_client_staged_resume["cursor"]))
+
+
+func reject_client_resume_installation(attempt_id: String, reason: String) -> void:
+	if role != Role.CLIENT or _client_staged_resume.get("attempt_id", "") != attempt_id:
+		return
+	_reject_resume_installation.rpc_id(1, attempt_id, reason)
+	_client_staged_resume = {}
+	_principal_command_admission_enabled = false
+
+
+func install_client_principal_assignment(attempt_id: String,
+		principal_id: String, player_index: int) -> bool:
+	if role != Role.CLIENT or _client_staged_resume.get("attempt_id", "") != \
+			attempt_id or _client_staged_resume.get("principal_id", "") != principal_id \
+			or int(_client_staged_resume.get("player_index", -1)) != player_index:
+		return false
+	var state: GameState = _client_staged_resume.get("state") as GameState
+	if state == null or not state.principal_controls_player(principal_id, player_index):
+		return false
+	_local_player_index = player_index
+	return true
+
+
+func cancel_fresh_resume() -> void:
+	if role == Role.SERVER and _resume_attempt.get("operation", "") == \
+			"fresh_session_resume":
+		_abort_resume("Resume cancelled.")
+
+
+## A reconnecting endpoint is transport-authenticated but remains unassigned
+## and non-admitted until a host explicitly chooses an unoccupied saved side.
+func _notify_unassigned_reconnect_endpoints() -> void:
+	if role != Role.SERVER or connection_state != ConnectionState.IN_GAME \
+			or not _resume_attempt.is_empty():
+		return
+	for endpoint_value: Variant in peers.keys():
+		var endpoint_id: int = int(endpoint_value)
+		var info: Dictionary = peers[endpoint_id] as Dictionary
+		if bool(info.get("authenticated", false)) \
+				and str(info.get("match_principal_id", "")).is_empty():
+			_begin_reconnect_for_peer(endpoint_id)
+
+
+func _begin_reconnect_for_peer(endpoint_id: int) -> void:
+	if role != Role.SERVER or connection_state != ConnectionState.IN_GAME \
+			or GameManager.current_game_state == null or not peers.has(endpoint_id) \
+			or not _resume_attempt.is_empty():
+		return
+	var binding: MatchPlayerControlBinding = _binding_for_state(
+			GameManager.current_game_state)
+	if binding == null:
+		return
+	var available: Array[int] = []
+	for player_index: int in range(Constants.PLAYER_COUNT):
+		var principal_id: String = binding.principal_id_for_player(player_index)
+		if binding.principal_kind(principal_id) == MatchPlayerControlBinding.KIND_HUMAN \
+				and not _active_principal_has_other_endpoint(principal_id, endpoint_id):
+			available.append(player_index)
+	if available.is_empty():
+		return
+	peers[endpoint_id]["command_admission_enabled"] = false
+	reconnect_assignment_ready.emit(endpoint_id, available)
+
+
+func begin_reconnect_assignment(endpoint_id: int, player_index: int) -> bool:
+	if role != Role.SERVER or connection_state != ConnectionState.IN_GAME \
+			or GameManager.current_game_state == null or not peers.has(endpoint_id) \
+			or not _resume_attempt.is_empty() or player_index < 0 \
+			or player_index >= Constants.PLAYER_COUNT:
+		return false
+	var state: GameState = GameManager.current_game_state
+	var binding: MatchPlayerControlBinding = _binding_for_state(state)
+	var principal_id: String = binding.principal_id_for_player(player_index)
+	if principal_id.is_empty() or binding.principal_kind(principal_id) != \
+			MatchPlayerControlBinding.KIND_HUMAN or _active_principal_has_other_endpoint(
+				principal_id, endpoint_id):
+		return false
+	var meta: SaveGameMetadata = SaveGameManager.build_metadata_for(state, "reconnect")
+	meta.scenario_id = GameManager.get_scenario_id()
+	meta.set_next_command_sequence(CommandProcessor.get_next_sequence())
+	_resume_attempt = {
+		"attempt_id": _new_random_hex(), "operation": "reconnect",
+		"phase": "STAGING_SNAPSHOT", "binding_data": binding.serialize(),
+		"candidate_fingerprint": CanonicalJson.hash(state.serialize()),
+		"cursor": meta.next_command_sequence, "expected_endpoints": [endpoint_id],
+		"proposals": {endpoint_id: player_index},
+		"associations": {endpoint_id: principal_id}, "ready": {}, "installed": {},
+		"metadata": meta.to_dict(),
+		"phase_started_msec": Time.get_ticks_msec(),
+	}
+	peers[endpoint_id]["match_principal_id"] = principal_id
+	peers[endpoint_id]["player_index"] = player_index
+	peers[endpoint_id]["command_admission_enabled"] = false
+	var filtered: Dictionary = StateFilter.filter_for_player(state.serialize(), player_index)
+	_receive_resume_snapshot.rpc_id(endpoint_id, "reconnect", _resume_attempt["attempt_id"],
+			filtered, meta.to_dict(), principal_id, player_index, meta.next_command_sequence)
+	return true
+
+
+@rpc("authority", "reliable")
+func _receive_resume_snapshot(operation: String, attempt_id: String,
+		state_dict: Dictionary, meta_dict: Dictionary, principal_id: String,
+		player_index: int, cursor: int) -> void:
+	if role != Role.CLIENT or operation not in ["fresh_session_resume", "reconnect"] \
+			or not _is_attempt_id(attempt_id) or player_index < 0 \
+			or player_index >= Constants.PLAYER_COUNT:
+		return
+	var state: GameState = GameState.deserialize(state_dict)
+	var meta: SaveGameMetadata = SaveGameMetadata.from_dict(meta_dict)
+	var binding: MatchPlayerControlBinding = _binding_for_state(state)
+	var reconstruction: Dictionary = SaveGameManager.reconstruction_cursor_for(meta, state)
+	if state == null or meta == null or binding == null \
+			or not state.principal_controls_player(principal_id, player_index) \
+			or not bool(reconstruction.get("ok", false)) \
+			or int(reconstruction.get("next_command_sequence", -1)) != cursor:
+		_client_staged_resume = {}
+		_acknowledge_resume_snapshot.rpc_id(1, attempt_id, false, -1)
+		return
+	_client_staged_resume = {"operation": operation, "attempt_id": attempt_id,
+		"state": state, "meta": meta, "principal_id": principal_id,
+		"player_index": player_index, "cursor": cursor, "acknowledged": false}
+	_principal_command_admission_enabled = false
+	_acknowledge_resume_snapshot.rpc_id(1, attempt_id, true, cursor)
+
+
+@rpc("any_peer", "reliable")
+func _acknowledge_resume_snapshot(attempt_id: String, accepted: bool, cursor: int) -> void:
+	if role != Role.SERVER or _resume_attempt.is_empty() \
+			or _resume_attempt.get("attempt_id", "") != attempt_id \
+			or _resume_attempt.get("phase", "") != "STAGING_SNAPSHOT":
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id not in (_resume_attempt["expected_endpoints"] as Array) \
+			or not accepted or cursor != int(_resume_attempt.get("cursor", -1)):
+		_abort_resume("A client rejected the staged snapshot.")
+		return
+	var ready: Dictionary = _resume_attempt["ready"] as Dictionary
+	if ready.has(sender_id):
+		return
+	ready[sender_id] = true
+	if _resume_attempt["operation"] == "fresh_session_resume":
+		_resume_attempt["phase"] = "READY_TO_COMMIT"
+		fresh_resume_ready_to_commit.emit(attempt_id)
+	else:
+		_resume_attempt["phase"] = "AWAITING_INSTALL_ACKS"
+		_resume_attempt["installed"] = {}
+		_resume_attempt["phase_started_msec"] = Time.get_ticks_msec()
+		_commit_resume_snapshot.rpc_id(sender_id, attempt_id)
+
+
+@rpc("authority", "reliable")
+func _commit_resume_snapshot(attempt_id: String) -> void:
+	if role != Role.CLIENT or _client_staged_resume.get("attempt_id", "") != attempt_id:
+		return
+	resume_commit_received.emit(_client_staged_resume["state"],
+			_client_staged_resume["meta"], _client_staged_resume["principal_id"],
+			int(_client_staged_resume["player_index"]), attempt_id)
+
+
+@rpc("any_peer", "reliable")
+func _acknowledge_resume_installation(attempt_id: String, cursor: int) -> void:
+	if role != Role.SERVER or _resume_attempt.get("phase", "") != \
+			"AWAITING_INSTALL_ACKS" or _resume_attempt.get("attempt_id", "") != attempt_id \
+			or cursor != int(_resume_attempt.get("cursor", -1)):
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id not in (_resume_attempt["expected_endpoints"] as Array):
+		return
+	var installed: Dictionary = _resume_attempt["installed"] as Dictionary
+	if installed.has(sender_id):
+		return
+	installed[sender_id] = true
+	_maybe_publish_resume()
+
+
+@rpc("authority", "reliable")
+func _enable_resume_admission(operation: String, attempt_id: String) -> void:
+	if role != Role.CLIENT or _client_staged_resume.get("attempt_id", "") != attempt_id \
+			or _client_staged_resume.get("operation", "") != operation \
+			or not bool(_client_staged_resume.get("acknowledged", false)):
+		return
+	_principal_command_admission_enabled = true
+	resume_status_changed.emit("Resume ready")
+	if operation == "fresh_session_resume":
+		fresh_resume_published.emit(attempt_id)
+	else:
+		_client_staged_resume = {}
+		reconnect_client_released.emit(attempt_id)
+
+
+@rpc("authority", "reliable")
+func _abort_resume_attempt(attempt_id: String, reason: String) -> void:
+	if role != Role.CLIENT or _client_staged_resume.get("attempt_id", "") != attempt_id:
+		return
+	var operation: String = str(_client_staged_resume.get("operation", ""))
+	_client_staged_resume = {}
+	_principal_command_admission_enabled = true
+	resume_status_changed.emit("Resume aborted")
+	if operation == "fresh_session_resume":
+		fresh_resume_failed.emit(reason)
+
+
+@rpc("any_peer", "reliable")
+func _reject_resume_installation(attempt_id: String, reason: String) -> void:
+	if role != Role.SERVER or _resume_attempt.get("attempt_id", "") != attempt_id \
+			or _resume_attempt.get("phase", "") != "AWAITING_INSTALL_ACKS":
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id not in (_resume_attempt.get("expected_endpoints", []) as Array):
+		return
+	var operation: String = str(_resume_attempt.get("operation", ""))
+	if operation == "fresh_session_resume":
+		# Host publication has already linearized; retain it and close only the
+		# missing endpoint rather than waiting forever for its acknowledgement.
+		if peers.has(sender_id):
+			peers[sender_id].erase("match_principal_id")
+			peers[sender_id]["command_admission_enabled"] = false
+		_resume_attempt = {}
+		_principal_command_admission_enabled = true
+		resume_status_changed.emit("Client installation rejected: " + reason)
+		_notify_unassigned_reconnect_endpoints()
+	else:
+		if peers.has(sender_id):
+			peers[sender_id].erase("match_principal_id")
+			peers[sender_id]["command_admission_enabled"] = false
+		_resume_attempt = {}
+		resume_status_changed.emit("Reconnect installation rejected: " + reason)
+		_notify_unassigned_reconnect_endpoints()
+
+
+func _maybe_publish_resume() -> void:
+	if _resume_attempt.get("phase", "") != "AWAITING_INSTALL_ACKS":
+		return
+	var expected: Array = _resume_attempt["expected_endpoints"] as Array
+	if (_resume_attempt["installed"] as Dictionary).size() != expected.size():
+		return
+	var operation: String = str(_resume_attempt["operation"])
+	var attempt_id: String = str(_resume_attempt["attempt_id"])
+	_principal_command_admission_enabled = true
+	for endpoint_value: Variant in expected:
+		var endpoint_id: int = int(endpoint_value)
+		if endpoint_id != 1 and peers.has(endpoint_id):
+			peers[endpoint_id]["command_admission_enabled"] = true
+			_enable_resume_admission.rpc_id(endpoint_id, operation, attempt_id)
+	_resume_attempt = {}
+	resume_status_changed.emit("Resume ready")
+	if operation == "fresh_session_resume":
+		fresh_resume_published.emit(attempt_id)
+
+
+func _validate_explicit_assignment(proposals: Dictionary,
+		binding: MatchPlayerControlBinding) -> bool:
+	var expected: Array = _resume_attempt.get("expected_endpoints", []) as Array
+	if proposals.size() != expected.size() or binding == null:
+		return false
+	var selected: Dictionary = {}
+	for endpoint_value: Variant in expected:
+		var endpoint_id: int = int(endpoint_value)
+		if not proposals.has(endpoint_id) or not (proposals[endpoint_id] is int):
+			return false
+		var player_index: int = int(proposals[endpoint_id])
+		if player_index < 0 or player_index >= Constants.PLAYER_COUNT \
+				or selected.has(player_index):
+			return false
+		var principal_id: String = binding.principal_id_for_player(player_index)
+		if principal_id.is_empty() or binding.principal_kind(principal_id) != \
+				MatchPlayerControlBinding.KIND_HUMAN:
+			return false
+		selected[player_index] = true
+	return selected.size() == Constants.PLAYER_COUNT
+
+
+func _resume_candidate_matches(state: GameState, meta: SaveGameMetadata,
+		binding: MatchPlayerControlBinding) -> bool:
+	return state != null and meta != null and binding != null \
+			and not _resume_attempt.is_empty() \
+			and _resume_attempt.get("binding_data", {}) == binding.serialize() \
+			and _resume_attempt.get("candidate_fingerprint", "") == \
+				CanonicalJson.hash(state.serialize()) \
+			and _resume_attempt.get("metadata", {}) == meta.to_dict() \
+			and int(_resume_attempt.get("cursor", -1)) == meta.next_command_sequence
+
+
+func _revalidate_explicit_assignment(binding: MatchPlayerControlBinding) -> bool:
+	var proposals: Dictionary = _resume_attempt.get("proposals", {}) as Dictionary
+	if not _validate_explicit_assignment(proposals, binding) \
+			or (_resume_attempt.get("associations", {}) as Dictionary).size() != \
+				Constants.PLAYER_COUNT:
+		return false
+	var expected: Array = _resume_attempt["expected_endpoints"] as Array
+	if expected.size() != Constants.PLAYER_COUNT \
+			or not (_resume_attempt.get("metadata", {}) is Dictionary):
+		return false
+	if role != Role.SERVER or connection_state != ConnectionState.LOBBY \
+			or peers.size() != 1 or _principal_command_admission_enabled:
+		return false
+	if LobbyManager.current_lobby == null or not LobbyManager.current_lobby.can_start():
+		return false
+	var current_remote: Array[int] = current_authenticated_lobby_peer_ids()
+	if current_remote.size() != 1 or int(expected[0]) != 1 \
+			or int(expected[1]) != current_remote[0]:
+		return false
+	var lobby_endpoints: Dictionary = {}
+	for player: Dictionary in LobbyManager.current_lobby.players:
+		var lobby_peer_id: int = int(player.get("peer_id", -1))
+		if lobby_peer_id < 0 or lobby_endpoints.has(lobby_peer_id):
+			return false
+		lobby_endpoints[lobby_peer_id] = true
+	if lobby_endpoints.size() != Constants.PLAYER_COUNT \
+			or not lobby_endpoints.has(1) or not lobby_endpoints.has(current_remote[0]):
+		return false
+	for endpoint_value: Variant in (_resume_attempt["expected_endpoints"] as Array):
+		var endpoint_id: int = int(endpoint_value)
+		var player_index: int = int(proposals.get(endpoint_id, -1))
+		var principal_id: String = binding.principal_id_for_player(player_index)
+		if principal_id.is_empty() \
+				or (_resume_attempt["associations"] as Dictionary).get(
+						endpoint_id, "") != principal_id:
+			return false
+		if endpoint_id == 1:
+			if _host_match_principal_id != principal_id \
+					or _local_player_index != player_index:
+				return false
+		elif not peers.has(endpoint_id) \
+				or not bool((peers[endpoint_id] as Dictionary).get(
+						"authenticated", false)) \
+				or str((peers[endpoint_id] as Dictionary).get(
+						"match_principal_id", "")) != principal_id \
+				or int((peers[endpoint_id] as Dictionary).get(
+						"player_index", -1)) != player_index \
+				or bool((peers[endpoint_id] as Dictionary).get(
+						"command_admission_enabled", true)):
+			return false
+	return true
+
+
+func _timeout_resume_attempt(phase: String) -> void:
+	var operation: String = str(_resume_attempt.get("operation", ""))
+	if phase == "STAGING_SNAPSHOT":
+		_abort_resume("Resume staging acknowledgement timed out.")
+		return
+	# Host publication has already happened. Preserve host/incumbent admission;
+	# remove only the unavailable endpoint and leave it eligible for explicit
+	# reconnect when transport confirms/re-establishes it.
+	for endpoint_value: Variant in (_resume_attempt.get("expected_endpoints", []) as Array):
+		var endpoint_id: int = int(endpoint_value)
+		if endpoint_id != 1 and peers.has(endpoint_id):
+			peers[endpoint_id].erase("match_principal_id")
+			peers[endpoint_id]["command_admission_enabled"] = false
+	_resume_attempt = {}
+	_principal_command_admission_enabled = true
+	resume_status_changed.emit("%s installation acknowledgement timed out." % operation)
+	_notify_unassigned_reconnect_endpoints()
+
+
+func _abort_resume(reason: String) -> void:
+	if _resume_attempt.is_empty():
+		return
+	var operation: String = str(_resume_attempt.get("operation", ""))
+	var is_prepublication_fresh: bool = _resume_attempt.get("operation", "") \
+			== "fresh_session_resume" and _resume_attempt.get("phase", "") \
+			not in ["AWAITING_INSTALL_ACKS", "PUBLISHED"]
+	var attempt_id: String = str(_resume_attempt.get("attempt_id", ""))
+	for endpoint_value: Variant in (_resume_attempt.get("expected_endpoints", []) as Array):
+		var endpoint_id: int = int(endpoint_value)
+		if endpoint_id != 1 and peers.has(endpoint_id) and _peer != null:
+			_abort_resume_attempt.rpc_id(endpoint_id, attempt_id, reason)
+	if is_prepublication_fresh:
+		_restore_prepublication_attempt_state()
+	elif operation == "reconnect":
+		# A reconnect association exists only for this purpose-specific attempt.
+		# Failed staging must return that endpoint to the unassigned state so a
+		# later explicit host proposal can choose from the still-vacant side.
+		_clear_failed_reconnect_associations()
+	_resume_attempt = {}
+	_principal_command_admission_enabled = true
+	resume_status_changed.emit("Resume aborted")
+	if operation == "fresh_session_resume":
+		fresh_resume_failed.emit(reason)
+	if operation == "reconnect":
+		_notify_unassigned_reconnect_endpoints()
+
+
+func _clear_failed_reconnect_associations() -> void:
+	for endpoint_value: Variant in (_resume_attempt.get("expected_endpoints", []) as Array):
+		var endpoint_id: int = int(endpoint_value)
+		if endpoint_id != 1 and peers.has(endpoint_id):
+			peers[endpoint_id].erase("match_principal_id")
+			peers[endpoint_id]["command_admission_enabled"] = false
+
+
+func _active_principal_has_other_endpoint(principal_id: String,
+		endpoint_id: int) -> bool:
+	if endpoint_id != 1 and _host_match_principal_id == principal_id:
+		return true
+	for peer_value: Variant in peers.keys():
+		var peer_id: int = int(peer_value)
+		if peer_id != endpoint_id and str((peers[peer_id] as Dictionary).get(
+				"match_principal_id", "")) == principal_id:
+			return true
+	return false
+
+
+func _binding_for_state(state: GameState) -> MatchPlayerControlBinding:
+	if state == null:
+		return null
+	return MatchPlayerControlBinding.deserialize(
+			state.serialize().get("match_player_control_binding", {}))
+
+
+func _peer_association_snapshot() -> Dictionary:
+	var result: Dictionary = {}
+	for endpoint_value: Variant in peers.keys():
+		var endpoint_id: int = int(endpoint_value)
+		var principal_id: String = str((peers[endpoint_id] as Dictionary).get(
+				"match_principal_id", ""))
+		if not principal_id.is_empty():
+			result[endpoint_id] = principal_id
+	return result
+
+
+func _peer_resume_state_snapshot() -> Dictionary:
+	var result: Dictionary = {}
+	for endpoint_value: Variant in peers.keys():
+		var endpoint_id: int = int(endpoint_value)
+		var info: Dictionary = peers[endpoint_id] as Dictionary
+		result[endpoint_id] = {
+			"match_principal_id": str(info.get("match_principal_id", "")),
+			"player_index": int(info.get("player_index", -1)),
+			"command_admission_enabled": bool(info.get(
+					"command_admission_enabled", true)),
+		}
+	return result
+
+
+func _restore_prepublication_attempt_state() -> void:
+	if _resume_attempt.get("operation", "") != "fresh_session_resume":
+		return
+	_host_match_principal_id = str(_resume_attempt.get("old_host_principal", ""))
+	_local_player_index = int(_resume_attempt.get("old_host_player_index", -1))
+	var old: Dictionary = _resume_attempt.get("old_peer_state", {}) as Dictionary
+	for endpoint_value: Variant in peers.keys():
+		var endpoint_id: int = int(endpoint_value)
+		var info: Dictionary = peers[endpoint_id] as Dictionary
+		info.erase("match_principal_id")
+		if old.has(endpoint_id):
+			var previous: Dictionary = old[endpoint_id] as Dictionary
+			var principal_id: String = str(previous.get("match_principal_id", ""))
+			if not principal_id.is_empty():
+				info["match_principal_id"] = principal_id
+			info["player_index"] = int(previous.get("player_index", -1))
+			info["command_admission_enabled"] = bool(previous.get(
+					"command_admission_enabled", true))
+
+
+func _new_random_hex() -> String:
+	return Crypto.new().generate_random_bytes(32).hex_encode()
+
+
+func _is_attempt_id(value: Variant) -> bool:
+	if not (value is String) or (value as String).length() != 64:
+		return false
+	var regex: RegEx = RegEx.new()
+	regex.compile("^[0-9a-f]{64}$")
+	return regex.search(value as String) != null
 
 
 func clear_match_principal_associations() -> void:
@@ -374,7 +1091,8 @@ func clear_match_principal_associations() -> void:
 
 
 func host_principal_controls_player(player_index: int) -> bool:
-	return GameManager.current_game_state != null \
+	return _principal_command_admission_enabled \
+			and GameManager.current_game_state != null \
 			and GameManager.current_game_state.principal_controls_player(
 				_host_match_principal_id, player_index)
 
@@ -451,11 +1169,26 @@ func _on_peer_connected(peer_id: int) -> void:
 	peer_connected.emit(peer_id)
 
 
-## Server-side: a peer has disconnected.
+## Server-side: a peer has disconnected.  Association loss is transient only;
+## the canonical state and saved binding are never changed here.
 func _on_peer_disconnected(peer_id: int) -> void:
 	_log.info("Peer disconnected: %d" % peer_id)
+	var affected_attempt: bool = not _resume_attempt.is_empty() \
+			and peer_id in (_resume_attempt.get("expected_endpoints", []) as Array)
+	var pre_publication: bool = _resume_attempt.get("phase", "") not in [
+			"AWAITING_INSTALL_ACKS", "PUBLISHED"]
 	peers.erase(peer_id)
 	_last_heartbeat.erase(peer_id)
+	if affected_attempt and pre_publication:
+		_abort_resume("A participant disconnected before publication.")
+	elif affected_attempt:
+		# The host state is already live. Preserve the host/other admitted side;
+		# only the disconnected endpoint becomes unassociated and non-admitted.
+		_resume_attempt = {}
+		_principal_command_admission_enabled = true
+		resume_status_changed.emit("Waiting for explicit reconnect assignment")
+	if connection_state == ConnectionState.IN_GAME and _resume_attempt.is_empty():
+		_notify_unassigned_reconnect_endpoints()
 	peer_disconnected.emit(peer_id)
 
 
@@ -519,6 +1252,21 @@ func _send_handshake(protocol_version: int, client_id: String,
 		_handshake_response.rpc_id(sender_id, false, reason, -1)
 		_disconnect_peer_deferred(sender_id)
 		return
+	# An already-running host authenticates transport only. No vacant lobby
+	# slot, peer/profile identity, or display name becomes gameplay authority.
+	if connection_state == ConnectionState.IN_GAME:
+		peers[sender_id] = {
+			"peer_id": sender_id,
+			"display_name": display_name,
+			"client_id": client_id,
+			"player_index": -1,
+			"protocol_version": protocol_version,
+			"authenticated": true,
+			"command_admission_enabled": false,
+		}
+		_handshake_response.rpc_id(sender_id, true, "", -1, true)
+		_begin_reconnect_for_peer(sender_id)
+		return
 	# --- Assign player slot ---
 	var player_index: int = _assign_player_slot(sender_id)
 	if player_index < 0:
@@ -538,7 +1286,7 @@ func _send_handshake(protocol_version: int, client_id: String,
 	}
 	_log.info("Peer %d accepted as player %d ('%s')." % [
 			sender_id, player_index, display_name])
-	_handshake_response.rpc_id(sender_id, true, "", player_index)
+	_handshake_response.rpc_id(sender_id, true, "", player_index, false)
 	peer_authenticated.emit(sender_id, player_index, display_name)
 
 
@@ -559,7 +1307,7 @@ func _verify_lobby_password(password: String) -> bool:
 ## Server → Client: handshake response (accept or reject).
 @rpc("authority", "reliable")
 func _handshake_response(accepted: bool, reason: String,
-		player_index: int) -> void:
+		player_index: int, server_in_game: bool = false) -> void:
 	if role != Role.CLIENT:
 		return
 	if accepted:
@@ -568,7 +1316,11 @@ func _handshake_response(accepted: bool, reason: String,
 		_local_player_index = player_index
 		PlayMode.set_mode(PlayMode.Mode.NETWORK)
 		_log.info("PlayMode set to NETWORK (client, player_index=%d)." % player_index)
-		_set_state(ConnectionState.LOBBY)
+		if server_in_game:
+			# Remain AUTHENTICATING until the host sends a filtered staged state.
+			resume_status_changed.emit("Waiting for explicit reconnect assignment")
+		else:
+			_set_state(ConnectionState.LOBBY)
 		_start_heartbeat()
 		handshake_accepted.emit(player_index)
 	else:
@@ -659,7 +1411,7 @@ func _server_shutdown_notice() -> void:
 ## Client-side helper: sends a serialized command to the server.
 ## Called by [NetworkCommandSubmitter.submit].
 func send_command_to_server(data: Dictionary) -> void:
-	if role != Role.CLIENT:
+	if role != Role.CLIENT or not _principal_command_admission_enabled:
 		_log.warn("send_command_to_server() called but role is %s." %
 				_role_name(role))
 		return
@@ -688,6 +1440,12 @@ func _submit_command_to_server(data: Dictionary) -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if not peers.has(sender_id):
 		_log.warn("Command from unknown peer %d — ignoring." % sender_id)
+		return
+	if not _principal_command_admission_enabled \
+			or not bool((peers[sender_id] as Dictionary).get(
+					"command_admission_enabled", true)):
+		_send_command_rejection(sender_id, data,
+				"Principal command admission is not enabled.")
 		return
 	var cmd: GameCommand = GameCommand.deserialize(data)
 	if cmd == null:
@@ -1083,14 +1841,23 @@ func _cleanup() -> void:
 		_heartbeat_timer.stop()
 		_heartbeat_timer.queue_free()
 		_heartbeat_timer = null
+	_sync_gate.deactivate()
 	peers.clear()
 	_last_heartbeat.clear()
 	_local_player_index = -1
 	_pending_game_config = {}
 	_host_match_principal_id = ""
+	_resume_attempt = {}
+	_post_publication_fresh_attempt_id = ""
+	_client_staged_resume = {}
+	_principal_command_admission_enabled = true
+	_captured_rejection_command = null
+	_captured_rejection_reason = ""
+	_lobby_password = ""
 	_active_port = 0
 	if _peer:
 		multiplayer.multiplayer_peer = null
+		_peer.close()
 		_peer = null
 	role = Role.NONE
 	_set_state(ConnectionState.DISCONNECTED)

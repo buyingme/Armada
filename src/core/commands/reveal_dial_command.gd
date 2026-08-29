@@ -37,6 +37,9 @@ func validate(game_state: GameState) -> String:
 		return base
 	if game_state.current_phase != Constants.GamePhase.SHIP:
 		return "Not in Ship Phase."
+	if _ship_select_controller_mismatch(game_state):
+		return "Current Ship Phase selection belongs to player %d." \
+				% game_state.interaction_flow.controller_player
 	if not payload.has("ship_index"):
 		return "Missing ship_index."
 	var action: String = payload.get("action", "")
@@ -83,3 +86,12 @@ func execute(game_state: GameState) -> Dictionary:
 		"action": action,
 		"ship_index": payload.get("ship_index", -1),
 	}
+
+
+func _ship_select_controller_mismatch(game_state: GameState) -> bool:
+	var flow: InteractionFlow = game_state.interaction_flow
+	return flow != null \
+			and flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION \
+			and flow.step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT \
+			and flow.controller_player >= 0 \
+			and flow.controller_player != player_index

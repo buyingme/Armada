@@ -1,6 +1,7 @@
 ## Integration tests for NetworkManager — state transitions, guards, and signals.
-## Tests the public API surface and state machine without creating real ENet peers.
-## Real network integration requires manual testing (two processes).
+## Tests the public API surface and state machine plus real local ENet binding.
+## Full peer-to-peer transport ordering is proven by the mandatory separate-
+## process tests/acceptance/network_resume harness.
 ##
 ## G4 Network Plan: §3 — G4.1 integration tests
 extends GutTest
@@ -270,6 +271,15 @@ func test_harness_make_handshake_uses_defaults() -> void:
 			"Default client_id should be 'test-uuid'.")
 	assert_eq(hs["display_name"], "TestPlayer",
 			"Default display name should be 'TestPlayer'.")
+	assert_eq(hs["protocol_version"], 4,
+			"MATCH-003 cuts over transport negotiation to protocol 4.")
+
+
+func test_protocol_three_handshake_is_not_compatible_with_cutover() -> void:
+	var harness: Variant = NetworkHarnessScript.new()
+	var legacy: Dictionary = harness.make_handshake(3)
+	assert_ne(legacy["protocol_version"], NetworkManager.PROTOCOL_VERSION,
+			"Protocol 3 peers must be rejected rather than silently downgraded.")
 
 
 func test_harness_make_handshake_custom_values() -> void:

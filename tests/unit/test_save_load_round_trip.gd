@@ -104,6 +104,57 @@ func _make_populated_state() -> GameState:
 	return gs
 
 
+## Produces the canonical state immediately after Player 0 completed a Ship
+## activation.  EndActivationCommand is the authoritative producer of the
+## persisted next-controller decision exercised by the resume regressions.
+func _make_completed_ship_phase_state() -> GameState:
+	var state: GameState = GameState.new()
+	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP
+	state.initiative_player = 0
+	var cr90: ShipInstance = _make_ship(SHIP_KEY_CR90, 0)
+	var nebulon: ShipInstance = _make_ship(SHIP_KEY_NEBULON, 0)
+	var imperial_ship: ShipInstance = _make_ship(SHIP_KEY_CR90, 1)
+	state.player_states[0].ships.append_array([cr90, nebulon])
+	state.player_states[1].ships.append(imperial_ship)
+	_assign_hidden_dials(cr90, Constants.CommandType.NAVIGATE)
+	_assign_hidden_dials(nebulon, Constants.CommandType.REPAIR)
+	_assign_hidden_dials(imperial_ship, Constants.CommandType.SQUADRON)
+
+	var activate := ActivateShipCommand.new(0, {"ship_index": 0})
+	activate.sequence = 1
+	assert_eq(activate.validate(state), "",
+			"Player 0 must be able to activate the CR90 before saving")
+	var activation: Dictionary = activate.execute(state)
+	var activation_id: String = str(activation.get("ship_activation_identity", ""))
+	assert_false(activation_id.is_empty())
+	assert_true(cr90.consume_unreached_squadron_command_opportunity(
+			activation_id, true))
+	assert_true(cr90.open_maneuver_opportunity(activation_id))
+	assert_true(cr90.consume_open_maneuver_opportunity(activation_id))
+	var finish := EndActivationCommand.new(0, {
+		"ship_index": 0,
+		"ship_activation_identity": activation_id,
+	})
+	assert_eq(finish.validate(state), "",
+			"The completed Player 0 activation must produce the next actor")
+	finish.execute(state)
+	assert_true(cr90.activated_this_round)
+	assert_eq(state.interaction_flow.controller_player, 1,
+			"EndActivationCommand must persist Player 1 as the next actor")
+	return state
+
+
+func _assign_hidden_dials(ship: ShipInstance, command: int) -> void:
+	var commands: Array[int] = []
+	for _index: int in range(ship.command_dial_stack.get_dials_needed()):
+		commands.append(command)
+	assert_true(ship.command_dial_stack.assign_dials(commands, 1))
+
+
 # ---------------------------------------------------------------------------
 # PlayerState fleet rebuilding
 # ---------------------------------------------------------------------------
@@ -170,6 +221,36 @@ func test_save_load_round_trip_preserves_fleet() -> void:
 	for ship: Variant in loaded.player_states[0].ships:
 		assert_not_null((ship as ShipInstance).ship_data,
 				"Loaded ship template should be re-resolved")
+
+
+func test_same_live_and_hot_seat_load_preserve_saved_next_ship_actor() -> void:
+	var completed: GameState = _make_completed_ship_phase_state()
+	var same_live: GameState = GameState.deserialize(completed.serialize())
+	assert_not_null(same_live)
+	assert_eq(same_live.interaction_flow.controller_player, 1,
+			"The serialized state must retain Player 1's next decision")
+
+	var prev_state: GameState = GameManager.current_game_state
+	var prev_active: bool = GameManager.is_game_active
+	var prev_player: int = GameManager.active_player
+	assert_true(GameManager.start_new_game_from_state(same_live, "same_live"))
+	assert_eq(GameManager.active_player, 1,
+			"Same-live installation must not fall back to initiative")
+
+	assert_true(_manager.save_game(completed, TEST_SAVE),
+			"The post-activation Hot-Seat state must persist")
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	assert_true(bool(result.get("ok", false)))
+	var loaded: GameState = result.get("state") as GameState
+	assert_not_null(loaded)
+	assert_eq(loaded.interaction_flow.controller_player, 1,
+			"Hot-Seat load must retain Player 1 as the next decision owner")
+	assert_true(GameManager.start_new_game_from_state(loaded, "hot_seat_load"))
+	assert_eq(GameManager.active_player, 1,
+			"Hot-Seat installation must restore Player 1, not initiative Player 0")
+	GameManager.current_game_state = prev_state
+	GameManager.is_game_active = prev_active
+	GameManager.active_player = prev_player
 
 
 func test_local_attack_preview_does_not_enter_saved_authoritative_state() -> void:

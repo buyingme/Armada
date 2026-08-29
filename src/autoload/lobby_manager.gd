@@ -70,6 +70,12 @@ signal game_starting()
 ## [signal game_starting] is emitted right after.  Phase J7.
 signal load_state_received()
 
+## Fresh-session resume presentation state.  The assignment UI is not an
+## authority: it submits only an explicit endpoint-to-player proposal.
+signal resume_assignment_required(attempt_id: String, endpoint_ids: Array[int],
+		available_players: Array[int])
+signal resume_attempt_finished()
+
 
 # ---------------------------------------------------------------------------
 # State
@@ -81,6 +87,10 @@ var current_lobby: LobbyState = null
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("LobbyManager")
 
+## Purpose-specific pre-publication state; never canonical session state.
+var _pending_initial_start: Dictionary = {}
+var _pending_resume: Dictionary = {}
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -89,6 +99,15 @@ var _log: GameLogger = GameLogger.new("LobbyManager")
 func _ready() -> void:
 	NetworkManager.peer_authenticated.connect(_on_peer_authenticated)
 	NetworkManager.peer_disconnected.connect(_on_peer_disconnected)
+	NetworkManager.fresh_resume_assignment_ready.connect(
+			_on_fresh_resume_assignment_ready)
+	NetworkManager.fresh_resume_ready_to_commit.connect(
+			_on_fresh_resume_ready_to_commit)
+	NetworkManager.fresh_resume_published.connect(
+			_on_fresh_resume_published)
+	NetworkManager.fresh_resume_failed.connect(_on_fresh_resume_failed)
+	NetworkManager.resume_commit_received.connect(_on_resume_commit_received)
+	NetworkManager.reconnect_client_released.connect(_on_reconnect_client_released)
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +150,8 @@ func request_start_game() -> void:
 		_log.warn("Cannot start game — lobby not ready.")
 		lobby_error.emit("All players must be ready to start.")
 		return
+	if not _pending_initial_start.is_empty():
+		return
 	_log.info("Starting game from lobby.")
 	# Select shared RNG seed and broadcast config BEFORE scene transition.
 	# Normal games retain fresh host selection.  Network replay reconstructs
@@ -151,31 +172,51 @@ func request_start_game() -> void:
 				ReplayDriver.get_pending_replay_binding())
 	else:
 		binding = MatchPlayerControlBinding.create_two_human()
-		if binding != null and not NetworkManager.establish_initial_match_principal_associations(
-				binding, current_lobby):
-			NetworkManager.clear_match_principal_associations()
-			binding = null
 	if binding == null:
 		lobby_error.emit("Match principal binding could not be established.")
 		return
+	_pending_initial_start = {
+		"rng_seed": rng_seed,
+		"scenario_id": scenario_id,
+		"binding": binding,
+	}
+	if not ReplayDriver.is_network_replay_bootstrap_active() \
+			and not NetworkManager.establish_initial_match_principal_associations(
+				binding, current_lobby):
+		_pending_initial_start = {}
+		lobby_error.emit("Initial Network association could not be established.")
+		return
+	_publish_pending_initial_start(binding)
+
+
+func _publish_pending_initial_start(binding: MatchPlayerControlBinding) -> void:
+	if _pending_initial_start.is_empty() \
+			or _pending_initial_start.get("binding") != binding:
+		return
+	var rng_seed: int = int(_pending_initial_start["rng_seed"])
+	var scenario_id: String = str(_pending_initial_start["scenario_id"])
 	var binding_data: Dictionary = binding.serialize()
 	if SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(scenario_id):
 		if not can_start_setup_match():
+			_pending_initial_start = {}
 			lobby_error.emit("Both players must choose valid fleets before starting.")
 			return
 		var setup_package: FleetSetupPackage = _prepare_setup_draft_for_start()
 		if setup_package == null:
+			_pending_initial_start = {}
 			lobby_error.emit("Setup package draft is unavailable.")
 			return
 		NetworkManager.broadcast_setup_package_config(
 				rng_seed, setup_package, binding_data)
 		_notify_game_start.rpc()
 		NetworkManager.start_game()
+		_pending_initial_start = {}
 		game_starting.emit()
 		return
 	NetworkManager.broadcast_game_config(rng_seed, scenario_id, binding_data)
 	_notify_game_start.rpc()
 	NetworkManager.start_game()
+	_pending_initial_start = {}
 	game_starting.emit()
 
 
@@ -211,9 +252,12 @@ func host_load_save(state: GameState, meta: SaveGameMetadata) -> void:
 	if state == null or meta == null:
 		_log.error("host_load_save() called with null state/meta.")
 		return
-	if not NetworkManager.can_install_loaded_binding(state):
-		_log.warn("Network save load rejected: no same-match live entitlement.")
-		lobby_error.emit("Network saves can only load into their existing live match.")
+	var same_live_match_load: bool = NetworkManager.can_install_loaded_binding(state)
+	var fresh_session_resume: bool = NetworkManager.connection_state == \
+			NetworkManager.ConnectionState.LOBBY
+	if not same_live_match_load and not fresh_session_resume:
+		_log.warn("Network save load rejected: no authorized load path.")
+		lobby_error.emit("Network save load is unavailable in this session.")
 		return
 	# Two valid call sites: from the lobby (current_lobby exists and is
 	# Ready) or mid-session (no/stale lobby, but a peer is connected).
@@ -225,6 +269,20 @@ func host_load_save(state: GameState, meta: SaveGameMetadata) -> void:
 	if not lobby_ready and not in_session:
 		_log.warn("Cannot load game — lobby not ready and no peers.")
 		lobby_error.emit("All players must be connected and Ready.")
+		return
+	if fresh_session_resume:
+		var availability: Dictionary = NetworkManager.resume_availability_for_state(state)
+		if not bool(availability.get("resumable", false)):
+			lobby_error.emit("This Network save does not have a supported two-human binding.")
+			return
+		_pending_resume = {
+			"state": state,
+			"meta": meta,
+			"published": false,
+		}
+		if not NetworkManager.begin_fresh_session_resume(state, meta):
+			_pending_resume = {}
+			lobby_error.emit("Network resume could not be started.")
 		return
 	_log.info("Host loading save '%s'." % meta.display_name)
 	# Install and reconcile on the host before the snapshot can be broadcast.
@@ -246,17 +304,154 @@ func host_load_save(state: GameState, meta: SaveGameMetadata) -> void:
 	_maybe_force_board_reload()
 
 
+func cancel_fresh_session_resume() -> void:
+	if _pending_resume.is_empty():
+		return
+	NetworkManager.cancel_fresh_resume()
+	_pending_resume = {}
+	resume_attempt_finished.emit()
+
+
+func is_fresh_session_resume_pending() -> bool:
+	return not _pending_resume.is_empty()
+
+
+## Returns presentation-only labels for the saved sides currently awaiting
+## explicit endpoint assignment.  These labels never participate in principal
+## association or assignment validation.
+func fresh_resume_side_labels(available_players: Array[int]) -> Dictionary:
+	var state: GameState = _pending_resume.get("state") as GameState
+	return saved_side_labels_for_state(state, available_players)
+
+
+## Returns saved-side presentation labels from canonical runtime state.
+## FleetRoster.name is authoritative fleet-builder input, but it is not
+## serialized into GameState or SaveGameMetadata.  A resumed save therefore
+## must not infer a name from a local fleet library; it uses the specified
+## Unnamed Fleet fallback while preserving the saved PlayerState faction.
+func saved_side_labels_for_state(state: GameState,
+		available_players: Array[int]) -> Dictionary:
+	var labels: Dictionary = {}
+	for player_index: int in available_players:
+		labels[player_index] = "%s — Unnamed Fleet" % \
+				UIProjector.player_faction_label(state, player_index)
+	return labels
+
+
+func submit_fresh_session_assignment(proposals: Dictionary) -> void:
+	if not NetworkManager.is_server() or _pending_resume.is_empty():
+		return
+	if not NetworkManager.submit_fresh_resume_assignment(proposals):
+		lobby_error.emit("The explicit side assignment is incomplete or invalid.")
+		return
+	if not NetworkManager.stage_fresh_resume_snapshots(
+			_pending_resume["state"], _pending_resume["meta"]):
+		NetworkManager.cancel_fresh_resume()
+
+
+func _on_fresh_resume_assignment_ready(attempt_id: String,
+		expected_endpoints: Array[int], available_players: Array[int]) -> void:
+	if not NetworkManager.is_server() or _pending_resume.is_empty():
+		return
+	_pending_resume["attempt_id"] = attempt_id
+	resume_assignment_required.emit(attempt_id, expected_endpoints, available_players)
+
+
+func _on_fresh_resume_ready_to_commit(attempt_id: String) -> void:
+	if not NetworkManager.is_server() or _pending_resume.get(
+			"attempt_id", "") != attempt_id:
+		return
+	_commit_fresh_session_resume(attempt_id)
+
+
+func _commit_fresh_session_resume(attempt_id: String) -> void:
+	if _pending_resume.get("attempt_id", "") != attempt_id:
+		return
+	var state: GameState = _pending_resume["state"] as GameState
+	var meta: SaveGameMetadata = _pending_resume["meta"] as SaveGameMetadata
+	if not NetworkManager.commit_fresh_resume_associations(state, meta):
+		return
+	# This is the sole canonical publication linearization point.
+	if not GameManager.start_new_game_from_state(
+			state, meta.scenario_id, meta.next_command_sequence):
+		NetworkManager.rollback_fresh_resume_associations()
+		return
+	_pending_resume["published"] = true
+	if not NetworkManager.mark_fresh_resume_host_state_live(attempt_id):
+		lobby_error.emit("Restored state is live but transport remains closed.")
+		return
+	if not NetworkManager.publish_fresh_resume_after_host_install(state, meta):
+		lobby_error.emit("Restored state is live but client publication is incomplete.")
+
+
+func _on_resume_commit_received(state: GameState, meta: SaveGameMetadata,
+		principal_id: String, player_index: int, attempt_id: String) -> void:
+	if NetworkManager.is_server() or state == null or meta == null:
+		return
+	if not NetworkManager.install_client_principal_assignment(
+			attempt_id, principal_id, player_index):
+		NetworkManager.reject_client_resume_installation(
+				attempt_id, "Staged principal assignment no longer matches.")
+		lobby_error.emit("Staged Network assignment is inconsistent.")
+		return
+	if not GameManager.start_new_game_from_state(
+			state, meta.scenario_id, meta.next_command_sequence):
+		NetworkManager.reject_client_resume_installation(
+				attempt_id, "Restored Network state is inconsistent.")
+		lobby_error.emit("Restored Network state is inconsistent.")
+		return
+	_pending_resume = {"state": state, "meta": meta, "attempt_id": attempt_id,
+		"published": true}
+	NetworkManager.acknowledge_resume_installation(attempt_id)
+
+
+func _on_fresh_resume_published(attempt_id: String) -> void:
+	if not NetworkManager.is_server() and _pending_resume.get("attempt_id", "") != attempt_id:
+		return
+	NetworkManager.start_game()
+	load_state_received.emit()
+	game_starting.emit()
+	_pending_resume = {}
+	resume_attempt_finished.emit()
+	_maybe_force_board_reload()
+
+
+func _on_fresh_resume_failed(reason: String) -> void:
+	if bool(_pending_resume.get("published", false)):
+		lobby_error.emit(reason)
+		return
+	_pending_resume = {}
+	resume_attempt_finished.emit()
+	lobby_error.emit(reason)
+
+
+func _on_reconnect_client_released(_attempt_id: String) -> void:
+	# Only the newly reconnected client enters the board.  The host and
+	# incumbent are already live and must not receive a second scene release.
+	if NetworkManager.is_server():
+		return
+	load_state_received.emit()
+	game_starting.emit()
+	_pending_resume = {}
+	_maybe_force_board_reload()
+
+
 # ---------------------------------------------------------------------------
 # Public API — Common
 # ---------------------------------------------------------------------------
 
 ## Leaves the current lobby and disconnects.
 func leave_lobby() -> void:
-	if current_lobby == null:
+	var had_lobby: bool = current_lobby != null
+	if not had_lobby and not NetworkManager.is_connected_to_network():
 		return
-	_log.info("Leaving lobby '%s'." % current_lobby.lobby_name)
+	if had_lobby:
+		_log.info("Leaving lobby '%s'." % current_lobby.lobby_name)
 	current_lobby = null
+	_pending_initial_start = {}
+	_pending_resume = {}
 	NetworkManager.disconnect_from_server()
+	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
 	lobby_left.emit()
 
 

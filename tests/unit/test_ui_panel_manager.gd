@@ -4,11 +4,18 @@
 extends GutTest
 
 
-var _mgr: UIPanelManager = null
+class QuitLifecyclePanelManager extends UIPanelManager:
+	var main_menu_transition_requested: bool = false
+
+	func _transition_to_main_menu() -> void:
+		main_menu_transition_requested = true
+
+
+var _mgr: QuitLifecyclePanelManager = null
 
 
 func before_each() -> void:
-	_mgr = UIPanelManager.new()
+	_mgr = QuitLifecyclePanelManager.new()
 	_mgr.name = "TestUIPanelManager"
 	add_child(_mgr)
 
@@ -180,3 +187,70 @@ func test_handle_quit_escape_ignores_non_key_event() -> void:
 	var result: bool = _mgr.handle_quit_escape(event)
 	# Assert
 	assert_false(result, "Should return false for non-key event.")
+
+
+# -----------------------------------------------------------------------
+# Network quit lifecycle
+# -----------------------------------------------------------------------
+
+func test_quit_network_game_tears_down_session_before_main_menu() -> void:
+	var previous_game_state: GameState = GameManager.current_game_state
+	var previous_game_active: bool = GameManager.is_game_active
+	var live_state := GameState.new()
+	live_state.initialize()
+	live_state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human())
+	var binding_before: Dictionary = live_state.serialize().get(
+			"match_player_control_binding", {}) as Dictionary
+	GameManager.current_game_state = live_state
+	GameManager.is_game_active = true
+	assert_true(NetworkManager.host(0),
+			"Fixture must enter a real host session before quitting it.")
+	NetworkManager.start_game()
+	assert_eq(NetworkManager.connection_state,
+			NetworkManager.ConnectionState.IN_GAME)
+	NetworkManager.peers[42] = {
+		"player_index": 1,
+		"match_principal_id": "saved-principal-1",
+		"command_admission_enabled": true,
+	}
+	NetworkManager._host_match_principal_id = "saved-principal-0"
+	NetworkManager._resume_attempt = {"operation": "fresh_session_resume"}
+	NetworkManager._client_staged_resume = {"attempt_id": "stale"}
+	NetworkManager._post_publication_fresh_attempt_id = "stale"
+	NetworkManager._principal_command_admission_enabled = false
+	NetworkManager._lobby_password = "stale-password"
+	NetworkManager._sync_gate.activate()
+	LobbyManager.current_lobby = LobbyState.new()
+	LobbyManager._pending_initial_start = {"scenario_id": "stale"}
+	LobbyManager._pending_resume = {"attempt_id": "stale"}
+
+	_mgr._on_quit_confirmed()
+
+	assert_eq(NetworkManager.connection_state,
+			NetworkManager.ConnectionState.DISCONNECTED)
+	assert_eq(NetworkManager.role, NetworkManager.Role.NONE)
+	assert_null(NetworkManager._peer)
+	assert_true(NetworkManager.peers.is_empty())
+	assert_true(NetworkManager._resume_attempt.is_empty())
+	assert_true(NetworkManager._client_staged_resume.is_empty())
+	assert_eq(NetworkManager._post_publication_fresh_attempt_id, "")
+	assert_eq(NetworkManager._host_match_principal_id, "")
+	assert_true(NetworkManager.is_player_command_admission_enabled())
+	assert_eq(NetworkManager._lobby_password, "")
+	assert_false(NetworkManager._sync_gate.is_active())
+	assert_null(LobbyManager.current_lobby)
+	assert_true(LobbyManager._pending_initial_start.is_empty())
+	assert_true(LobbyManager._pending_resume.is_empty())
+	assert_eq(PlayMode.current_mode, PlayMode.Mode.HOT_SEAT)
+	assert_eq(GameManager.current_game_state.serialize().get(
+			"match_player_control_binding", {}) as Dictionary, binding_before,
+			"Quit teardown must not mutate the saved canonical player binding.")
+	assert_true(_mgr.main_menu_transition_requested,
+			"Production quit should transition only after session teardown.")
+	assert_true(NetworkManager.host(0),
+			"A new host session must be accepted after explicit quit teardown.")
+	NetworkManager.disconnect_from_server()
+	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
+	GameManager.current_game_state = previous_game_state
+	GameManager.is_game_active = previous_game_active

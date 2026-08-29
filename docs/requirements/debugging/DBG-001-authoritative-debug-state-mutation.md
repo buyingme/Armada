@@ -1,6 +1,8 @@
 # DBG-001 — Authoritative Debug State Mutation
 
-Status: Draft
+Status: Accepted
+Accepted by: Project Owner
+Accepted date: 2026-08-29
 
 ## Purpose
 
@@ -9,6 +11,34 @@ The debug menu exists to make game-state setup, manipulation, and rule verificat
 State-changing debug actions must produce game states that are equivalent in authority, projection, networking, serialization, and replay behavior to states reached through normal gameplay.
 
 The debug menu must not create a second or presentation-only path for changing authoritative game state.
+
+## AS-IS Discovery Evidence
+
+This section records observed implementation facts. It is not a statement of
+accepted target architecture.
+
+- Ship debug dragging and rotation currently mutate only `ShipToken`
+  presentation transforms. `ShipInstance.pos_x`, `pos_y`, and `rotation_deg`
+  remain unchanged.
+- Squadron debug dragging and rotation have the same presentation-only path;
+  `SquadronInstance.pos_x`, `pos_y`, and `rotation_deg` remain unchanged.
+- `ExecuteManeuverCommand` and `MoveSquadronCommand` are not raw debug
+  repositioning commands. Their complete semantics include gameplay legality,
+  activation opportunities, lifecycle, and continuation effects.
+- `DebugDealDamageCommand` adds a selected faceup card to durable ship state,
+  but the debug UI currently draws and identity-overrides the card from the
+  authoritative damage deck before submitting that command. The deck mutation
+  is therefore outside the recorded command and current debug replay does not
+  fully reproduce damage-deck state.
+- Once a faceup card has been assigned, normal and debug paths converge on the
+  same durable ship damage-card state and immediate/persistent rule-resolution
+  infrastructure. This is useful BUG-032 evidence, but does not resolve
+  BUG-032.
+- In Network play, a client can currently submit debug damage through ordinary
+  gameplay-side authorization, while the host submitter is constrained by the
+  gameplay side it controls and cannot freely debug the opposing side.
+- No current debug UI exposes direct hull, shield, speed, defense-token, or
+  destroy/restore mutation.
 
 ## Requirements
 
@@ -30,13 +60,22 @@ Examples include:
 
 Presentation must derive the resulting state through the normal projection path.
 
+Debug commands may bypass normal gameplay legality when needed to establish a
+test state, but they must preserve the existing structural invariants of the
+authoritative state model. This requirement does not define new gameplay
+invariants.
+
 ### DBG-001-02 — Authoritative Command Path
 
 State-changing debug actions must use the authoritative command infrastructure.
 
-Where an existing gameplay command correctly represents the intended operation, it may be reused.
+An existing gameplay command may be reused only when its complete authoritative
+semantics match the intended debug operation. The comparison includes
+lifecycle, opportunity consumption, legality, continuation, and
+phase/activation effects, not merely the final field mutation.
 
-Where debug functionality requires behavior that normal gameplay does not permit, a debug-specific command may be used.
+Where those semantics do not match, including where debug functionality must
+bypass normal gameplay legality, a purpose-specific debug command is required.
 
 Debug-specific commands must use the same authoritative command execution infrastructure as gameplay commands rather than establishing a separate debug mutation system.
 
@@ -56,19 +95,32 @@ The replay must make it possible to identify:
 
 - that a state-changing operation originated from debug tooling;
 - which authoritative object was affected;
-- the state-changing intent and information necessary for deterministic replay.
+- the state-changing intent and all authoritative state changes necessary for
+  deterministic replay.
 
-A replay containing debug commands must reproduce the resulting authoritative game state.
+A replay containing debug commands must reproduce the resulting authoritative
+game state, including authoritative resources consumed or otherwise changed by
+the debug operation.
+
+Where one debug operation necessarily causes follow-up authoritative commands,
+history must contain enough evidence to reconstruct the resulting state and to
+understand that the sequence originated from debug setup. This requirement does
+not require debug flags in ordinary canonical gameplay state or a generic
+command-correlation framework.
 
 ### DBG-001-05 — Network Authority
 
-In network play, only the authoritative host may issue state-changing debug commands.
+In network play, state-changing debug authority belongs only to the
+authoritative host. This authority is independent of which saved or gameplay
+side the host currently controls.
 
-Accepted debug commands must propagate through the normal authoritative network synchronization path.
+Clients may not independently issue or authorize an authoritative
+state-changing debug mutation.
 
-Clients must derive the resulting state through the same synchronization/projection mechanisms used for ordinary gameplay.
+Accepted debug commands must propagate through the normal authoritative
+command, synchronization, projection, and filtering infrastructure.
 
-Clients must not independently perform authoritative debug mutations.
+Clients must derive accepted debug mutations through those same mechanisms.
 
 ### DBG-001-06 — Hot-Seat Consistency
 
@@ -101,16 +153,25 @@ This capability should make discrepancies between canonical state and presentati
 
 ## Required Verification
 
-The implementation must demonstrate at minimum:
+The minimum trusted authoritative-debug slice must demonstrate at minimum:
 
 1. Moving a ship through the debug menu changes its canonical position and orientation.
-2. Normal presentation subsequently reflects that canonical position.
-3. The movement is present in replay history and reproduces correctly.
-4. In network play, a host-issued debug movement is reflected correctly on the client.
-5. The client cannot independently issue an authoritative state-changing debug operation.
-6. Assigning a damage card through debug tooling changes canonical state through the authoritative command path.
-7. Subsequent damage-card rule processing uses the same authoritative rule infrastructure used by normal gameplay.
-8. Save/load or replay after debug manipulation reconstructs the authoritative state correctly.
+2. Moving a squadron through the debug menu changes its canonical position and orientation.
+3. Normal presentation subsequently reflects each canonical repositioning.
+4. Each repositioning is present in replay history and reproduces correctly.
+5. Assigning a damage card through debug tooling changes canonical ship state
+   and consumes the authoritative damage deck through the authoritative
+   command path.
+6. Subsequent damage-card rule processing uses the same authoritative rule
+   infrastructure used by normal gameplay.
+7. Canonical-state inspection exposes the selected movable object's
+   authoritative position and orientation sufficiently to verify these paths.
+8. In Hot-Seat, the same authoritative debug command infrastructure is usable.
+9. In Network play, a host-issued debug repositioning and damage assignment
+   propagates correctly to a client, and a client cannot independently issue
+   or authorize either mutation.
+10. Save/load and replay after each operation reconstruct the resulting
+    authoritative state, including damage-deck state after debug damage setup.
 
 ## Non-Goals
 
@@ -120,13 +181,27 @@ DBG-001 does not require:
 - forcing debug actions to obey normal gameplay legality where doing so would prevent useful test-state construction;
 - creating a separate debug command processor;
 - duplicating gameplay rule implementations for debug use;
-- migrating every existing debug function in one implementation step unless required to eliminate an identified non-authoritative mutation path.
+- migrating every possible future state-changing debug operation in the first
+  implementation slice.
+
+Other state-changing debug actions may migrate incrementally when they exist
+or become necessary. The minimum trusted slice is limited to ship
+repositioning, squadron repositioning, damage-card assignment with
+authoritative deck consumption, and the inspection, Hot-Seat, Network, replay,
+and save/load support required to verify them.
 
 ## Relationship to BUG-032
 
 BUG-032 exposed a discrepancy between damage-card behavior reached through normal gameplay and damage-card behavior exercised through debug tooling.
 
-The working debug damage-card path is useful diagnostic evidence, but the debug infrastructure itself must first be made authoritative and replayable before it can be treated as a trustworthy reference path.
+The working debug damage-card path is useful diagnostic evidence, but it cannot
+be treated as a trustworthy reference path until its canonical deck mutation,
+Network authority, and replay behavior are authoritative and reproducible.
+
+Discovery shows that, after setup, normal and debug faceup-card paths use the
+same durable ship-card state and rule-resolution infrastructure. That
+convergence is useful comparison evidence only after the debug setup path meets
+this requirement; it does not diagnose or resolve BUG-032.
 
 BUG-032 therefore depends on DBG-001.
 
@@ -142,11 +217,7 @@ Before BUG-032 can be accepted as resolved:
 
 ## Open Implementation Questions
 
-The implementation/audit should determine:
-
-- which existing debug actions currently mutate presentation objects directly;
-- which debug actions mutate canonical state without using commands;
-- which existing gameplay commands can safely be reused;
-- which operations require dedicated debug-specific commands;
-- whether current damage-card debug injection invokes rule processing differently from normal damage resolution;
-- whether ship/squadron debug displacement currently changes scene transforms without changing canonical geometry.
+- Whether the bounded ship and squadron repositioning scope is represented by
+  one purpose-specific command class or two.
+- The narrow payload and validation design that records authoritative
+  damage-deck consumption and any necessary debug-origin follow-up evidence.

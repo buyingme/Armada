@@ -1,0 +1,287 @@
+{
+	"commands": [
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"commands": [
+					3
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 1,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					0,
+					1
+				],
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 2,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					3,
+					0,
+					2
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 3,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 0,
+			"sequence": 4,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"effect_id": "structural_damage",
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 5,
+			"type": "debug_deal_damage"
+		},
+		{
+			"payload": {
+				"card_index": 0,
+				"choice": {
+
+				},
+				"effect_id": "structural_damage",
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 6,
+			"type": "resolve_immediate_effect"
+		},
+		{
+			"payload": {
+				"effect_id": "ruptured_engine",
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 7,
+			"type": "debug_deal_damage"
+		},
+		{
+			"payload": {
+				"effect_id": "injured_crew",
+				"owner_player": 1,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 8,
+			"type": "debug_deal_damage"
+		},
+		{
+			"payload": {
+				"card_index": 0,
+				"choice": {
+					"id": "discard_defense_1"
+				},
+				"effect_id": "injured_crew",
+				"owner_player": 1,
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 9,
+			"type": "resolve_immediate_effect"
+		},
+		{
+			"payload": {
+				"owner_player": 1,
+				"pos_x": 0.211246743798256,
+				"pos_y": 0.71374523639679,
+				"rotation_deg": 180.000005008956,
+				"target_kind": "ship",
+				"unit_index": 0
+			},
+			"player": 0,
+			"sequence": 10,
+			"type": "debug_reposition"
+		},
+		{
+			"payload": {
+				"owner_player": 1,
+				"pos_x": 0.233943521976471,
+				"pos_y": 0.766708672046661,
+				"rotation_deg": 180.000005008956,
+				"target_kind": "ship",
+				"unit_index": 0
+			},
+			"player": 0,
+			"sequence": 11,
+			"type": "debug_reposition"
+		},
+		{
+			"payload": {
+				"effect_id": "crew_panic",
+				"owner_player": 1,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 12,
+			"type": "debug_deal_damage"
+		},
+		{
+			"payload": {
+				"action": "reveal",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 13,
+			"type": "reveal_dial"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 14,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:14",
+				"ship_index": 0,
+				"step_id": "repair_step"
+			},
+			"player": 0,
+			"sequence": 15,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:14",
+				"ship_index": 0,
+				"step_id": "attack_step"
+			},
+			"player": 0,
+			"sequence": 16,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"declaration_context": "ship_attack",
+				"reason": "no_targets",
+				"ship_activation_identity": "ship-activation:14",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 17,
+			"type": "skip_attack"
+		},
+		{
+			"payload": {
+				"did_overlap": false,
+				"pos_x": 0.688999995478877,
+				"pos_y": 0.721175525806568,
+				"rotation_deg": 0.0,
+				"ship_activation_identity": "ship-activation:14",
+				"ship_index": 0,
+				"speed": 2,
+				"speed_delta": 0,
+				"yaw_bonus_joint": -1,
+				"yaw_clicks": [
+					0,
+					0
+				]
+			},
+			"player": 0,
+			"sequence": 18,
+			"type": "execute_maneuver"
+		},
+		{
+			"payload": {
+				"draw_from_deck": true,
+				"effect_id": "ruptured_engine",
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 19,
+			"type": "persistent_effect_damage"
+		},
+		{
+			"payload": {
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 20,
+			"type": "destroy_unit"
+		},
+		{
+			"payload": {
+				"mode": "discard",
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 21,
+			"type": "spend_dial"
+		},
+		{
+			"payload": {
+				"reason": "crew_panic",
+				"ship_index": 0,
+				"skip_reveal": true
+			},
+			"player": 1,
+			"sequence": 22,
+			"type": "activate_ship"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			1
+		],
+		"format_version": 7,
+		"godot_version": "4.5.1-stable (official)",
+		"initial_command_sequence": 0,
+		"initiative_player": 0,
+		"match_player_control_binding": {
+			"player_principal_ids": [
+				"mp-29dad84c-a0c3-412d-b3d1-2194855f4425",
+				"mp-8b69415a-6bf8-4170-9024-f2e70eb4a84e"
+			],
+			"principals": [
+				{
+					"kind": "HUMAN",
+					"principal_id": "mp-29dad84c-a0c3-412d-b3d1-2194855f4425"
+				},
+				{
+					"kind": "HUMAN",
+					"principal_id": "mp-8b69415a-6bf8-4170-9024-f2e70eb4a84e"
+				}
+			]
+		},
+		"rng_seed": "23612410",
+		"scenario_id": "learning_scenario",
+		"timestamp": "2026-08-30T13:01:33"
+	}
+}

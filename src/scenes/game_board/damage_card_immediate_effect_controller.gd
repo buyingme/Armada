@@ -97,4 +97,10 @@ func _on_choice_confirmed(selection: Dictionary) -> void:
 	_pending_card = null
 	if ship == null or card == null or not ship.faceup_damage.has(card):
 		return
-	GameManager.submit_resolve_immediate_effect(ship, card, selection)
+	var result: Dictionary = GameManager.submit_resolve_immediate_effect(
+			ship, card, selection)
+	if not result.is_empty() and not bool(result.get("awaiting_remote", false)):
+		# Hot-seat has no remote-result mirror to emit these derived visuals.
+		# The command remains the sole gameplay mutation; this only projects the
+		# resulting canonical state through the same shared signal surface.
+		ImmediateEffectSignals.emit(card, ship, result)

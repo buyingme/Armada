@@ -132,6 +132,8 @@ func _is_network_client() -> bool:
 func _ready() -> void:
 	CommandProcessor.command_executed.connect(
 			_on_local_squadron_phase_progress_committed)
+	CommandProcessor.command_executed.connect(
+			_on_persistent_damage_ship_phase_turn_terminated)
 	EventBus.command_dials_submitted.connect(_on_command_dials_submitted)
 	EventBus.command_picker_confirmed.connect(_on_command_picker_confirmed)
 	EventBus.activation_ended.connect(_on_activation_ended)
@@ -146,6 +148,20 @@ func _ready() -> void:
 			_on_network_command_result)
 	NetworkManager.command_rejection_received.connect(
 			_on_network_command_rejection)
+
+
+## Synchronizes the transient local controller from the accepted persistent
+## damage result.  The command has already updated canonical interaction flow;
+## this does not mutate gameplay state or infer progress from presentation.
+func _on_persistent_damage_ship_phase_turn_terminated(
+		command: GameCommand, result: Dictionary) -> void:
+	if command == null \
+			or command.command_type != "persistent_effect_damage" \
+			or not bool(result.get("ship_phase_turn_terminated", false)):
+		return
+	var next_player: int = int(result.get("next_ship_phase_controller", -1))
+	if next_player >= 0 and next_player < Constants.PLAYER_COUNT:
+		_set_active_player(next_player)
 
 
 func _notification(what: int) -> void:

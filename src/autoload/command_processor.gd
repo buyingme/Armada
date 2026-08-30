@@ -316,20 +316,56 @@ func _enqueue_post_success_continuation(game_state: GameState,
 	var attack: GameCommand = _attack_continuation(
 			game_state, command, result, execution_mode)
 	var commanded_squadron: GameCommand = \
-			_commanded_squadron_completion_continuation(
-					game_state, command, execution_mode)
-	if timing != null and attack != null:
+		_commanded_squadron_completion_continuation(
+				game_state, command, execution_mode)
+	var ship_phase_termination: GameCommand = \
+		_ship_phase_termination_continuation(
+				game_state, command, result, execution_mode)
+	var continuation_count: int = int(timing != null) + int(attack != null) \
+			+ int(commanded_squadron != null) + int(ship_phase_termination != null)
+	if continuation_count > 1:
 		_log.warn("Conflicting post-success continuations after [%s]." %
-				command.command_type)
-	elif (timing != null or attack != null) and commanded_squadron != null:
-		_log.warn("Conflicting post-success continuations after [%s]." %
-				command.command_type)
+			command.command_type)
 	elif timing != null:
 		_observer_followups.append(timing)
 	elif attack != null:
 		_observer_followups.append(attack)
 	elif commanded_squadron != null:
 		_observer_followups.append(commanded_squadron)
+	elif ship_phase_termination != null:
+		_observer_followups.append(ship_phase_termination)
+
+
+## Preserves the existing phase-transition owner when persistent damage ends
+## the final legal Ship Phase activation.  The damage command owns the atomic
+## destruction/activation-boundary termination; AdvancePhaseCommand remains
+## the only command that advances phase and is recorded after that damage.
+func _ship_phase_termination_continuation(game_state: GameState,
+		command: GameCommand, result: Dictionary,
+		execution_mode: String) -> GameCommand:
+	if execution_mode != TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
+			or command == null \
+			or command.command_type != "persistent_effect_damage" \
+			or not bool(result.get("ship_phase_turn_terminated", false)) \
+			or game_state == null \
+			or game_state.current_phase != Constants.GamePhase.SHIP \
+			or _has_unactivated_ship(game_state):
+		return null
+	return AdvancePhaseCommand.new(command.player_index, {
+		"next_phase": Constants.GamePhase.SQUADRON,
+	})
+
+
+func _has_unactivated_ship(game_state: GameState) -> bool:
+	for player_state: PlayerState in game_state.player_states:
+		if player_state == null:
+			continue
+		for raw_ship: Variant in player_state.ships:
+			if raw_ship is ShipInstance:
+				var ship: ShipInstance = raw_ship as ShipInstance
+				if not ship.is_destroyed() and not ship.activated_this_round:
+					return true
+	return false
 
 
 ## Bounded CON-007 composed-return seam for a completed ship-commanded

@@ -1415,8 +1415,9 @@ func _resume_active_attack_from_state() -> Dictionary:
 	return result
 
 
-## Rebuilds only purpose-specific scene/application projection from canonical
-## owners. InteractionFlow is not consulted and no semantic command is emitted.
+## Rebuilds purpose-specific scene/application projection from canonical owners.
+## When ADR-006 does not identify a later presentation step, the accepted
+## InteractionFlow synchronizes that transient presentation without mutation.
 func _restore_declaration_adjacent_projection(
 		has_active_attack: bool) -> bool:
 	var game_state: GameState = GameManager.current_game_state
@@ -1426,7 +1427,7 @@ func _restore_declaration_adjacent_projection(
 	if active_ship != null:
 		var ship_token: ShipToken = _find_ship_token_for_instance(active_ship)
 		if not _ship_activation_controller.restore_canonical_activation_context(
-				active_ship, ship_token):
+				active_ship, ship_token, game_state.interaction_flow):
 			return false
 	var active_squadron: SquadronInstance = \
 			game_state.get_active_squadron_activation()

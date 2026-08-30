@@ -365,10 +365,11 @@ func _prepare_activation_context(token: ShipToken,
 
 
 ## Rebuilds the enclosing scene-local activation context from ADR-006 owners.
-## Returns true for a valid owner even when it does not encode one of the
-## declaration-adjacent steps handled by TWI-003.
+## Purpose-specific canonical facts select Squadron, Attack, or Maneuver.
+## Only the accepted activation-entry flow may select Reveal; other ambiguous
+## presentation steps synchronize from the accepted InteractionFlow.
 func restore_canonical_activation_context(ship: ShipInstance,
-		token: ShipToken) -> bool:
+		token: ShipToken, flow: InteractionFlow) -> bool:
 	if ship == null or token == null or token.get_ship_instance() != ship \
 			or not ship.has_active_ship_activation():
 		return false
@@ -381,15 +382,50 @@ func restore_canonical_activation_context(ship: ShipInstance,
 	elif ship.squadron_command_opportunity_disposition \
 			== ShipInstance.ACTIVATION_DISPOSITION_OPEN:
 		step = ShipActivationState.Step.SQUADRON
-	if step < 0:
-		return true
+	elif _is_activation_entry_recovery(ship, flow):
+		# ADR-006 establishes both opportunities as UNREACHED at activation
+		# entry.  This is the only canonical state that can recover Reveal.
+		step = ShipActivationState.Step.REVEAL
+	elif not _has_recoverable_activation_flow_step(flow):
+		return false
 	var activation: ShipActivationState = ShipActivationState.create(ship)
-	activation.set_current_step(step as ShipActivationState.Step)
+	if step >= 0:
+		activation.set_current_step(step as ShipActivationState.Step)
 	_activation_ctx.set_active(token, activation)
 	GameManager._activating_ship = ship
 	if _panel_mgr.activation_sidebar != null:
 		_panel_mgr.activation_sidebar.highlight_active(ship)
+	if step < 0:
+		# ADR-006 intentionally has no generic current-step fact.  For a
+		# later state not identified by its purpose-specific facts, the
+		# accepted InteractionFlow supplies presentation synchronization only.
+		sync_activation_step_from_flow(flow)
 	return true
+
+
+func _is_activation_entry_recovery(ship: ShipInstance,
+		flow: InteractionFlow) -> bool:
+	return flow != null \
+			and flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION \
+			and flow.step_id == Constants.InteractionStep.ACTIVATION_MODAL_OPEN \
+			and not ship.attack_step_active \
+			and ship.squadron_command_opportunity_disposition \
+					== ShipInstance.ACTIVATION_DISPOSITION_UNREACHED \
+			and ship.maneuver_opportunity_disposition \
+					== ShipInstance.ACTIVATION_DISPOSITION_UNREACHED
+
+
+func _has_recoverable_activation_flow_step(flow: InteractionFlow) -> bool:
+	if flow == null \
+			or flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
+		return false
+	return flow.step_id in [
+		Constants.InteractionStep.SQUADRON_STEP,
+		Constants.InteractionStep.REPAIR_STEP,
+		Constants.InteractionStep.ATTACK_STEP,
+		Constants.InteractionStep.MANEUVER_STEP,
+		Constants.InteractionStep.ACTIVATION_DONE,
+	]
 
 
 ## Rebuilds an already-committed command-squadron projection without running

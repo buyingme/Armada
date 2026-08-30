@@ -157,6 +157,9 @@ func before_each() -> void:
 	CF_DECLINE.register()
 	H9_USE.register()
 	H9_DECLINE.register()
+	SpendDialCommand.register()
+	ActivateShipCommand.register()
+	AdvanceActivationStepCommand.register()
 	RollDiceCommand.register()
 	ConfirmAttackDiceCommand.register()
 	CommitAccuracyCommand.register()
@@ -1728,6 +1731,136 @@ func test_network_owner_waits_then_projects_mirrored_skip_to_maneuver() -> void:
 	assert_true(board._ship_activation_controller.is_activation_modal_open())
 	assert_true(activation_modal._is_interactable,
 			"The authenticated canonical ship owner controls Maneuver.")
+
+
+func test_network_crew_panic_discard_reconstructs_usable_activation() -> void:
+	var authority_state: GameState = _player_one_ship_attack_state()
+	GameManager.current_game_state = authority_state
+	var initial_client_view: Dictionary = StateFilter.filter_for_player(
+			authority_state.serialize(), 1)
+	var spend_dial := SpendDialCommand.new(1, {
+		"ship_index": 0,
+		"mode": "discard",
+	})
+	var spend_result: Dictionary = CommandProcessor.submit(spend_dial)
+	assert_false(spend_result.is_empty())
+	var activate_ship := ActivateShipCommand.new(1, {
+		"ship_index": 0,
+		"skip_reveal": true,
+		"reason": "crew_panic",
+	})
+	var activate_result: Dictionary = CommandProcessor.submit(activate_ship)
+	assert_false(activate_result.is_empty())
+	assert_true(authority_state.get_ship(1, 0).has_active_ship_activation())
+	assert_eq(authority_state.interaction_flow.step_id,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN)
+	assert_eq(authority_state.get_ship(1, 0).squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_UNREACHED)
+
+	var client_state: GameState = GameState.deserialize(initial_client_view)
+	assert_not_null(client_state)
+	var client_ship: ShipInstance = client_state.get_ship(1, 0)
+
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	var submitter := AwaitingRecordingSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	assert_true(GameManager.start_new_game_from_state(
+			client_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 0))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var controller: ShipActivationController = board._ship_activation_controller
+	controller._pending_crew_panic_ship = client_ship
+	controller._pending_crew_panic_ship_key = client_ship.data_key
+	controller._on_crew_panic_choice({"id": "discard_dial"})
+	assert_eq(submitter.submitted_commands.size(), 2)
+	assert_eq(submitter.submitted_commands[0].command_type, "spend_dial")
+	assert_eq(submitter.submitted_commands[1].command_type, "activate_ship")
+
+	# Apply the actual production command-result signal in authoritative order.
+	# The spend result still projects WAIT_FOR_SHIP_SELECT and clears the
+	# provisional context before the queued activation result is received.
+	NetworkManager.command_result_received.emit(
+			spend_dial.serialize(), spend_result)
+	assert_null(board._activation_ctx.ship_activation_state,
+			"The pre-activation context is correctly retired by the spent-dial result.")
+	NetworkManager.command_result_received.emit(
+			activate_ship.serialize(), activate_result)
+
+	assert_not_null(board._activation_ctx.ship_activation_state,
+			"The accepted activation result must recover shared presentation context.")
+	assert_eq(board._activation_ctx.ship_activation_state.get_ship(), client_ship)
+	assert_true(board._ship_activation_controller.is_activation_modal_open(),
+			"The controlling client must receive the ordinary activation modal.")
+	assert_true(board._panel_mgr.activation_modal._is_interactable,
+			"The canonical ship owner must retain the usable activation controls.")
+
+	board._ship_activation_controller.submit_activation_step("repair_step")
+	assert_eq(submitter.submitted_commands.size(), 3)
+	assert_eq(submitter.submitted_commands[2].command_type,
+			"advance_activation_step")
+	assert_eq(submitter.submitted_commands[2].player_index, 1,
+			"The recovered controller proceeds through the existing activation command.")
+
+
+func test_network_reconstruction_syncs_ambiguous_repair_from_interaction_flow() \
+		-> void:
+	var authority_state: GameState = _player_one_ship_attack_state()
+	GameManager.current_game_state = authority_state
+	var activate_ship := ActivateShipCommand.new(1, {
+		"ship_index": 0,
+		"skip_reveal": true,
+	})
+	assert_false(CommandProcessor.submit(activate_ship).is_empty())
+	var authority_ship: ShipInstance = authority_state.get_ship(1, 0)
+	var repair_step := AdvanceActivationStepCommand.new(1, {
+		"ship_index": 0,
+		"step_id": "repair_step",
+		"ship_activation_identity": authority_ship.ship_activation_identity,
+	})
+	assert_false(CommandProcessor.submit(repair_step).is_empty())
+	assert_eq(authority_ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_eq(authority_ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_UNREACHED)
+	assert_false(authority_ship.attack_step_active)
+	assert_eq(authority_state.interaction_flow.step_id,
+			Constants.InteractionStep.REPAIR_STEP)
+
+	var client_view: Dictionary = StateFilter.filter_for_player(
+			authority_state.serialize(), 1)
+	var client_state: GameState = GameState.deserialize(client_view)
+	assert_not_null(client_state)
+	var client_ship: ShipInstance = client_state.get_ship(1, 0)
+
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	var submitter := AwaitingRecordingSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	assert_true(GameManager.start_new_game_from_state(
+			client_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 0))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+
+	assert_not_null(board._activation_ctx.ship_activation_state)
+	assert_eq(board._activation_ctx.ship_activation_state.get_ship(), client_ship)
+	assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.REPAIR),
+			"Ambiguous ADR-006 facts must synchronize the accepted Repair step.")
+	assert_false(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.REVEAL),
+			"A non-entry recovery must not assume Reveal from transient defaults.")
+	assert_true(board._ship_activation_controller.is_activation_modal_open())
+	assert_true(board._panel_mgr.activation_modal._is_interactable)
+
+	board._ship_activation_controller.submit_activation_step("attack_step")
+	assert_eq(submitter.submitted_commands.size(), 1)
+	assert_eq(submitter.submitted_commands[0].command_type,
+			"advance_activation_step")
+	assert_eq(submitter.submitted_commands[0].player_index, 1,
+			"Repair reconstruction retains ordinary controller entitlement.")
 
 
 func test_live_remaining_attack_skip_projects_same_maneuver_boundary() -> void:

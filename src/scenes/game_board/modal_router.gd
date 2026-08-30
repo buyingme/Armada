@@ -334,10 +334,36 @@ func _drive_activation_modal(intent: UIProjector.UIIntent,
 		return
 	if flow == null or intent.flow_type == Constants.InteractionFlow.NONE:
 		return
+	if intent.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION:
+		_restore_activation_context_from_command_result(command)
 	_ship_activation_controller.sync_activation_step_from_flow(flow)
 	if intent.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION:
 		_drive_ship_activation_lifecycle(intent, command)
 	_ship_activation_controller.update_activation_modal_interactivity()
+
+
+## Restores the existing shared activation presentation context after an
+## accepted activation lifecycle command when an earlier command-result route
+## retired its provisional local context.  Canonical ShipInstance ownership
+## determines the active ship; this derives presentation only.
+func _restore_activation_context_from_command_result(command: GameCommand) -> void:
+	if command == null or not _is_activation_modal_open_command(command) \
+			or _activation_ctx == null:
+		return
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return
+	var active_ship: ShipInstance = game_state.get_active_ship_activation()
+	if active_ship == null:
+		return
+	var current_state: ShipActivationState = _activation_ctx.ship_activation_state
+	if current_state != null and current_state.get_ship() == active_ship:
+		return
+	if not _find_ship_token_fn.is_valid():
+		return
+	var token: ShipToken = _find_ship_token_fn.call(active_ship) as ShipToken
+	_ship_activation_controller.restore_canonical_activation_context(
+			active_ship, token, game_state.interaction_flow)
 
 
 func _drive_ship_activation_lifecycle(intent: UIProjector.UIIntent,

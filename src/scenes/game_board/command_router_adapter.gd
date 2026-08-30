@@ -30,8 +30,10 @@ const TIMING_WINDOW_OPPORTUNITY: GDScript = preload(
 
 var _attack_panel_controller: AttackPanelController = null
 var _debug_controller: DebugController = null
+var _damage_card_immediate_effect_controller: DamageCardImmediateEffectController = null
 var _modal_router: Node = null
 var _find_ship_token_fn: Callable = Callable()
+var _find_squadron_token_fn: Callable = Callable()
 
 
 # ---------------------------------------------------------------------------
@@ -51,10 +53,13 @@ func initialize(
 		displacement_controller: DisplacementController,
 		activation_ctx: ActivationContext,
 		find_ship_token_fn: Callable,
-		find_squadron_token_fn: Callable) -> void:
+		find_squadron_token_fn: Callable,
+		damage_card_immediate_effect_controller: DamageCardImmediateEffectController = null) -> void:
 	_attack_panel_controller = attack_panel_controller
 	_debug_controller = debug_controller
+	_damage_card_immediate_effect_controller = damage_card_immediate_effect_controller
 	_find_ship_token_fn = find_ship_token_fn
+	_find_squadron_token_fn = find_squadron_token_fn
 	_create_modal_router(
 			panel_mgr,
 			attack_panel_controller,
@@ -146,8 +151,37 @@ func _route_to_controllers(cmd: GameCommand, result: Dictionary) -> void:
 	if cmd != null and _debug_controller != null \
 			and cmd.command_type == "debug_deal_damage":
 		_debug_controller.react_to_command(cmd, result)
+	if cmd != null and _damage_card_immediate_effect_controller != null \
+			and cmd.command_type == "debug_deal_damage":
+		_damage_card_immediate_effect_controller.react_to_debug_damage_result(
+				cmd, result)
+	if cmd != null and cmd.command_type == "debug_reposition":
+		_project_debug_reposition(result)
 	if cmd != null and cmd.command_type == "persistent_effect_damage":
 		_emit_persistent_damage_events(cmd, result)
+
+
+func _project_debug_reposition(result: Dictionary) -> void:
+	var state: GameState = GameManager.current_game_state
+	if state == null:
+		return
+	var kind: String = str(result.get("target_kind", ""))
+	var owner: int = int(result.get("owner_player", -1))
+	var index: int = int(result.get("unit_index", -1))
+	var token: Node2D = null
+	if kind == "ship" and _find_ship_token_fn.is_valid():
+		var ship: ShipInstance = state.get_ship(owner, index)
+		if ship != null:
+			token = _find_ship_token_fn.call(ship) as Node2D
+	elif kind == "squadron" and _find_squadron_token_fn.is_valid():
+		var squadron: SquadronInstance = state.get_squadron(owner, index)
+		if squadron != null:
+			token = _find_squadron_token_fn.call(squadron) as Node2D
+	if token == null:
+		return
+	token.position = Vector2(float(result.get("pos_x", 0.0)),
+			float(result.get("pos_y", 0.0))) * GameScale.play_area_size_px
+	token.rotation = deg_to_rad(float(result.get("rotation_deg", 0.0)))
 
 
 func _emit_persistent_damage_events(cmd: GameCommand,

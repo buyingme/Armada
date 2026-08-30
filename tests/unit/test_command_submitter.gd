@@ -125,6 +125,19 @@ func test_network_submit_returns_awaiting_sentinel() -> void:
 			"Should warn about send_command_to_server with wrong role.")
 
 
+func test_host_debug_admission_is_command_type_specific_and_target_side_independent() -> void:
+	var previous_role: NetworkManager.Role = NetworkManager.role
+	NetworkManager.role = NetworkManager.Role.SERVER
+	var submitter := NetworkHostCommandSubmitter.new()
+	assert_true(submitter._is_host_debug_command(
+			GameCommand.new(1, "debug_reposition", {"owner_player": 0})))
+	assert_true(submitter._is_host_debug_command(
+			GameCommand.new(0, "debug_deal_damage", {"owner_player": 1})))
+	assert_false(submitter._is_host_debug_command(
+			GameCommand.new(1, "assign_dials", {})))
+	NetworkManager.role = previous_role
+
+
 func test_network_replay_submit_player_one_uses_replay_route() -> void:
 	var submitter := NetworkCommandSubmitter.new()
 	var cmd := _TestNoopCmd.new(1, {})

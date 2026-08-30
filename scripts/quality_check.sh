@@ -17,6 +17,8 @@ NC='\033[0m' # No Color
 
 ERRORS=0
 WARNINGS=0
+LOG_DIR="$(mktemp -d -t armada_quality_logs_XXXXXX)"
+trap 'rm -rf "$LOG_DIR"' EXIT
 
 echo "========================================="
 echo " Armada Quality Check"
@@ -30,7 +32,7 @@ if [ -n "$PRINT_HITS" ]; then
     echo -e "${RED}FAIL${NC}"
     echo "$PRINT_HITS"
     echo "  → Use GameLogger instead of print()"
-    ((ERRORS++))
+    ((ERRORS += 1))
 else
     echo -e "${GREEN}OK${NC}"
 fi
@@ -45,13 +47,13 @@ for f in $(find src/ -name "*.gd" -type f 2>/dev/null); do
             echo -e "${RED}FAIL${NC}"
         fi
         echo "  Missing doc comment: $f"
-        ((MISSING_DOCS++))
+        ((MISSING_DOCS += 1))
     fi
 done
 if [ $MISSING_DOCS -eq 0 ]; then
     echo -e "${GREEN}OK${NC}"
 else
-    ((ERRORS++))
+    ((ERRORS += 1))
 fi
 
 # --- Check 3: All public functions have type annotations ---
@@ -61,7 +63,7 @@ if [ -n "$UNTYPED" ]; then
     echo -e "${YELLOW}WARN${NC}"
     echo "$UNTYPED"
     echo "  → Add return type annotation (-> Type)"
-    ((WARNINGS++))
+    ((WARNINGS += 1))
 else
     echo -e "${GREEN}OK${NC}"
 fi
@@ -75,7 +77,7 @@ MAGIC=$(grep -rn '[^a-zA-Z_0-9][2-9][0-9]*[^a-zA-Z_0-9.:]' src/core/ --include="
 if [ -n "$MAGIC" ]; then
     echo -e "${YELLOW}WARN (review manually)${NC}"
     echo "$MAGIC"
-    ((WARNINGS++))
+    ((WARNINGS += 1))
 else
     echo -e "${GREEN}OK${NC}"
 fi
@@ -91,19 +93,19 @@ for f in $(find src/core/ src/models/ -name "*.gd" -type f 2>/dev/null); do
             echo -e "${RED}FAIL${NC}"
         fi
         echo "  Missing test: $TEST_FILE (for $f)"
-        ((MISSING_TESTS++))
+        ((MISSING_TESTS += 1))
     fi
 done
 if [ $MISSING_TESTS -eq 0 ]; then
     echo -e "${GREEN}OK${NC}"
 else
-    ((ERRORS++))
+    ((ERRORS += 1))
 fi
 
 # --- Check 6: Run GUT tests ---
 echo -n "Running GUT tests... "
 if command -v godot &> /dev/null; then
-    TEST_OUTPUT=$(godot --headless -s addons/gut/gut_cmdln.gd \
+    TEST_OUTPUT=$(godot --headless --log-file "$LOG_DIR/godot.log" -s addons/gut/gut_cmdln.gd \
         -gdir=res://tests -ginclude_subdirs -gexit 2>&1)
     if echo "$TEST_OUTPUT" | grep -q "All tests passed"; then
         PASSED=$(echo "$TEST_OUTPUT" | grep "Passing Tests" | awk '{print $NF}')
@@ -112,11 +114,11 @@ if command -v godot &> /dev/null; then
     else
         echo -e "${RED}FAIL${NC}"
         echo "$TEST_OUTPUT" | tail -20
-        ((ERRORS++))
+        ((ERRORS += 1))
     fi
 else
     echo -e "${YELLOW}SKIP (godot not in PATH)${NC}"
-    ((WARNINGS++))
+    ((WARNINGS += 1))
 fi
 
 # --- Summary ---

@@ -25,6 +25,9 @@
 extends Node
 
 
+const DEBUG_REPOSITION_COMMAND_SCRIPT: GDScript = preload(
+		"res://src/core/commands/debug_reposition_command.gd")
+
 const CommitSetupObstacleCommand = preload(
 		"res://src/core/commands/commit_setup_obstacle_command.gd")
 const CommitSetupDeploymentCommand = preload(
@@ -134,6 +137,9 @@ func _ready() -> void:
 	RevealDialCommand.register()
 	AdvanceActivationStepCommand.register()
 	# Tier 11 — debug-only commands.
+	GameCommand.register_type("debug_reposition", func(player: int,
+			payload: Dictionary) -> GameCommand:
+		return DEBUG_REPOSITION_COMMAND_SCRIPT.new(player, payload))
 	DebugDealDamageCommand.register()
 	# Tier 12 — interaction-flow synchronisation (Phase I6b-3).
 	PublishAttackFlowCommand.register()

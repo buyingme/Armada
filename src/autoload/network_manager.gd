@@ -1451,6 +1451,12 @@ func _submit_command_to_server(data: Dictionary) -> void:
 	if cmd == null:
 		_log.warn("Failed to deserialize command from peer %d." % sender_id)
 		return
+	if cmd.command_type in ["debug_reposition", "debug_deal_damage"]:
+		_log.warn("Remote peer %d attempted host-only debug command [%s]." % [
+			sender_id, cmd.command_type])
+		_send_command_rejection(sender_id, data,
+				"State-changing debug commands are host-only.")
+		return
 	var principal_id: String = str(peers[sender_id].get("match_principal_id", ""))
 	if GameManager.current_game_state == null \
 			or not GameManager.current_game_state.principal_controls_player(

@@ -1,20 +1,13 @@
 ## DebugDealDamageCommand
 ##
-## Deals a pre-drawn, identity-overridden damage card faceup to a ship
-## via the debug damage tool (Shift+D).  Adds the card as faceup damage
-## and registers a persistent effect when applicable.
-##
-## The presentation layer (game_board.gd) draws from [DamageDeck],
-## overrides the card's identity fields (effect_id, title, timing,
-## trait_type, effect_text), serializes the card, and submits this
-## command.  The command's [method execute] applies the recorded
-## mutations to [GameState]-owned objects.
+## Deals one selected real damage card faceup to a ship via the debug tool.
+## The command alone removes the top-most matching card from the authoritative
+## current draw pile; presentation supplies only the requested effect id.
 ##
 ## Payload:
 ##   "owner_player" — player index owning the target ship
 ##   "ship_index"   — index into the player's ships array
 ##   "effect_id"    — chosen damage card effect ID
-##   "card_data"    — serialized [DamageCard] dict (full identity)
 ##
 ## DBG-050 — debug damage dealing.
 class_name DebugDealDamageCommand
@@ -48,9 +41,11 @@ func validate(game_state: GameState) -> String:
 		return "Ship not found."
 	if payload.get("effect_id", "") == "":
 		return "Missing effect_id."
-	var card_data: Dictionary = payload.get("card_data", {})
-	if card_data.is_empty():
-		return "Missing card_data."
+	if game_state.damage_deck == null:
+		return "Damage deck not available."
+	if not game_state.damage_deck.has_debug_draw_card_effect_id(
+			str(payload.get("effect_id", ""))):
+		return "Requested damage card is unavailable in the draw pile."
 	return ""
 
 
@@ -60,17 +55,22 @@ func execute(game_state: GameState) -> Dictionary:
 	var owner: int = payload.get("owner_player", 0)
 	var ship_index: int = payload.get("ship_index", 0)
 	var ship: ShipInstance = game_state.get_ship(owner, ship_index)
-	var card_data: Dictionary = payload.get("card_data", {})
 	var effect_id: String = payload.get("effect_id", "")
-	# Deserialize and add the card as faceup damage.
-	var card: DamageCard = DamageCard.deserialize(card_data)
+	if ship == null or game_state.damage_deck == null:
+		return {}
+	var card: DamageCard = game_state.damage_deck.take_debug_draw_card_by_effect_id(
+			effect_id)
+	if card == null:
+		return {}
 	card.is_faceup = true
 	ship.add_faceup_damage(card)
+	var card_index: int = ship.faceup_damage.size() - 1
 	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
 	return {
 		"effect_id": effect_id,
 		"owner_player": owner,
 		"ship_index": ship_index,
+		"card_index": card_index,
 		"card_title": card.title,
 		"persistent_registered": false,
 		"new_hull": new_hull,

@@ -160,16 +160,13 @@ func test_execute_structural_damage_extra_card() -> void:
 	var ps: PlayerState = _state.get_player_state(0)
 	var ship: ShipInstance = ps.ships[idx]
 	_add_faceup_card(ship, "structural_damage")
-	# Pre-draw a card and serialize it.
-	var extra: DamageCard = _state.damage_deck.draw_card()
-	var extra_data: Dictionary = extra.serialize()
+	var before_draw_count: int = _state.damage_deck.get_draw_count()
 	var cmd := ResolveImmediateEffectCommand.new(0, {
 		"effect_id": "structural_damage",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
 		"choice": {},
-		"extra_card_data": extra_data,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("effect_id"), "structural_damage",
@@ -181,9 +178,11 @@ func test_execute_structural_damage_extra_card() -> void:
 	# 1 original card (now facedown) + 1 extra = 2 facedown.
 	assert_eq(ship.facedown_damage.size(), 2,
 			"Should have 2 facedown cards after structural damage")
+	assert_eq(_state.damage_deck.get_draw_count(), before_draw_count - 1,
+			"Structural Damage must consume its ordinary draw in the command")
 
 
-func test_execute_structural_damage_no_extra() -> void:
+func test_execute_structural_damage_always_draws_without_caller_card_data() -> void:
 	var idx: int = _add_ship(0)
 	var ps: PlayerState = _state.get_player_state(0)
 	var ship: ShipInstance = ps.ships[idx]
@@ -196,10 +195,9 @@ func test_execute_structural_damage_no_extra() -> void:
 		"choice": {},
 	})
 	var result: Dictionary = cmd.execute(_state)
-	assert_false(result.get("extra_dealt", true) as bool,
-			"Should report no extra card when extra_card_data is empty")
-	assert_eq(ship.facedown_damage.size(), 1,
-			"Original card should be moved to facedown only")
+	assert_true(result.get("extra_dealt", false) as bool)
+	assert_eq(ship.facedown_damage.size(), 2,
+			"Command-owned draw and original card should become facedown")
 
 
 # ======================================================================
@@ -476,9 +474,6 @@ func test_serialize_deserialize_structural_damage() -> void:
 		"ship_index": 0,
 		"card_index": 0,
 		"choice": {},
-		"extra_card_data": {"trait_type": "Ship", "title": "Test",
-				"is_faceup": false, "effect_text": "",
-				"timing": "", "effect_id": ""},
 	})
 	cmd.sequence = 42
 	var data: Dictionary = cmd.serialize()
@@ -489,9 +484,8 @@ func test_serialize_deserialize_structural_damage() -> void:
 	assert_eq(restored.sequence, 42, "Sequence should match")
 	assert_eq(restored.payload.get("effect_id"), "structural_damage",
 			"effect_id survives roundtrip")
-	var extra: Dictionary = restored.payload.get("extra_card_data", {})
-	assert_eq(extra.get("title"), "Test",
-			"extra_card_data should survive roundtrip")
+	assert_false(restored.payload.has("extra_card_data"),
+			"Structural Damage no longer accepts caller-supplied card identity")
 
 
 func test_serialize_deserialize_comm_noise() -> void:

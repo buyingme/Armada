@@ -79,6 +79,31 @@ func draw_card() -> DamageCard:
 	return _draw_pile.pop_back()
 
 
+## Returns whether the current draw pile contains a card with [param effect_id].
+## This intentionally does not consult the discard pile or reshuffle it: debug
+## selection is a narrow authoritative setup operation, not an ordinary draw.
+func has_debug_draw_card_effect_id(effect_id: String) -> bool:
+	if effect_id.is_empty():
+		return false
+	for index: int in range(_draw_pile.size() - 1, -1, -1):
+		if _draw_pile[index].effect_id == effect_id:
+			return true
+	return false
+
+
+## Removes and returns the top-most matching card from the current draw pile.
+## Remaining draw order and the discard pile are deliberately untouched.
+func take_debug_draw_card_by_effect_id(effect_id: String) -> DamageCard:
+	if effect_id.is_empty():
+		return null
+	for index: int in range(_draw_pile.size() - 1, -1, -1):
+		if _draw_pile[index].effect_id == effect_id:
+			var card: DamageCard = _draw_pile[index]
+			_draw_pile.remove_at(index)
+			return card
+	return null
+
+
 ## Adds a card to the discard pile.
 ## Used when damage cards are removed from a ship (e.g. by repair).
 func discard(card: DamageCard) -> void:

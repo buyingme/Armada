@@ -18,6 +18,8 @@ extends PanelContainer
 ##   Shield Failure: {"zones": Array[String]}
 ##   Injured Crew / Comm Noise: {"id": String}
 signal choice_confirmed(selection: Dictionary)
+## Emitted only by [method open_debug_cancellable].
+signal debug_choice_cancelled
 
 
 ## Panel width cap — matches other modal proportions.
@@ -54,6 +56,8 @@ var _title_label: Label = null
 
 ## Effect text label.
 var _effect_label: Label = null
+var _debug_cancellable: bool = false
+var _cancel_button: Button = null
 
 
 func _init() -> void:
@@ -65,6 +69,17 @@ func _init() -> void:
 ## Opens the modal with the given choice descriptor.
 ## [param choice_info] — from ImmediateEffectResolver.get_required_choice().
 func open(choice_info: Dictionary) -> void:
+	_debug_cancellable = false
+	_open(choice_info)
+
+
+## Opens the one bounded cancellable picker used by the DEBUG damage selector.
+func open_debug_cancellable(choice_info: Dictionary) -> void:
+	_debug_cancellable = true
+	_open(choice_info)
+
+
+func _open(choice_info: Dictionary) -> void:
 	_choice_info = choice_info
 	_multi_select = choice_info.get("multi_select", false)
 	_max_selections = int(choice_info.get("max_selections", 1))
@@ -139,6 +154,7 @@ func _clear_content() -> void:
 	_confirm_button = null
 	_title_label = null
 	_effect_label = null
+	_cancel_button = null
 
 
 ## Builds the full modal UI from the choice descriptor.
@@ -233,6 +249,12 @@ func _build_confirm_section() -> VBoxContainer:
 	_confirm_button.custom_minimum_size = Vector2(200, 44)
 	_confirm_button.pressed.connect(_on_confirm_pressed)
 	btn_container.add_child(_confirm_button)
+	if _debug_cancellable:
+		_cancel_button = Button.new()
+		_cancel_button.text = "Cancel"
+		_cancel_button.custom_minimum_size = Vector2(120, 44)
+		_cancel_button.pressed.connect(_cancel_debug_choice)
+		btn_container.add_child(_cancel_button)
 	section.add_child(btn_container)
 	return section
 
@@ -305,6 +327,7 @@ func _on_confirm_pressed() -> void:
 	_log.info("Choice confirmed: %s → %s" % [choice_type, str(selection)])
 	close_modal()
 	choice_confirmed.emit(selection)
+	_debug_cancellable = false
 
 
 ## Handles Escape key to close (non-destructive — no confirm emitted).
@@ -314,6 +337,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key: InputEventKey = event as InputEventKey
 		if key.pressed and key.keycode == KEY_ESCAPE:
-			# For damage card choices, Escape should NOT dismiss — the player
-			# must make a choice. Do nothing.
-			accept_event()
+			if _debug_cancellable:
+				_cancel_debug_choice()
+			else:
+				# Ordinary damage card choices remain required-choice modals.
+				accept_event()
+
+
+func _cancel_debug_choice() -> void:
+	if not _debug_cancellable:
+		return
+	_debug_cancellable = false
+	close_and_clear()
+	debug_choice_cancelled.emit()

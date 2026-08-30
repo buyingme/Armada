@@ -17,6 +17,9 @@
 extends Node
 
 
+const DEBUG_REPOSITION_COMMAND_SCRIPT: GDScript = preload(
+		"res://src/core/commands/debug_reposition_command.gd")
+
 ## Client-local notification that an authoritative server rejected one
 ## submitted command. It carries no accepted command result.
 signal network_command_rejected(command: GameCommand, reason: String)
@@ -2008,17 +2011,13 @@ func submit_repair_hull(ship: ShipInstance,
 
 
 ## Submits a [ResolveImmediateEffectCommand] for a faceup damage card.
-## The caller must pre-draw any extra card (structural_damage) and pass
-## the serialized dict as [param extra_card_data].  Player choices are
-## passed in [param choice].
+## Player choices are passed in [param choice].  Structural Damage's ordinary
+## deck draw is owned by ResolveImmediateEffectCommand.
 ## [param ship] — the ShipInstance that received the card.
 ## [param card] — the faceup DamageCard to resolve.
 ## [param choice] — player selection dictionary (may be empty).
-## [param extra_card_data] — serialized DamageCard dict for pre-drawn
-##   extra card (structural_damage only; empty otherwise).
 func submit_resolve_immediate_effect(ship: ShipInstance,
-		card: DamageCard, choice: Dictionary = {},
-		extra_card_data: Dictionary = {}) -> Dictionary:
+		card: DamageCard, choice: Dictionary = {}) -> Dictionary:
 	if not current_game_state:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
@@ -2030,8 +2029,6 @@ func submit_resolve_immediate_effect(ship: ShipInstance,
 		"card_index": card_idx,
 		"choice": choice,
 	}
-	if not extra_card_data.is_empty():
-		pl["extra_card_data"] = extra_card_data
 	# Network: route authority through the **submitting peer** so the
 	# server's peer/player check accepts the command regardless of who
 	# is the chooser (attacker vs defender, debug tool, etc.).  The
@@ -2107,7 +2104,6 @@ func submit_persistent_effect_damage(ship: ShipInstance,
 ## Submits a [DebugDealDamageCommand] when the debug damage tool deals
 ## a faceup damage card to a ship.
 ## [param ship] — the target ship.
-## [param card_data] — serialized [DamageCard] with overridden identity.
 ## [param effect_id] — chosen damage card effect ID.
 ##
 ## In network mode the command's [code]player_index[/code] is set to the
@@ -2115,7 +2111,6 @@ func submit_persistent_effect_damage(ship: ShipInstance,
 ## peer-authority check accepts the command regardless of who Shift+D'd.
 ## The payload's [code]owner_player[/code] still points at the ship owner.
 func submit_debug_deal_damage(ship: ShipInstance,
-		card_data: Dictionary,
 		effect_id: String) -> Dictionary:
 	if not current_game_state:
 		return {}
@@ -2129,9 +2124,24 @@ func submit_debug_deal_damage(ship: ShipInstance,
 		"owner_player": ship.owner_player,
 		"ship_index": ship_index,
 		"effect_id": effect_id,
-		"card_data": card_data,
 	})
 	return _submitter.submit(cmd)
+
+
+## Submits the closed authoritative DEBUG transform transaction.
+func submit_debug_reposition(target_kind: String, owner_player: int,
+		unit_index: int, pos_x: float, pos_y: float,
+		rotation_deg: float) -> Dictionary:
+	var submitter_player: int = get_active_player()
+	if PlayMode.is_network():
+		var local_idx: int = NetworkManager.get_local_player_index()
+		if local_idx >= 0:
+			submitter_player = local_idx
+	return _submitter.submit(DEBUG_REPOSITION_COMMAND_SCRIPT.new(submitter_player, {
+		"target_kind": target_kind, "owner_player": owner_player,
+		"unit_index": unit_index, "pos_x": pos_x, "pos_y": pos_y,
+		"rotation_deg": rotation_deg,
+	}))
 
 
 # ---------------------------------------------------------------------------

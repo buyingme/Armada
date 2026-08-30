@@ -938,8 +938,7 @@ func _on_choice_confirmed(selection: Dictionary) -> void:
 		_log.warn("Choice confirmed: card at index %d is null."
 				% card_index)
 		return
-	GameManager.submit_resolve_immediate_effect(
-			ship, card, selection, {})
+	GameManager.submit_resolve_immediate_effect(ship, card, selection)
 	_log.info("Choice submitted: card='%s' selection=%s."
 			% [card.title, str(selection)])
 

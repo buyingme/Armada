@@ -49,6 +49,7 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 		"counter_target_player", "counter_target_squadron_index",
 	],
 	"debug_deal_damage": ["owner_player", "ship_index"],
+	"debug_reposition": ["owner_player", "unit_index"],
 	"destroy_unit": ["owner_player", "ship_index"],
 	"discard_token": ["ship_index", "token_type"],
 	"end_activation": ["ship_index"],

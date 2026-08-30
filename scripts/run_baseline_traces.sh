@@ -111,7 +111,8 @@ run_hot_seat() {
         return 1
     fi
     echo "=== Hot-seat ==="
-    if ! "$GODOT" --headless --path "$PROJECT_DIR" -- \
+    if ! "$GODOT" --headless --path "$PROJECT_DIR" \
+            --log-file "$TMP_DIR/hot_seat_godot.log" -- \
             --replay "$replay" \
             --baseline-output "$actual" \
             >"$TMP_DIR/hot_seat.log" 2>&1; then
@@ -136,7 +137,8 @@ run_network() {
     fi
     echo "=== Network ==="
     # Start headless host with replay loaded.
-    "$GODOT" --headless --path "$PROJECT_DIR" -- \
+    "$GODOT" --headless --path "$PROJECT_DIR" \
+            --log-file "$TMP_DIR/network_host_godot.log" -- \
             --server --port "$PORT" \
             --replay "$replay" \
             --baseline-output "$actual_host" \
@@ -145,7 +147,8 @@ run_network() {
     PIDS+=("$host_pid")
     sleep 2
     # Start client.
-    "$GODOT" --headless --path "$PROJECT_DIR" -- \
+    "$GODOT" --headless --path "$PROJECT_DIR" \
+            --log-file "$TMP_DIR/network_client_godot.log" -- \
             --connect "127.0.0.1:$PORT" \
             --replay "$replay" \
             --baseline-output "$actual_client" \

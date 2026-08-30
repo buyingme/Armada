@@ -56,6 +56,7 @@ var _token_container: Node2D = null
 ## Debug controller — owns deploy overlay, debug HUD, help panel, and
 ## scenario saver.  Created in [method _create_debug_controller].
 var _debug_controller: DebugController = null
+var _damage_card_immediate_effect_controller: DamageCardImmediateEffectController = null
 
 ## UI panel manager — owns all UI panel creation, positioning,
 ## resizing, and isolated UI callbacks.
@@ -211,7 +212,8 @@ func _process(_delta: float) -> void:
 	if _setup_placement_controller:
 		_setup_placement_controller.process_setup_dragging()
 
-	if not DebugMode.has_selection():
+	if not DebugMode.has_selection() or _debug_controller == null \
+			or not _debug_controller.is_reposition_preview_active():
 		return
 	_move_selected_token_to_mouse()
 
@@ -225,6 +227,8 @@ func _process(_delta: float) -> void:
 ## the mouse).
 func _input(event: InputEvent) -> void:
 	if _active_attack_reconstruction_blocked:
+		return
+	if _debug_controller and _debug_controller.try_handle_input(event):
 		return
 	# Phase 7b: Squadron movement — intercept before GUI / token can consume.
 	if _squadron_phase_controller \
@@ -243,6 +247,8 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
+	if _debug_controller and _debug_controller.try_handle_input(event):
+		return
 	if _try_handle_displacement_lock_click(event):
 		return
 	if _setup_placement_controller and _setup_placement_controller.try_handle_input(event):
@@ -250,8 +256,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _tool_overlay_controller.try_handle_escape(event):
 		return
 	if _tool_overlay_controller.try_handle_tool_shortcut(event):
-		return
-	if _debug_controller and _debug_controller.try_handle_input(event):
 		return
 	if _panel_mgr.handle_quit_escape(event):
 		return
@@ -347,8 +351,6 @@ func _init_scenario_systems_for_loaded_state() -> void:
 	_damage_deck = gs.damage_deck
 	if _attack_executor and _damage_deck:
 		_attack_executor.set_damage_deck(_damage_deck)
-	if _debug_controller and _damage_deck:
-		_debug_controller.set_damage_deck(_damage_deck)
 	if _attack_executor and _panel_mgr.handoff_overlay:
 		_attack_executor.set_handoff_overlay(_panel_mgr.handoff_overlay)
 
@@ -385,8 +387,6 @@ func _init_scenario_systems(setup: LearningScenarioSetup) -> void:
 		GameManager.current_game_state.damage_deck = _damage_deck
 	if _attack_executor:
 		_attack_executor.set_damage_deck(_damage_deck)
-	if _debug_controller:
-		_debug_controller.set_damage_deck(_damage_deck)
 	if _attack_executor and _panel_mgr.handoff_overlay:
 		_attack_executor.set_handoff_overlay(_panel_mgr.handoff_overlay)
 
@@ -473,6 +473,9 @@ func _spawn_squadron_token(
 
 ## Called when a ship token is clicked.
 func _on_token_clicked(token: ShipToken) -> void:
+	if DebugMode.enabled and _debug_controller \
+			and _debug_controller.handle_token_click(token):
+		return
 	if _setup_placement_controller \
 			and _setup_placement_controller.try_handle_ship_click(token):
 		return
@@ -491,6 +494,9 @@ func _on_token_clicked(token: ShipToken) -> void:
 
 ## Called when a squadron token is clicked.
 func _on_squadron_clicked(token: SquadronToken) -> void:
+	if DebugMode.enabled and _debug_controller \
+			and _debug_controller.handle_token_click(token):
+		return
 	if _setup_placement_controller \
 			and _setup_placement_controller.try_handle_squadron_click(token):
 		return
@@ -1046,7 +1052,8 @@ func _create_command_router_adapter() -> void:
 		_displacement_controller,
 			_activation_ctx,
 			_find_ship_token_for_instance,
-			_find_squadron_token_for_instance)
+			_find_squadron_token_for_instance,
+			_damage_card_immediate_effect_controller)
 
 ## Creates the [SquadronPhaseController] child node and wires its signals.
 func _create_squadron_phase_controller() -> void:
@@ -1086,7 +1093,25 @@ func _create_debug_controller() -> void:
 	_debug_controller = DebugController.new()
 	_debug_controller.name = "DebugController"
 	add_child(_debug_controller)
-	_debug_controller.initialize(self , get_ship_tokens, get_squadron_tokens)
+	_debug_controller.initialize(self, get_ship_tokens, get_squadron_tokens,
+			Callable(self, "_can_enter_debug"))
+
+
+func _can_enter_debug() -> bool:
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a)
+	# DBG-001 host-only DEBUG admission uses the existing Network role owner.
+	if PlayMode.is_network() and NetworkManager.role != NetworkManager.Role.SERVER:
+		return false
+	return _panel_mgr == null or _panel_mgr.handoff_overlay == null \
+		or not _panel_mgr.handoff_overlay.visible
+
+
+func _create_damage_card_immediate_effect_controller() -> void:
+	_damage_card_immediate_effect_controller = DamageCardImmediateEffectController.new()
+	_damage_card_immediate_effect_controller.name = "DamageCardImmediateEffectController"
+	add_child(_damage_card_immediate_effect_controller)
+	_damage_card_immediate_effect_controller.initialize(
+			_camera, _panel_mgr.handoff_overlay)
 
 ## Creates the [DisplacementController] child node.  The
 ## displacement_completed signal is connected by
@@ -1292,6 +1317,7 @@ func _finalize_ready_sequence() -> bool:
 		_block_after_active_attack_reconstruction_failure(attack_resume)
 		return false
 	_initialize_ship_activation_controller()
+	_create_damage_card_immediate_effect_controller()
 	_create_command_router_adapter()
 	_connect_signals()
 	_connect_panel_signals()

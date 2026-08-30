@@ -58,10 +58,7 @@ func _ready() -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event: InputEventKey = event as InputEventKey
-		if key_event.keycode == KEY_F12:
-			enabled = not enabled
-			get_viewport().set_input_as_handled()
-		elif enabled:
+		if enabled:
 			match key_event.keycode:
 				KEY_S:
 					if key_event.ctrl_pressed:

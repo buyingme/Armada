@@ -209,3 +209,25 @@ func test_deserialize_empty_data() -> void:
 			"Deserializing empty dict should produce empty draw pile")
 	assert_eq(restored.get_discard_count(), 0,
 			"Deserializing empty dict should produce empty discard pile")
+
+
+func test_debug_selection_uses_topmost_matching_draw_card_only() -> void:
+	var before: Dictionary = _deck.serialize()
+	var draw: Array = before["draw_pile"] as Array
+	var effect_id: String = str((draw.back() as Dictionary).get("effect_id", ""))
+	var discard_card: DamageCard = _deck.draw_card()
+	_deck.discard(discard_card)
+	var discard_before: Array = (_deck.serialize()["discard_pile"] as Array).duplicate(true)
+	assert_true(_deck.has_debug_draw_card_effect_id(effect_id))
+	var taken: DamageCard = _deck.take_debug_draw_card_by_effect_id(effect_id)
+	assert_not_null(taken)
+	assert_eq(taken.effect_id, effect_id)
+	assert_eq(_deck.serialize()["discard_pile"], discard_before,
+			"Debug selection must not inspect or mutate discard")
+
+
+func test_debug_selection_unavailable_is_non_mutating() -> void:
+	var before: Dictionary = _deck.serialize()
+	assert_false(_deck.has_debug_draw_card_effect_id("not_a_real_effect"))
+	assert_null(_deck.take_debug_draw_card_by_effect_id("not_a_real_effect"))
+	assert_eq(_deck.serialize(), before)

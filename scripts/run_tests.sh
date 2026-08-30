@@ -30,6 +30,12 @@ fi
 
 cd "$PROJECT_DIR"
 
+# Godot's default rotating log lives in the shared application user directory.
+# Keep test-process diagnostics isolated so an open editor/game log cannot make
+# a headless test process fail before project code loads.
+LOG_DIR="$(mktemp -d -t armada_gut_logs_XXXXXX)"
+trap 'rm -rf "$LOG_DIR"' EXIT
+
 # ---  Parse arguments  --------------------------------------------------------
 TEST_DIR="res://tests"
 SINGLE_FILE=""
@@ -55,7 +61,7 @@ case "${1:-}" in
 esac
 
 # --- Build GUT command --------------------------------------------------------
-GUT_CMD=("$GODOT" --headless -s addons/gut/gut_cmdln.gd)
+GUT_CMD=("$GODOT" --headless --log-file "$LOG_DIR/godot.log" -s addons/gut/gut_cmdln.gd)
 
 if [[ -n "$SINGLE_FILE" ]]; then
     # Accept both res:// paths and local filesystem paths.

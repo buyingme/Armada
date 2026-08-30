@@ -44,6 +44,7 @@ static var _DECLARATIONS: Dictionary = {
 			KEY_FLOW_STEPS: [_pair(Constants.InteractionFlow.STATUS_CLEANUP,
 					Constants.InteractionStep.STATUS_CLEANUP_STEP)]},
 	"debug_deal_damage": {KEY_SCOPE: Constants.CommandScope.GLOBAL},
+	"debug_reposition": {KEY_SCOPE: Constants.CommandScope.GLOBAL},
 	"destroy_unit": {KEY_SCOPE: Constants.CommandScope.GLOBAL},
 	"publish_attack_flow": {KEY_SCOPE: Constants.CommandScope.GLOBAL},
 	"activate_ship": {KEY_SCOPE: Constants.CommandScope.PHASE,

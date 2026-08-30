@@ -58,3 +58,18 @@ func test_panel_minimum_width() -> void:
 	# Assert — custom_minimum_size should be set.
 	assert_eq(_panel.custom_minimum_size.x, float(DebugHelpPanel.PANEL_WIDTH_PX),
 			"Panel should have the configured minimum width")
+
+
+func test_panel_describes_authoritative_reposition_controls() -> void:
+	var labels: Array[Label] = []
+	_collect_labels(_panel, labels)
+	var text: String = "\n".join(labels.map(func(label: Label) -> String: return label.text))
+	assert_string_contains(text, "Preview / commit reposition")
+	assert_string_contains(text, "Canonical X / Y / rotation")
+
+
+func _collect_labels(node: Node, labels: Array[Label]) -> void:
+	if node is Label:
+		labels.append(node as Label)
+	for child: Node in node.get_children():
+		_collect_labels(child, labels)

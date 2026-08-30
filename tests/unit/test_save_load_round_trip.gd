@@ -223,6 +223,30 @@ func test_save_load_round_trip_preserves_fleet() -> void:
 				"Loaded ship template should be re-resolved")
 
 
+func test_debug_outcome_round_trip_preserves_public_transform_and_deck_order() -> void:
+	var gs: GameState = _make_populated_state()
+	var ship: ShipInstance = gs.player_states[0].ships[0] as ShipInstance
+	ship.pos_x = 0.73
+	ship.pos_y = 0.21
+	ship.rotation_deg = 135.0
+	var card: DamageCard = gs.damage_deck.take_debug_draw_card_by_effect_id(
+			"injured_crew")
+	assert_not_null(card)
+	card.is_faceup = true
+	ship.add_faceup_damage(card)
+	var expected_deck: Dictionary = gs.damage_deck.serialize()
+	assert_true(_manager.save_game(gs, TEST_SAVE))
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	assert_true(bool(result.get("ok", false)))
+	var loaded: GameState = result.get("state") as GameState
+	var loaded_ship: ShipInstance = loaded.player_states[0].ships[0] as ShipInstance
+	assert_eq(loaded_ship.pos_x, 0.73)
+	assert_eq(loaded_ship.pos_y, 0.21)
+	assert_eq(loaded_ship.rotation_deg, 135.0)
+	assert_eq(loaded_ship.faceup_damage[0].effect_id, "injured_crew")
+	assert_eq(loaded.damage_deck.serialize(), expected_deck)
+
+
 func test_same_live_and_hot_seat_load_preserve_saved_next_ship_actor() -> void:
 	var completed: GameState = _make_completed_ship_phase_state()
 	var same_live: GameState = GameState.deserialize(completed.serialize())

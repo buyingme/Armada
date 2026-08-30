@@ -245,6 +245,25 @@ func test_filter_preserves_opponent_public_fields() -> void:
 	assert_eq(opp_ship["activated_this_round"], false, "Activation is public")
 
 
+func test_debug_public_result_projection_keeps_transform_and_faceup_card_only() -> void:
+	var ship: Dictionary = _make_ship(1, 0, 0, 2, 1)
+	ship["pos_x"] = 0.73
+	ship["pos_y"] = 0.21
+	ship["rotation_deg"] = 135.0
+	var state: Dictionary = _make_game_state([], [ship], 31, 2)
+	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
+	var opponent: Dictionary = filtered["player_states"][1]["ships"][0]
+	var deck: Dictionary = filtered["damage_deck"]
+	assert_eq(opponent["pos_x"], 0.73)
+	assert_eq(opponent["rotation_deg"], 135.0)
+	assert_eq(opponent["faceup_damage"].size(), 1)
+	assert_eq(opponent["facedown_count"], 2)
+	assert_eq(deck["draw_count"], 31)
+	assert_eq(deck["discard_pile"].size(), 2)
+	assert_false(deck.has("draw_pile"))
+	assert_false(filtered.has("rng"))
+
+
 func test_filter_preserves_round_and_phase() -> void:
 	var state: Dictionary = _make_game_state()
 	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)

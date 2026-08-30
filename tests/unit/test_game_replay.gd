@@ -575,3 +575,15 @@ func test_replay_commands_deserialize_and_execute() -> void:
 			"Deserialized command should have correct sequence.")
 	# Cleanup registry.
 	GameCommand._registry.erase("assign_dials")
+
+
+func test_debug_reposition_replay_restores_target_identity_as_integers() -> void:
+	var restored: GameCommand = GameCommand.deserialize({
+		"type": "debug_reposition", "player": 0.0, "sequence": 0.0,
+		"payload": {"target_kind": "ship", "owner_player": 1.0,
+			"unit_index": 0.0, "pos_x": 0.4, "pos_y": 0.6,
+			"rotation_deg": 90.0},
+	})
+	assert_not_null(restored)
+	assert_eq(typeof(restored.payload["owner_player"]), TYPE_INT)
+	assert_eq(typeof(restored.payload["unit_index"]), TYPE_INT)

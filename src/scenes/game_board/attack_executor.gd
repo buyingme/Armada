@@ -3722,11 +3722,8 @@ func _resolve_immediate_card_effect(card: DamageCard,
 ## [code]should_defer = false[/code] (e.g. `structural_damage`).
 func _auto_resolve_immediate_effect(card: DamageCard,
 		ship: ShipInstance, flow_decision: Dictionary) -> void:
-	var extra_card_data: Dictionary = {}
-	if flow_decision.get("card_id", "") == "structural_damage":
-		extra_card_data = _draw_structural_damage_extra(card)
 	var result: Dictionary = GameManager.submit_resolve_immediate_effect(
-			ship, card, {}, extra_card_data)
+			ship, card, {})
 	if not result.is_empty():
 		_emit_immediate_signals(card, ship, result)
 		_log.info("Immediate effect resolved: '%s'." % card.title)
@@ -3893,9 +3890,8 @@ func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
 		_log.error("Immediate choice confirmed but no pending card/ship!")
 		_attack_exec_finalize_after_delay()
 		return
-	var extra_card_data: Dictionary = _draw_structural_damage_extra(card)
 	var result: Dictionary = GameManager.submit_resolve_immediate_effect(
-			ship, card, selection, extra_card_data)
+			ship, card, selection)
 	if not result.is_empty():
 		_emit_immediate_signals(card, ship, result)
 		_log.info("Immediate effect resolved: '%s' (choice=%s)." % [
@@ -3907,18 +3903,6 @@ func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
 	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
 	EventBus.ship_hull_changed.emit(ship, new_hull)
 	_attack_exec_finalize_after_delay()
-
-
-## Draws the extra damage card required by the `structural_damage`
-## immediate effect and returns its serialised payload, or an empty
-## dictionary for other effect IDs / when no damage deck is wired.
-func _draw_structural_damage_extra(card: DamageCard) -> Dictionary:
-	if card.effect_id != "structural_damage" or _damage_deck == null:
-		return {}
-	var extra: DamageCard = _damage_deck.draw_card()
-	if extra == null:
-		return {}
-	return extra.serialize()
 
 
 ## Phase I6b-3 R5 — runs on the attacker peer when the chooser peer's

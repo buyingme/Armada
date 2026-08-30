@@ -23,8 +23,6 @@
 ##   [code]ship_index[/code]      — int — index in player's ships array
 ##   [code]card_index[/code]      — int — index in ship.faceup_damage
 ##   [code]choice[/code]          — Dictionary — player selection (may be empty)
-##   [code]extra_card_data[/code] — Dictionary — (structural_damage only)
-##                                   serialized DamageCard for the extra draw
 ##
 ## Rules Reference: RRG "Damage Cards", p.4; DM-005, DM-010–015.
 class_name ResolveImmediateEffectCommand
@@ -81,6 +79,10 @@ func validate(game_state: GameState) -> String:
 	if card.effect_id != effect_id:
 		return "Card at index %d has effect '%s', expected '%s'." % [
 				card_idx, card.effect_id, effect_id]
+	if effect_id == "structural_damage" \
+			and (game_state.damage_deck == null \
+			or game_state.damage_deck.get_total_count() <= 0):
+		return "Structural Damage requires an available damage card."
 	return _validate_choice(effect_id, ship)
 
 
@@ -189,16 +191,16 @@ func execute(game_state: GameState) -> Dictionary:
 ## Structural Damage: deal 1 extra facedown card, flip this card facedown.
 func _execute_structural_damage(game_state: GameState,
 		ship: ShipInstance, card: DamageCard) -> Dictionary:
-	var extra_data: Dictionary = payload.get("extra_card_data", {})
-	if not extra_data.is_empty():
-		var extra: DamageCard = DamageCard.deserialize(extra_data)
-		extra.is_faceup = false
-		ship.add_facedown_damage(extra)
+	var extra: DamageCard = game_state.damage_deck.draw_card()
+	if extra == null:
+		return {}
+	extra.is_faceup = false
+	ship.add_facedown_damage(extra)
 	card.flip_facedown()
 	_move_to_facedown(card, ship)
 	return {
 		"effect_id": "structural_damage",
-		"extra_dealt": not extra_data.is_empty(),
+		"extra_dealt": true,
 		"new_hull": ship.ship_data.hull - ship.get_total_damage(),
 	}
 

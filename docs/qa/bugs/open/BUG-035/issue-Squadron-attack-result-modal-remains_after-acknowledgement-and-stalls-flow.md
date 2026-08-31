@@ -4,6 +4,132 @@ Severity: High
 Area: Completed-attack result acknowledgement / post-attack continuation
 Layer: Command Flow
 
+> [!IMPORTANT]
+> ## Current Status — 2026-08-31
+>
+> **OPEN — manually reproduced in current Network gameplay.**
+>
+> The sections below contain the complete historical investigation,
+> implementation, verification, and prior acceptance record for BUG-035.
+> Statements that BUG-035 was fixed, verified, accepted, or closed describe
+> earlier repository states and must not be interpreted as the current issue
+> disposition.
+>
+> Current reproduction evidence:
+>
+> - `annotation_20260831_212345_001.json`
+> - `replay_20260831_212422.json`
+> - `game_20260831_212220_bug035_network_commanded_squadron_stall.txt`
+>
+> The current failure occurs after a ship-commanded Squadron Attack completes
+> and both completed-result acknowledgements execute, but the enclosing Squadron
+> Activation does not converge to the next stable outcome.
+>
+> The runtime evidence also contains `squadron_destroyed` signal-delivery errors
+> during Network lethal-damage processing. Their causal relationship to the
+> continuation failure is not yet established.
+>
+> **Investigation rule:** treat the current evidence above as authoritative for
+> present behavior. Use the historical sections below only to understand prior
+> hypotheses, repairs, regressions, and architecture decisions.
+>
+> Do not assume that the previous repair remains correct merely because its
+> automated regression still passes.
+
+### Manual Network Recurrence — 2026-08-31 — Ship-Commanded Squadron Attack
+
+Intensive two-human Network play testing reproduced a remaining BUG-035 stall
+during a ship-commanded Squadron Activation.
+
+Evidence:
+
+- `annotation_20260831_212345_001.json`
+- `replay_20260831_212422.json`
+- `game_20260831_212220_bug035_network_commanded_squadron_stall.txt`
+
+The commanded TIE Fighter Squadron successfully begins and resolves its attack.
+
+Relevant authoritative command sequence:
+
+- `begin_attack` — seq 599
+- attack flow / dice-resolution commands — seq 600–612
+- `resolve_damage` — seq 612
+- `complete_attack` — seq 613
+- attacking-player `acknowledge_attack_result` — seq 614
+- opposing-player `acknowledge_attack_result` — seq 615
+
+The attack destroys the defending squadron.
+
+Both host and client logs show the attack completing and both required
+acknowledgements executing. No subsequent
+`CompleteSquadronActivationCommand` is observed before the stall.
+
+The terminal output additionally records repeated failures while processing the
+lethal Squadron result on the Network path:
+
+`Error calling from signal 'squadron_destroyed' ... Cannot convert argument 1 from Object to Object.`
+
+Affected subscribers include:
+
+- `GameManager._on_squadron_destroyed`
+- `SfxManager._on_squadron_destroyed`
+- `UIPanelManager._on_score_changed`
+- `ActivationSidebar._on_squadron_destroyed`
+
+The stack traces originate from
+`GameManager._handle_remote_resolve_damage()` during Network command-result
+processing.
+
+The terminal output shows the failure through both the immediate Network result
+handling path and the ordered Network-result application path.
+
+The host also records one rejected `publish_attack_flow` submission immediately
+after `complete_attack`:
+
+`Completed attack result acknowledgement is outstanding.`
+
+This rejection is not currently classified as a defect. It may represent valid
+enforcement of the completed-result acknowledgement barrier.
+
+After both acknowledgements, gameplay does not return to a usable
+ship-commanded Squadron Activation state. The player cannot activate another
+squadron permitted by the ship's Squadron command.
+
+The captured canonical state shows:
+
+- `CurrentAttackState` inactive;
+- the completed-Attack inspection satisfied;
+- the enclosing ship Squadron-command opportunity still OPEN;
+- the commanded squadron still associated with its
+  `ship_squadron_command` activation;
+- no expected post-Attack `CompleteSquadronActivationCommand` before the stall.
+
+The relationship between the Network `squadron_destroyed` signal failures and
+the missing post-Attack Squadron Activation continuation is not yet established.
+
+They must be treated as separate observations until implementation investigation
+proves or disproves causality.
+
+In particular, the investigation must determine whether:
+
+1. canonical lethal Squadron destruction is already correct and the signal
+   failure is an independent projection/event-integration defect;
+2. a failed destruction callback incorrectly gates presentation recovery;
+3. semantic gameplay continuation incorrectly depends on a destruction signal
+   callback;
+4. the missing `CompleteSquadronActivationCommand` has an independent cause in
+   the authoritative Squadron Activation completion predicate.
+
+The new reproduction demonstrates that previous automated BUG-035 coverage does
+not completely represent the production state space of this branch.
+
+No further implementation repair is authorized from this observation alone.
+The failing production state must first be compared against successful
+ship-commanded Squadron continuations in the same replay and against the current
+passing BUG-035 regressions.
+
+
+
 2026-08-25 status:
 Implementation checkpoint: automated workbook acceptance complete; final two-human Network manual QA pending. No known automated BUG-035 gap remains. Manual acceptance deferred while prerequisite test/recovery infrastructure is repaired.
 
@@ -1218,9 +1344,7 @@ Possible dispositions after investigation:
 - if accepted authority does not define the case, stop for an Owner decision
   rather than inventing cancellation semantics.
 
-No repair is authorized from this observation alone.
+No further implementation repair should be attempted before the current recurrence is forensically compared with the existing BUG-035 regressions and successful production branches.
 
 BUG-035 remains open pending this classification and completion of the remaining
 manual QA.
-
-continuation in the implementation workbook

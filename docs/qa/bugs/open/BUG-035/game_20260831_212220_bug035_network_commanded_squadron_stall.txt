@@ -1,0 +1,259 @@
+*** host log file
+
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=610 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [commit_accuracy] seq=611 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [resolve_damage] seq=612 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [complete_attack] seq=613 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [WARN] [CommandProcessor] Command rejected [publish_attack_flow]: Completed attack result acknowledgement is outstanding.
+[2026-08-31T21:22:20] [INFO] [NetworkManager] Command [publish_attack_flow] from peer 1771621702 rejected by validation.
+[2026-08-31T21:22:22] [INFO] [CommandProcessor] Executed [acknowledge_attack_result] seq=614 player=1.
+[2026-08-31T21:22:22] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:22] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:24] [INFO] [CommandProcessor] Executed [acknowledge_attack_result] seq=615 player=0.
+[2026-08-31T21:22:24] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:24] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:24] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:24] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:54] [INFO] [DebugMode] Debug mode ENABLED
+[2026-08-31T21:23:12] [INFO] [TooltipManager] show_text() SHOWN (force=true, dur=0.0): 'Click a ship to deal faceup damage'
+[2026-08-31T21:23:12] [INFO] [DebugController] Debug damage targeting mode entered (Shift+D).
+[2026-08-31T21:23:45] [INFO] [DebugMode] [ANNOTATION #1] Just after the first squadron attack form my Vsd, the game stalls and I cannot activate another squadron.
+[2026-08-31T21:23:46] [INFO] [TooltipManager] hide_tooltip() — was FORCED, now IDLE.
+[2026-08-31T21:23:46] [INFO] [DebugController] Debug damage targeting cancelled.
+
+*** client log file
+
+[2026-08-31T21:22:16] [DEBUG] [Targeting]   squad 'TIE Fighter Squadron' threatened by squad 'X-wing Squadron'
+[2026-08-31T21:22:16] [DEBUG] [Targeting]   squad 'TIE Fighter Squadron' threatened by squad 'X-wing Squadron'
+[2026-08-31T21:22:16] [DEBUG] [Targeting]   squad 'TIE Fighter Squadron' threatened by squad 'X-wing Squadron'
+[2026-08-31T21:22:16] [DEBUG] [Targeting]   squad 'TIE Fighter Squadron' threatened by squad 'X-wing Squadron'
+[2026-08-31T21:22:16] [DEBUG] [Targeting] === build() complete — 1 ship + 6 squad results ===
+[2026-08-31T21:22:16] [INFO] [CommandProcessor] Executed [begin_attack] seq=599 player=1.
+[2026-08-31T21:22:16] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [publish_attack_flow] (1 pending).
+[2026-08-31T21:22:16] [INFO] [AttackExecutor] Awaiting dice roll.
+[2026-08-31T21:22:16] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=600 player=1.
+[2026-08-31T21:22:17] [INFO] [AttackExecutor] Rolling dice: 3 blue.
+[2026-08-31T21:22:17] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [roll_dice] (1 pending).
+[2026-08-31T21:22:17] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=601 player=1.
+[2026-08-31T21:22:17] [INFO] [CommandProcessor] Executed [roll_dice] seq=602 player=1.
+[2026-08-31T21:22:17] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [publish_attack_flow] (1 pending).
+[2026-08-31T21:22:17] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [publish_attack_flow] (2 pending).
+[2026-08-31T21:22:17] [INFO] [AttackExecutor] Dice rolled: 3 dice, 2 damage.
+[2026-08-31T21:22:17] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [publish_attack_flow] (3 pending).
+[2026-08-31T21:22:17] [INFO] [AttackExecutor] Swarm available — offering one die reroll.
+[2026-08-31T21:22:17] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=603 player=1.
+[2026-08-31T21:22:17] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=604 player=1.
+[2026-08-31T21:22:17] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=605 player=1.
+[2026-08-31T21:22:19] [INFO] [CommandProcessor] Executed [reroll_attack_die] seq=606 player=1.
+[2026-08-31T21:22:19] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [publish_attack_flow] (1 pending).
+[2026-08-31T21:22:19] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [publish_attack_flow] (2 pending).
+[2026-08-31T21:22:19] [INFO] [AttackExecutor] Final dice: 2 damage. Awaiting confirm.
+[2026-08-31T21:22:19] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=607 player=1.
+[2026-08-31T21:22:19] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=608 player=1.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [confirm_attack_dice] seq=609 player=1.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack confirmed: 2 damage. Starting Step 3 (accuracy).
+[2026-08-31T21:22:20] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [publish_attack_flow] (1 pending).
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] No accuracy icons or canonical defender — skipping accuracy step.
+[2026-08-31T21:22:20] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [commit_accuracy] (2 pending).
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=610 player=1.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [commit_accuracy] seq=611 player=1.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Accuracy confirmed: locked tokens [].
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [resolve_damage] seq=612 player=1.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Resolving damage: 2 total.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Squadron took 1 damage. Hull: 0/5.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Squadron destroyed!
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [complete_attack] seq=613 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:22] [INFO] [CommandProcessor] Executed [acknowledge_attack_result] seq=614 player=1.
+[2026-08-31T21:22:22] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:22] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:24] [INFO] [CommandProcessor] Executed [acknowledge_attack_result] seq=615 player=0.
+[2026-08-31T21:22:24] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:24] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:24] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:24] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:24:22] [INFO] [NetworkManager] Peer disconnected: 1
+[2026-08-31T21:24:22] [WARN] [NetworkManager] Server disconnected.
+[2026-08-31T21:24:22] [INFO] [NetworkManager] State: LOBBY → DISCONNECTED
+
+
+*** terminal output
+
+[2026-08-31T21:22:19] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=607 player=1.
+[2026-08-31T21:22:19] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:19] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:19] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=607 player=1.
+[2026-08-31T21:22:19] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=608 player=1.
+[2026-08-31T21:22:19] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:19] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:19] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=608 player=1.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [confirm_attack_dice] seq=609 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [confirm_attack_dice] seq=609 player=1.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack confirmed: 2 damage. Starting Step 3 (accuracy).
+[2026-08-31T21:22:20] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [publish_attack_flow] (1 pending).
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] No accuracy icons or canonical defender — skipping accuracy step.
+[2026-08-31T21:22:20] [INFO] [NetworkCommandSubmitter] Awaiting response — queued command [commit_accuracy] (2 pending).
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=610 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [publish_attack_flow] seq=610 player=1.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [commit_accuracy] seq=611 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [resolve_damage] seq=612 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+ERROR: Error calling from signal 'squadron_destroyed' to callable: 'Node(game_manager.gd)::_on_squadron_destroyed': Cannot convert argument 1 from Object to Object.
+   at: emit_signalp (core/object/object.cpp:1310)
+   GDScript backtrace (most recent call first):
+       [0] _handle_remote_resolve_damage (res://src/autoload/game_manager.gd:3163)
+       [1] _handle_remote_command_effects (res://src/autoload/game_manager.gd:2824)
+       [2] _on_network_command_result (res://src/autoload/game_manager.gd:2649)
+       [3] _broadcast_command_result (res://src/autoload/network_manager.gd:1557)
+       [4] _submit_observer_followup_from_server (res://src/autoload/network_manager.gd:1614)
+       [5] _submit_followup (res://src/autoload/command_processor.gd:685)
+       [6] drain_observer_followups (res://src/autoload/command_processor.gd:259)
+       [7] _drain_server_observer_followups (res://src/autoload/network_manager.gd:1618)
+       [8] _submit_command_to_server (res://src/autoload/network_manager.gd:1507)
+ERROR: Error calling from signal 'squadron_destroyed' to callable: 'Node(sfx_manager.gd)::_on_squadron_destroyed': Cannot convert argument 1 from Object to Object.
+   at: emit_signalp (core/object/object.cpp:1310)
+   GDScript backtrace (most recent call first):
+       [0] _handle_remote_resolve_damage (res://src/autoload/game_manager.gd:3163)
+       [1] _handle_remote_command_effects (res://src/autoload/game_manager.gd:2824)
+       [2] _on_network_command_result (res://src/autoload/game_manager.gd:2649)
+       [3] _broadcast_command_result (res://src/autoload/network_manager.gd:1557)
+       [4] _submit_observer_followup_from_server (res://src/autoload/network_manager.gd:1614)
+       [5] _submit_followup (res://src/autoload/command_processor.gd:685)
+       [6] drain_observer_followups (res://src/autoload/command_processor.gd:259)
+       [7] _drain_server_observer_followups (res://src/autoload/network_manager.gd:1618)
+       [8] _submit_command_to_server (res://src/autoload/network_manager.gd:1507)
+ERROR: Error calling from signal 'squadron_destroyed' to callable: 'Node(ui_panel_manager.gd)::_on_score_changed': Cannot convert argument 1 from Object to Object.
+   at: emit_signalp (core/object/object.cpp:1310)
+   GDScript backtrace (most recent call first):
+       [0] _handle_remote_resolve_damage (res://src/autoload/game_manager.gd:3163)
+       [1] _handle_remote_command_effects (res://src/autoload/game_manager.gd:2824)
+       [2] _on_network_command_result (res://src/autoload/game_manager.gd:2649)
+       [3] _broadcast_command_result (res://src/autoload/network_manager.gd:1557)
+       [4] _submit_observer_followup_from_server (res://src/autoload/network_manager.gd:1614)
+       [5] _submit_followup (res://src/autoload/command_processor.gd:685)
+       [6] drain_observer_followups (res://src/autoload/command_processor.gd:259)
+       [7] _drain_server_observer_followups (res://src/autoload/network_manager.gd:1618)
+       [8] _submit_command_to_server (res://src/autoload/network_manager.gd:1507)
+ERROR: Error calling from signal 'squadron_destroyed' to callable: 'PanelContainer(activation_sidebar.gd)::_on_squadron_destroyed': Cannot convert argument 1 from Object to Object.
+   at: emit_signalp (core/object/object.cpp:1310)
+   GDScript backtrace (most recent call first):
+       [0] _handle_remote_resolve_damage (res://src/autoload/game_manager.gd:3163)
+       [1] _handle_remote_command_effects (res://src/autoload/game_manager.gd:2824)
+       [2] _on_network_command_result (res://src/autoload/game_manager.gd:2649)
+       [3] _broadcast_command_result (res://src/autoload/network_manager.gd:1557)
+       [4] _submit_observer_followup_from_server (res://src/autoload/network_manager.gd:1614)
+       [5] _submit_followup (res://src/autoload/command_processor.gd:685)
+       [6] drain_observer_followups (res://src/autoload/command_processor.gd:259)
+       [7] _drain_server_observer_followups (res://src/autoload/network_manager.gd:1618)
+       [8] _submit_command_to_server (res://src/autoload/network_manager.gd:1507)
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [complete_attack] seq=613 player=1.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [commit_accuracy] seq=611 player=1.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Accuracy confirmed: locked tokens [].
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [resolve_damage] seq=612 player=1.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Resolving damage: 2 total.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Squadron took 1 damage. Hull: 0/5.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Squadron destroyed!
+ERROR: Error calling from signal 'squadron_destroyed' to callable: 'Node(game_manager.gd)::_on_squadron_destroyed': Cannot convert argument 1 from Object to Object.
+   at: emit_signalp (core/object/object.cpp:1310)
+   GDScript backtrace (most recent call first):
+       [0] _handle_remote_resolve_damage (res://src/autoload/game_manager.gd:3163)
+       [1] _handle_remote_command_effects (res://src/autoload/game_manager.gd:2824)
+       [2] _apply_network_command_result (res://src/autoload/game_manager.gd:2720)
+       [3] _flush_ordered_network_results (res://src/autoload/game_manager.gd:2700)
+       [4] _queue_network_command_result (res://src/autoload/game_manager.gd:2693)
+       [5] _on_network_command_result (res://src/autoload/game_manager.gd:2651)
+       [6] _broadcast_command_result (res://src/autoload/network_manager.gd:1557)
+ERROR: Error calling from signal 'squadron_destroyed' to callable: 'Node(sfx_manager.gd)::_on_squadron_destroyed': Cannot convert argument 1 from Object to Object.
+   at: emit_signalp (core/object/object.cpp:1310)
+   GDScript backtrace (most recent call first):
+       [0] _handle_remote_resolve_damage (res://src/autoload/game_manager.gd:3163)
+       [1] _handle_remote_command_effects (res://src/autoload/game_manager.gd:2824)
+       [2] _apply_network_command_result (res://src/autoload/game_manager.gd:2720)
+       [3] _flush_ordered_network_results (res://src/autoload/game_manager.gd:2700)
+       [4] _queue_network_command_result (res://src/autoload/game_manager.gd:2693)
+       [5] _on_network_command_result (res://src/autoload/game_manager.gd:2651)
+       [6] _broadcast_command_result (res://src/autoload/network_manager.gd:1557)
+ERROR: Error calling from signal 'squadron_destroyed' to callable: 'Node(ui_panel_manager.gd)::_on_score_changed': Cannot convert argument 1 from Object to Object.
+   at: emit_signalp (core/object/object.cpp:1310)
+   GDScript backtrace (most recent call first):
+       [0] _handle_remote_resolve_damage (res://src/autoload/game_manager.gd:3163)
+       [1] _handle_remote_command_effects (res://src/autoload/game_manager.gd:2824)
+       [2] _apply_network_command_result (res://src/autoload/game_manager.gd:2720)
+       [3] _flush_ordered_network_results (res://src/autoload/game_manager.gd:2700)
+       [4] _queue_network_command_result (res://src/autoload/game_manager.gd:2693)
+       [5] _on_network_command_result (res://src/autoload/game_manager.gd:2651)
+       [6] _broadcast_command_result (res://src/autoload/network_manager.gd:1557)
+ERROR: Error calling from signal 'squadron_destroyed' to callable: 'PanelContainer(activation_sidebar.gd)::_on_squadron_destroyed': Cannot convert argument 1 from Object to Object.
+   at: emit_signalp (core/object/object.cpp:1310)
+   GDScript backtrace (most recent call first):
+       [0] _handle_remote_resolve_damage (res://src/autoload/game_manager.gd:3163)
+       [1] _handle_remote_command_effects (res://src/autoload/game_manager.gd:2824)
+       [2] _apply_network_command_result (res://src/autoload/game_manager.gd:2720)
+       [3] _flush_ordered_network_results (res://src/autoload/game_manager.gd:2700)
+       [4] _queue_network_command_result (res://src/autoload/game_manager.gd:2693)
+       [5] _on_network_command_result (res://src/autoload/game_manager.gd:2651)
+       [6] _broadcast_command_result (res://src/autoload/network_manager.gd:1557)
+WARNING: [2026-08-31T21:22:20] [WARN] [CommandProcessor] Command rejected [publish_attack_flow]: Completed attack result acknowledgement is outstanding.
+     at: push_warning (core/variant/variant_utility.cpp:1034)
+     GDScript backtrace (most recent call first):
+         [0] _log (res://src/utils/logger.gd:128)
+         [1] warn (res://src/utils/logger.gd:105)
+         [2] _reject_command (res://src/autoload/command_processor.gd:697)
+         [3] _submit (res://src/autoload/command_processor.gd:284)
+         [4] submit_deferred_followups (res://src/autoload/command_processor.gd:188)
+         [5] _submit_command_to_server (res://src/autoload/network_manager.gd:1474)
+[2026-08-31T21:22:20] [INFO] [NetworkManager] Command [publish_attack_flow] from peer 1771621702 rejected by validation.
+[2026-08-31T21:22:20] [INFO] [CommandProcessor] Executed [complete_attack] seq=613 player=1.
+[2026-08-31T21:22:20] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:20] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:22] [INFO] [CommandProcessor] Executed [acknowledge_attack_result] seq=614 player=1.
+[2026-08-31T21:22:22] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:22] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:22] [INFO] [CommandProcessor] Executed [acknowledge_attack_result] seq=614 player=1.
+[2026-08-31T21:22:22] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:22] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:24] [INFO] [CommandProcessor] Executed [acknowledge_attack_result] seq=615 player=0.
+[2026-08-31T21:22:24] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:24] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:24] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:24] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:24] [INFO] [CommandProcessor] Executed [acknowledge_attack_result] seq=615 player=0.
+[2026-08-31T21:22:24] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:24] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:24] [INFO] [TargetSelector] Target selector dismissed.
+[2026-08-31T21:22:24] [INFO] [AttackExecutor] Attack executor dismissed.
+[2026-08-31T21:22:54] [INFO] [DebugMode] Debug mode ENABLED
+[2026-08-31T21:23:12] [INFO] [TooltipManager] show_text() SHOWN (force=true, dur=0.0): 'Click a ship to deal faceup damage'
+[2026-08-31T21:23:12] [INFO] [DebugController] Debug damage targeting mode entered (Shift+D).
+[2026-08-31T21:23:45] [INFO] [DebugMode] [ANNOTATION #1] Just after the first squadron attack form my Vsd, the game stalls and I cannot activate another squadron.
+[2026-08-31T21:23:46] [INFO] [TooltipManager] hide_tooltip() — was FORCED, now IDLE.
+[2026-08-31T21:23:46] [INFO] [DebugController] Debug damage targeting cancelled.
+[2026-08-31T2

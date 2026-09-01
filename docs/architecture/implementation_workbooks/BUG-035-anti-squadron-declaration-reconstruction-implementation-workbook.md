@@ -7,8 +7,55 @@ Accepted update date: 2026-08-22
 Accepted second update date: 2026-08-22
 Accepted third update date: 2026-08-23
 Accepted fourth update date: 2026-08-25
+Accepted fifth update date: 2026-09-01
 
-2026-08-25: Implementation checkpoint: automated workbook acceptance complete; final two-human Network manual QA pending. No known automated BUG-035 gap remains. Manual acceptance deferred while prerequisite test/recovery infrastructure is repaired.
+## 2026-09-01: Added Requirement
+
+### Squadron action-order convergence coverage
+
+Regression coverage must exercise both legal Squadron action orders and must
+re-evaluate the remaining action from canonical state after the first action.
+
+At minimum cover:
+
+- Move → Attack, with Attack remaining legal;
+- Move → terminal activation when no legal Attack remains;
+- Attack → Move where Move was already legal;
+- Attack → Move where the Attack outcome changes canonical state and makes Move
+  newly legal, including destruction of the last non-Heavy engager;
+- Attack → terminal activation where Move remains prohibited or otherwise
+  unavailable;
+- terminal completion when neither action remains.
+
+Where applicable, exercise the same child-action semantics in both:
+
+- normal Squadron Phase activation; and
+- ship-commanded Squadron Activation.
+
+Normal Squadron Phase coverage is verification of shared child-action semantics
+only. It does not authorize a Squadron Phase production repair. If current
+evidence shows that Squadron Phase production behavior or the established
+shared child action predicate/recovery implementation itself requires
+correction, implementation SHALL stop rather than expand this workbook's
+scope.
+
+The first action's pre-action legality must not be cached as the legality of the
+second action. Remaining-action availability must be derived from canonical
+state after the first action resolves.
+
+For every branch verify either:
+
+1. the remaining legal action is recoverable as the next stable player
+   decision without synthesizing a completion command; or
+2. `CompleteSquadronActivationCommand` executes exactly once when no legal
+   action remains, followed by the accepted enclosing continuation.
+
+At least one production-path regression must cover the full live transition,
+rather than beginning from a manually constructed post-Attack fixture.
+
+
+## 2026-08-25:
+Implementation checkpoint: automated workbook acceptance complete; final two-human Network manual QA pending. No known automated BUG-035 gap remains. Manual acceptance deferred while prerequisite test/recovery infrastructure is repaired.
 
 Amendment basis: Owner-directed BUG-035 convergence re-entry, accepted
 ship-commanded Squadron terminal route-coverage finding (2026-08-22), and
@@ -378,7 +425,7 @@ received principal.
 | `src/autoload/command_processor.gd` | Sole CON-007 live-authority post-success seam | Add only the bounded ship-commanded completion hook in its existing deferred post-success path: invoke the GameManager canonical evaluator after an accepted ship-commanded `CompleteSquadronActivationCommand`, and enqueue only its returned existing `AdvanceActivationStepCommand(repair_step)`. No generic continuation, parent-policy, or additional progression semantics are authorized. |
 | `src/autoload/game_manager.gd` | Bounded canonical query used by the processor-owned seam | Add only a purpose-specific evaluator invoked from the authorized `CommandProcessor` hook. It derives live-versus-terminal Squadron Command status from existing canonical facts and returns no transaction or the existing fully identified Ship Activation transition; it neither submits nor enqueues a command and remains independent of all presentation inputs. |
 | `src/scenes/game_board/ship_activation_controller.gd` | Existing command-mode Squadron projection | Remove or neutralize only the terminal semantic submission/finalization branch that currently follows `InteractionFlow`/modal/controller-local resolver state. Retain derived modal, overlay, and recoverable-choice projection; do not move semantic progression into another controller. |
-| `tests/integration/test_current_attack_production_resume.gd`, `tests/integration/test_current_attack_shared_protocol.gd`, and directly applicable panel/router tests | Stable-outcome and result-presentation regression coverage | Extend assertions and add only the focused two-human Network partial-acknowledgement and reconstruction fixtures in Sections 2.0 and 5. |
+| `tests/integration/test_current_attack_production_resume.gd`, `tests/integration/test_current_attack_shared_protocol.gd`, `tests/integration/test_squadron_attack_target_recovery.gd`, and directly applicable panel/router tests | Stable-outcome, result-presentation, and 2026-09-01 action-order regression coverage | Extend assertions and add only the focused two-human Network partial-acknowledgement and reconstruction fixtures in Sections 2.0 and 5, and the focused action-order regressions required by the 2026-09-01 amendment. |
 
 Not authorized: `GameState`, `ShipInstance`, command classes, Ship Activation
 state/commands, `CurrentAttackState`, contracts, ADRs, requirements, generic
@@ -402,6 +449,24 @@ Extend the real-GameBoard Hot-Seat coverage in
 post-acknowledgement anti-squadron tests. Reuse
 `_satisfied_inactive_anti_state(true)`, `GameManager.start_new_game_from_state`,
 board token helpers, and `AcknowledgeAttackResultCommand` where applicable.
+
+The 2026-09-01 action-order regressions SHALL cover the applicable listed
+Move → Attack, Move → terminal, Attack → Move, Attack → terminal, and terminal
+completion-when-neither-action-remains variants in their respective contexts.
+At least one ship-commanded Attack → Move
+regression SHALL begin on the live production path before Attack completion,
+resolve the Attack through ordinary completion and acknowledgement, lethally
+destroy the last live non-Heavy engager, re-derive Move as newly legal from
+post-Attack canonical state, recover that same squadron's Move as the next
+stable decision, and execute zero `CompleteSquadronActivationCommand`
+transactions.
+
+Its paired non-lethal retained-engagement control SHALL retain a live non-Heavy
+engager, prove Move remains illegal specifically because engagement remains,
+execute exactly one `CompleteSquadronActivationCommand`, and prove the
+accepted enclosing continuation reaches its applicable stable outcome. These
+regressions verify established canonical semantics only; they do not authorize
+changes to the action-completion predicate, canonical state, or commands.
 
 The existing remaining-target real-GameBoard regression SHALL retain its proof
 of history exclusion, ordinary declaration Confirm, and exactly one second
@@ -574,7 +639,11 @@ Do not:
   `squadron_done`, or treat a post-Begin active Attack as voluntarily
   cancellable under this workbook;
 - redesign shared Attack Flow, introduce caller-specific completion
-  architecture, or broaden into Squadron Phase / unrelated Attack work.
+  architecture, or broaden production work into Squadron Phase / unrelated
+  Attack work. Squadron Phase coverage under the 2026-09-01 amendment is
+  verification-only; a need to change Squadron Phase production behavior or
+  the established shared child action predicate/recovery semantics is a stop
+  condition.
 - permit `InteractionFlow`, `ModalRouter`, a controller callback, scene token,
   `ShipActivationState`, or `SquadronCommandResolver` instance state to decide
   commanded-Squadron terminality or submit its parent progression; or
@@ -597,9 +666,10 @@ gameplay with no further immediate required transition.
 | Ship anti-squadron: legal same-zone target, voluntary pre-commit finish | Manual-QA gap | Add Section 2.1A proof that the controller can finish the remaining optional anti-squadron Attack opportunity before another Begin, using the existing no-active-Attack Skip/decline semantics and without `squadron_done`. |
 | Ship anti-squadron: exhausted, normal Ship Attack remains | Must be extended | Add the Section 2.2 recovered-normal-declaration stable assertion. |
 | Ship anti-squadron: exhausted, no Ship Attack remains | Must be extended | Add the Section 2.3 exact-once Maneuver `OPEN` stable assertion. |
-| Squadron Phase: remaining action / allocation remains | Convergence-complete evidence | Preserve the existing owner live-action/allocation assertion; do not reopen without contrary evidence. |
-| Squadron Phase: terminal allocation/handoff | Convergence-complete evidence | Preserve accepted terminal phase/handoff assertion. |
-| Ship-commanded Squadron: remaining action / capacity remains | Convergence-complete canonical/recoverable evidence | Preserve the recoverable live choice assertion; no parent-progression command may be synthesized. |
+| Squadron Phase: same squadron has a remaining second action | Verification-only shared-child-semantics evidence | Cover applicable action-order variants and preserve the same-squadron recoverable decision assertion. This row does not authorize reopening Squadron Phase production behavior. |
+| Squadron Phase: terminal Squadron Activation / applicable phase continuation | Verification-only shared-child-semantics evidence | Cover terminal action-order variants and preserve the accepted terminal phase/handoff assertion. This row does not authorize reopening Squadron Phase production behavior. |
+| Ship-commanded Squadron: same squadron has a remaining second action | Must be extended by the 2026-09-01 amendment | Cover applicable action-order variants, including the live lethal Attack → Move recovery; recover that same squadron's remaining decision with zero `CompleteSquadronActivationCommand` executions. |
+| Ship-commanded Squadron: current squadron complete; capacity and another eligible squadron remain | Convergence-complete canonical/recoverable evidence | Preserve the exactly-one `CompleteSquadronActivationCommand` assertion and recover another commanded-squadron decision; no parent-progression command may be synthesized. |
 | Ship-commanded Squadron: terminal command return | Incomplete: route audit proved controller/modal-dependent semantic bypass | Add the Section 5 commanded-Squadron terminal stable-outcome regression and remove the bypass before declaring this context convergence-complete. |
 | Two-human Network: host is remaining result acknowledger after client acknowledgement | New manual-QA diagnosis; canonical state and command path are valid, but host result presentation is stale | Add the Section 2.0/Section 5 composed result-presentation regression, including stale `ATTACK_RESOLVE_DAMAGE` precedence and exactly one host acknowledgement. |
 
@@ -695,6 +765,15 @@ For the Network completed-result presentation/recovery slice, also stop if:
 18. a material production-file expansion beyond the Section 4 result
     projection/reconstruction seam is required.
 
+For the 2026-09-01 action-order coverage, also stop if:
+
+19. Squadron Phase production behavior or the established shared child action
+    predicate/recovery semantics would require modification; or
+20. the required live lethal Attack → Move or paired non-lethal
+    retained-engagement branches cannot be proven using the established
+    canonical state, action-completion predicates, commands, and accepted
+    enclosing continuations.
+
 The processor-owned invocation path and authorized file scope above resolve the
 two pre-amendment audit gates. No stop gate is currently triggered on the
 available route-coverage evidence; implementation SHALL stop if that evidence
@@ -702,8 +781,12 @@ is contradicted at the authorized seam.
 
 Completion requires the preserved remaining-target regression, the
 Section 2.1A voluntary pre-commit finish regression, both exhausted iteration
-branches, the commanded-Squadron capacity-remains and terminal stable-outcome
-branches, the four-context stable-outcome review, applicable
+branches, all applicable 2026-09-01 action-order variants, including terminal
+completion when neither action remains, the live lethal Attack → Move
+production-path regression, and paired non-lethal retained-engagement control,
+the commanded-Squadron same-squadron
+remaining-action, capacity-remains, and terminal stable-outcome branches, the
+four-context stable-outcome review, applicable
 live/mirror/replay/reconstruction checks, the two-human Network
 host-remaining-acknowledger result/reconstruction regression, the required suites, applicable
 architecture or documentation lint, and `git diff --check` to pass. Manual QA must cover the voluntary pre-commit anti-squadron finish with a

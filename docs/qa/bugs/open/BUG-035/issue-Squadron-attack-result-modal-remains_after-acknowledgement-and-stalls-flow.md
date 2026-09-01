@@ -128,9 +128,56 @@ The failing production state must first be compared against successful
 ship-commanded Squadron continuations in the same replay and against the current
 passing BUG-035 regressions.
 
+### Forensic Investigation Result — 2026-09-01
+
+The 2026-08-31 Network recurrence has been forensically investigated.
+
+The previously suspected missing
+`CompleteSquadronActivationCommand` is **not** the semantic defect.
+
+The lethal attack destroys the commanded squadron's last live non-Heavy
+engager. This changes authoritative remaining-action legality: the attacking
+squadron has already spent its Attack but now has a legal Move remaining.
+
+Therefore the Squadron Activation is correctly incomplete after the final
+attack-result acknowledgement, and CON-007 correctly derives no
+`CompleteSquadronActivationCommand`.
+
+The required stable outcome is instead recovery of the same commanded
+squadron's remaining Move decision.
+
+The proven BUG-035 defect is at that presentation/recovery boundary:
+
+- canonical remaining-action state is correct;
+- the completed-Attack inspection is satisfied;
+- no semantic continuation command should execute yet;
+- the existing live interaction remains path-dependent and does not recover
+  the required `ACTION_CHOICE` / Move decision after the final acknowledgement.
+
+The existing regression coverage misses this production branch because its
+legal-Move fixture begins from an already completed/satisfied state and does
+not exercise the live production transition through Attack, lethal destruction,
+two-human acknowledgement, and `ATTACKING → ACTION_CHOICE` recovery.
+
+The accepted BUG-035 architecture remains sufficient. The implementation
+workbook requires only a narrow verification/acceptance amendment covering the
+same-squadron remaining-action branch before implementation.
+
+See:
+
+`BUG-035-2026-08-31-network-recurrence-forensic-audit.md`
+
+The Network `squadron_destroyed` Object-conversion errors observed in the same
+reproduction have been proven independent of BUG-035 semantic continuation.
+They have a separate event-payload type root cause and should be tracked under
+a separate BUG identity.
+
+BUG-031 remains a distinct VERIFY issue. No shared root cause with BUG-035 was
+proven.
 
 
-2026-08-25 status:
+## 2026-08-25 status:
+
 Implementation checkpoint: automated workbook acceptance complete; final two-human Network manual QA pending. No known automated BUG-035 gap remains. Manual acceptance deferred while prerequisite test/recovery infrastructure is repaired.
 
 ## Expected

@@ -4,12 +4,13 @@ Contract ID: CON-001
 Title: Current Attack State And Semantic Transition Contract
 Status: Accepted
 Derived From: ADR-001
-Related ADRs: ADR-001, ADR-003, ADR-004, ADR-005
+Related ADRs: ADR-001, ADR-003, ADR-004, ADR-005, ADR-012 (Draft)
 Related Contracts: CON-003, CON-004, CON-005
 Related Verification: TEST-003 where timing-window behavior is involved
 
 Accepted by: Owner
 Accepted date: 2026-07-18
+Accepted update date: 2026-09-01
 Supersedes: None
 Superseded by: None
 
@@ -29,6 +30,14 @@ this scope.
 
 This Contract does not decide architecture. ADR-001 remains the normative
 architecture source.
+
+### Pending BUG-042 amendment
+
+The Project Owner has selected authority-only RNG for live Network play. The
+two `CON-001-NET` obligations marked **Pending ADR-012 acceptance** below are a
+Draft refinement derived from ADR-012. They are not part of the accepted
+CON-001 baseline until ADR-012 and this amendment are accepted. All other
+CON-001 obligations retain their accepted status unchanged.
 
 ## 1. Purpose
 
@@ -542,6 +551,24 @@ CON-001-NET-009: Visibility and transport filtering SHALL remain separate from
 command authorization. Hidden or filtered information SHALL neither grant nor
 remove semantic command authority.
 
+**Pending ADR-012 acceptance — CON-001-NET-010:** At a passive live Network
+mirror, an RNG-dependent semantic attack command SHALL consume its validated
+authority-resolved outcome inside the same replayable command transaction. The
+result SHALL contain only the viewer-authorized realized facts required for
+that mirror's application. The command SHALL remain the owner of canonical
+mutation; the mirror SHALL NOT require hidden authority-only inputs,
+reconstruct or advance live RNG, or reproduce the random calculation.
+
+**Pending ADR-012 acceptance — CON-001-NET-011:** Before canonical mutation, a
+passive mirror SHALL validate the authoritative result using the command,
+authoritative sequence/order, its accepted filtered pre-state, and result
+fields authorized for that peer. A missing, malformed, stale, duplicated,
+inconsistent, or inapplicable result SHALL fail closed and leave that rejecting
+mirror without partial mutation, successful command-history entry, cursor
+advancement, follow-up generation, or success presentation. Passive rejection
+SHALL NOT imply rollback of an authority transaction already accepted and
+committed.
+
 ## 7. Ownership Boundary Obligations
 
 ### 7.1 Responsibility Boundaries
@@ -677,7 +704,7 @@ the following matrix:
 | Serialization | Canonical active and inactive forms, deterministic round trip, invalid-state rejection, and compatibility behavior. |
 | Save/load | Mid-attack resume, post-terminal non-resurrection, legal-next-transition equivalence, and stale identity rejection. |
 | Replay | Semantic command order, deterministic reconstruction, exact-once terminal transitions, and no dependency on calculation or UI records. |
-| Networking | Authoritative command order, shared-state agreement, stale/duplicate/out-of-order rejection, and no client-synthesized semantic transitions. |
+| Networking | Authoritative command order, shared-state agreement, stale/duplicate/out-of-order rejection, no client-synthesized semantic transitions, and—after ADR-012 acceptance—command-owned validated application of viewer-authorized authority-resolved random outcomes without passive RNG execution or hidden authority-only validation inputs. |
 | Reconnect | Canonical state reconstruction before projection, lifecycle identity preservation, and correct live interaction resumption. |
 | Projection and visibility | Viewer-specific filtering, non-authoritative projection, command-side authorization, and absence of hidden-information authority. |
 | Ownership boundaries | Runtime rule state, timing-window state, and current-attack state remain on their accepted owners during coordinated transactions. |
@@ -776,6 +803,7 @@ An implementation is CON-001-conformant only when:
 - `docs/architecture/adr/ADR-003-rule-and-validation-surfaces.md`
 - `docs/architecture/adr/ADR-004-upgrade-runtime-ownership.md`
 - `docs/architecture/adr/ADR-005-timing-window-ownership-and-continuation.md`
+- `docs/architecture/adr/ADR-012-live-network-rng-authority-and-result-application.md`
 - `docs/architecture/contracts/CON-003-rule-capability-contract.md`
 - `docs/architecture/contracts/CON-004-upgrade-runtime-contract.md`
 - `docs/architecture/contracts/CON-005-timing-window-implementation-contract.md`

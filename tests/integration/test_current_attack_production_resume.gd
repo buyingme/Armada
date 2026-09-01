@@ -2452,6 +2452,97 @@ func test_dial_commanded_attack_acknowledgement_retains_legal_move_interaction()
 	assert_false(board._attack_executor.is_active())
 
 
+func test_live_commanded_attack_lethal_last_non_heavy_engager_recovers_move() \
+		-> void:
+	var state: GameState = _live_commanded_squadron_attack_state(true)
+	var attacker: SquadronInstance = state.get_squadron(0, 0)
+	var defender: SquadronInstance = state.get_squadron(1, 0)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 73))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+
+	modal._on_attack_pressed()
+	var defender_token: SquadronToken = _board_squadron_token(board, defender)
+	assert_not_null(defender_token)
+	assert_true(board._target_selector.handle_squadron_click(defender_token),
+			"The live command activation must expose its ordinary squadron target.")
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_true(panel._confirm_is_declaration)
+	panel._on_confirm_pressed()
+	assert_true(state.current_attack_state.active)
+	assert_eq(_command_count(CommandProcessor.get_history(), "begin_attack"), 1)
+
+	_resolve_active_unopposed_attack(0)
+	assert_true(defender.is_destroyed(),
+			"The live attack must destroy the last nearby non-Heavy engager.")
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_not_null(inspection)
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+
+	assert_not_null(state.completed_attack_inspection)
+	assert_true(state.completed_attack_inspection.is_satisfied())
+	assert_true(state.current_attack_state.is_inactive())
+	assert_eq(attacker.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_BEGUN)
+	assert_false(attacker.move_action_committed)
+	assert_true(state.has_legal_remaining_squadron_move_action(attacker),
+			"Move must be re-derived from post-destruction canonical state.")
+	assert_eq(_history_types().count(CompleteSquadronActivationCommand.TYPE), 0,
+			"A recoverable same-squadron Move must not synthesize completion.")
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_true(modal.visible)
+	assert_true(modal._move_button.visible)
+	assert_false(modal._attack_button.visible)
+
+
+func test_live_commanded_attack_nonlethal_retained_engagement_completes_once() \
+		-> void:
+	var state: GameState = _live_commanded_squadron_attack_state(false)
+	var attacker: SquadronInstance = state.get_squadron(0, 0)
+	var defender: SquadronInstance = state.get_squadron(1, 0)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 74))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+	modal._on_attack_pressed()
+	var defender_token: SquadronToken = _board_squadron_token(board, defender)
+	assert_not_null(defender_token)
+	assert_true(board._target_selector.handle_squadron_click(defender_token))
+	board._target_selector.get_panel()._on_confirm_pressed()
+	assert_true(state.current_attack_state.active)
+
+	_resolve_active_unopposed_attack(0)
+	assert_false(defender.is_destroyed())
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_not_null(inspection)
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+
+	assert_false(state.has_legal_remaining_squadron_move_action(attacker),
+			"The surviving non-Heavy engager must keep Move unavailable.")
+	assert_eq(_history_types().count(CompleteSquadronActivationCommand.TYPE), 1)
+	assert_eq(_history_activation_step_count("repair_step"), 1,
+			"The terminal child returns through the existing Ship Activation path.")
+	assert_eq(state.interaction_flow.step_id, Constants.InteractionStep.ATTACK_STEP)
+	assert_false(board._squadron_phase_controller.is_command_mode())
+
+
+func test_squadron_action_order_predicates_rederive_after_each_action() -> void:
+	_assert_squadron_action_order_predicates(true)
+	_assert_squadron_action_order_predicates(false)
+
+
 func test_passive_and_replay_acknowledgements_do_not_synthesize_blocked_move_completion() \
 		-> void:
 	for mode: String in [CurrentAttackContinuation.MODE_NETWORK_MIRROR,
@@ -3478,6 +3569,97 @@ func _satisfied_inactive_commanded_attack_state(
 				"ship_activation_identity": ship.ship_activation_identity})
 	assert_eq(attacker.attack_action_disposition,
 			SquadronInstance.ATTACK_ACTION_BEGUN)
+	return state
+
+
+## Starts before Begin and resolves through the ordinary live attack path.  The
+## lethal variant removes the only nearby non-Heavy engager; the retained
+## control keeps that engager alive so canonical Move legality diverges only
+## after the attack result is applied.
+func _live_commanded_squadron_attack_state(lethal: bool) -> GameState:
+	var state: GameState = _command_squadron_projection_state(false)
+	var attacker: SquadronInstance = state.get_squadron(0, 0)
+	attacker.squadron_data = attacker.squadron_data.duplicate(true) \
+			as SquadronData
+	attacker.squadron_data.anti_squadron_armament = \
+			{"BLACK": 8} if lethal else {"BLUE": 1}
+	var defender := SquadronInstance.create_from_data(
+			"tie_fighter_squadron",
+			AssetLoader.load_squadron_data("tie_fighter_squadron"), 1)
+	defender.pos_x = 0.5
+	defender.pos_y = 0.48
+	defender.roster_entry_id = "live-commanded-engager"
+	if lethal:
+		defender.current_hull = 1
+	state.get_player_state(1).squadrons.append(defender)
+	assert_true(state.validate_declaration_adjacent_state())
+	return state
+
+
+## Verifies the shared child-action predicate without changing Squadron Phase
+## production behavior.  The same canonical checks apply to its Rogue
+## move-and-attack row and to ship-commanded Squadron Activation.
+func _assert_squadron_action_order_predicates(is_phase_context: bool) -> void:
+	var label: String = "Squadron Phase" if is_phase_context \
+			else "ship-commanded Squadron"
+	var move_then_attack: GameState = _action_order_squadron_state(
+			is_phase_context, true)
+	var move_first: SquadronInstance = move_then_attack.get_squadron(0, 0)
+	var is_rogue: bool = is_phase_context
+	assert_true(move_then_attack.has_legal_remaining_squadron_move_action(
+			move_first), "%s Move must be legal before Move → Attack." % label)
+	assert_true(move_first.commit_move_action(move_first.activation_id, is_rogue))
+	assert_true(move_first.has_remaining_attack_action(is_rogue),
+			"%s must re-derive Attack after Move." % label)
+	assert_true(move_first.commit_attack_action_begun(
+			move_first.activation_id, is_rogue))
+	assert_true(move_then_attack.is_squadron_activation_action_complete(
+			move_first), "%s has neither action after Move → Attack." % label)
+
+	var attack_then_move: GameState = _action_order_squadron_state(
+			is_phase_context, true)
+	var attack_first: SquadronInstance = attack_then_move.get_squadron(0, 0)
+	assert_true(attack_first.commit_attack_action_begun(
+			attack_first.activation_id, is_rogue))
+	assert_true(attack_then_move.has_legal_remaining_squadron_move_action(
+			attack_first), "%s must re-derive Move after Attack." % label)
+	assert_false(attack_then_move.is_squadron_activation_action_complete(
+			attack_first), "%s must not complete while Move remains." % label)
+
+	var attack_terminal: GameState = _action_order_squadron_state(
+			is_phase_context, false)
+	var terminal_attacker: SquadronInstance = attack_terminal.get_squadron(0, 0)
+	assert_true(terminal_attacker.commit_attack_action_begun(
+			terminal_attacker.activation_id, is_rogue))
+	assert_false(attack_terminal.has_legal_remaining_squadron_move_action(
+			terminal_attacker),
+			"The retained non-Heavy engager must prohibit %s Move." % label)
+	assert_true(attack_terminal.is_squadron_activation_action_complete(
+			terminal_attacker), "%s Attack → terminal must complete." % label)
+
+
+func _action_order_squadron_state(is_phase_context: bool,
+		move_is_legal: bool) -> GameState:
+	var state: GameState = _phase_squadron_projection_state(false) \
+			if is_phase_context else _command_squadron_projection_state(false)
+	var attacker: SquadronInstance = state.get_squadron(0, 0)
+	if is_phase_context:
+		attacker.squadron_data = attacker.squadron_data.duplicate(true) \
+				as SquadronData
+		attacker.squadron_data.keywords.append({"name": "Rogue"})
+	var defender: SquadronInstance = state.get_squadron(1, 0)
+	if defender == null:
+		defender = SquadronInstance.create_from_data(
+			"tie_fighter_squadron",
+			AssetLoader.load_squadron_data("tie_fighter_squadron"), 1)
+		defender.pos_x = 0.5
+		defender.pos_y = 0.48
+		defender.roster_entry_id = "action-order-engager"
+		state.get_player_state(1).squadrons.append(defender)
+	if move_is_legal:
+		defender.squadron_data = defender.squadron_data.duplicate(true) \
+				as SquadronData
+		defender.squadron_data.keywords.append({"name": "Heavy"})
 	return state
 
 

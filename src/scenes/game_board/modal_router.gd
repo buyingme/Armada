@@ -167,6 +167,8 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 		game_state: GameState, command: GameCommand) -> void:
 	if _drive_completed_attack_result(intent):
 		return
+	if _recover_commanded_squadron_remaining_action(game_state):
+		return
 	_drive_tarkin_choice_modal(intent)
 	_drive_ecm_ready_cost_modal(intent)
 	_drive_displacement_modal(intent, command)
@@ -176,6 +178,31 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 	_drive_current_attack_dice(intent.attack_dice_results)
 	_drive_timing_window_panel(intent.timing_window)
 	_apply_activation_affordances(intent)
+
+
+## A satisfied result can leave the currently commanded squadron with one
+## canonical action still available.  This is a derived-only recovery branch:
+## no completion or parent transition is selected here.  Rebuild the existing
+## command-mode action surface from the active squadron after the stale Attack
+## projection has lost its authority.
+func _recover_commanded_squadron_remaining_action(game_state: GameState) -> bool:
+	if game_state == null or _ship_activation_controller == null:
+		return false
+	var inspection: CompletedAttackInspection = \
+			game_state.completed_attack_inspection
+	if inspection == null or not inspection.is_satisfied():
+		return false
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack != null and attack.active:
+		return false
+	var squadron: SquadronInstance = game_state.get_active_squadron_activation()
+	if squadron == null \
+			or squadron.activation_context \
+					!= SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
+			or game_state.is_squadron_activation_action_complete(squadron):
+		return false
+	return _ship_activation_controller.restore_command_squadron_activation(
+			squadron, false)
 
 
 ## A pending canonical result is presentation precedence over any stale Attack

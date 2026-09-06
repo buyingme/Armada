@@ -3225,12 +3225,26 @@ func _handle_remote_select_redirect_zone(
 
 ## B19: Mirror resolve_damage side effects on client.
 func _handle_remote_resolve_damage(
-		_cmd: GameCommand, result: Dictionary) -> void:
-	var target_type: String = result.get("target_type", "ship")
+		cmd: GameCommand, result: Dictionary) -> void:
+	# ResolveDamageCommand has an application contract, so the host's
+	# remote-authored fallback derives presentation from CurrentAttackState's
+	# resolved outcome rather than receiving the authority result.  That
+	# outcome uses target_kind and deliberately carries no duplicate defender
+	# identity.  Resolve the canonical target from the still-active attack.
+	var target_type: String = str(result.get(
+			"target_type", result.get("target_kind", "ship")))
 	if target_type == "squadron":
-		var sq: SquadronInstance = _find_squadron_from_damage_result(result)
-		if sq and result.get("destroyed", false):
-			EventBus.squadron_destroyed.emit(sq)
+		var sq: SquadronInstance = _find_squadron_from_damage_result(result) \
+				if result.has("owner_player") \
+				and result.has("squadron_index") else null
+		if sq == null:
+			sq = _find_squadron_from_active_damage_attack(cmd)
+		if sq:
+			# The mirrored command has already committed canonical hull and
+			# destruction state.  Project that instance on every passive peer;
+			# GameBoard derives retirement from this state rather than an
+			# executor-local defender token.
+			EventBus.squadron_hull_changed.emit(sq, sq.current_hull)
 		return
 	var ship: ShipInstance = _find_ship_from_damage_result(result)
 	if ship == null:
@@ -3297,6 +3311,22 @@ func _find_squadron_from_damage_result(result: Dictionary) -> SquadronInstance:
 			or squadron_index >= player_state.squadrons.size():
 		return null
 	return player_state.squadrons[squadron_index] as SquadronInstance
+
+
+## Resolves a squadron damage target from the active canonical attack only
+## when the network presentation fallback intentionally omitted result target
+## identity.  This reads existing state; it creates no presentation authority.
+func _find_squadron_from_active_damage_attack(
+		cmd: GameCommand) -> SquadronInstance:
+	if current_game_state == null or cmd == null:
+		return null
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.attack_id != str(cmd.payload.get("attack_id", "")) \
+			or attack.defender_kind != CurrentAttackState.KIND_SQUADRON:
+		return null
+	return current_game_state.get_squadron(
+			attack.defender_player, attack.defender_index)
 
 
 ## B20–B21: Mirror overlap/persistent damage side effects on client.

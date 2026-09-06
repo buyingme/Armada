@@ -843,6 +843,19 @@ func _on_ship_hull_projection_changed(
 	_fade_out_destroyed_token(token)
 
 
+## Retires the board projection once an accepted squadron hull update says
+## the canonical squadron is destroyed.  SquadronInstance remains the sole
+## destruction owner; this removes only its matching local token.
+func _on_squadron_hull_projection_changed(
+		squadron: RefCounted, _new_hull: int) -> void:
+	if not squadron is SquadronInstance:
+		return
+	var instance: SquadronInstance = squadron as SquadronInstance
+	if not instance.is_destroyed():
+		return
+	_retire_destroyed_squadron_token(_find_squadron_token_for_instance(instance))
+
+
 ## Snaps a ShipToken to the position stored in its ShipInstance model
 ## after a remote execute_maneuver command.  G4.6.5 BF-2.
 func _on_ship_repositioned_remotely(ship: ShipInstance) -> void:
@@ -876,11 +889,9 @@ func _on_squadron_repositioned_remotely(sq: SquadronInstance) -> void:
 	# already emits the signal locally for the player who made the move.
 
 
-## Fades and hides the SquadronToken matching a destroyed
-## [SquadronInstance].  Idempotent: skips tokens that are already
-## invisible (e.g. attacker peer where [AttackExecutor._fade_out_token]
-## already ran).  Closes the passive-peer-destroy gap where the network
-## client kept showing the token after a kill.
+## Retires the SquadronToken named by a legacy destruction presentation
+## notification.  Canonical hull projection is the normal damage path; this
+## remains tolerant of existing token-based notifications.
 func _on_squadron_destroyed_fade_token(sq_or_token: Variant) -> void:
 	var token: SquadronToken = null
 	if sq_or_token is SquadronToken:
@@ -888,15 +899,25 @@ func _on_squadron_destroyed_fade_token(sq_or_token: Variant) -> void:
 	elif sq_or_token is SquadronInstance:
 		token = _find_squadron_token_for_instance(
 				sq_or_token as SquadronInstance)
-	if token == null or not token.visible:
+	_retire_destroyed_squadron_token(token)
+
+
+## Removes exactly one destroyed squadron projection from all board lookup and
+## interaction membership.  It is intentionally idempotent because canonical
+## refresh and legacy destroy presentation notifications may both arrive.
+func _retire_destroyed_squadron_token(token: SquadronToken) -> void:
+	if token == null or token.get_parent() != _token_container:
 		return
+	if DebugMode.selected_token == token:
+		DebugMode.deselect_token()
 	token.set_process_unhandled_input(false)
-	var tween: Tween = token.create_tween()
-	tween.tween_property(token, "modulate:a", 0.0, 0.8)
-	tween.tween_callback(func() -> void:
-		token.visible = false
-		token.modulate.a = 1.0
-	)
+	token.visible = false
+	_token_container.remove_child(token)
+	# Keep the detached node alive only for any in-flight executor animation or
+	# result presentation that already holds it.  It is no longer a board token:
+	# all board lookup, selection, input, and collision membership is the token
+	# container above.  As a direct child it is freed with this board.
+	add_child(token)
 
 
 ## Finds the SquadronToken on the board bound to the given SquadronInstance.
@@ -1485,6 +1506,7 @@ func _connect_board_core_signals() -> void:
 func _connect_board_damage_and_remote_signals() -> void:
 	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
 	EventBus.ship_hull_changed.connect(_on_ship_hull_projection_changed)
+	EventBus.squadron_hull_changed.connect(_on_squadron_hull_projection_changed)
 	EventBus.ship_repositioned_remotely.connect(
 			_on_ship_repositioned_remotely)
 	EventBus.squadron_repositioned_remotely.connect(

@@ -97,6 +97,35 @@ class DestroyedShipProjectionBoard:
 		return token
 
 
+class DestroyedSquadronProjectionBoard:
+	extends GameBoard
+
+	func _ready() -> void:
+		pass
+
+	func setup_capture(instance: SquadronInstance) -> SquadronToken:
+		_token_container = Node2D.new()
+		add_child(_token_container)
+		var token: SquadronToken = SquadronToken.new()
+		token.bind_instance(instance)
+		_token_container.add_child(token)
+		_connect_board_damage_and_remote_signals()
+		return token
+
+	func setup_loaded_capture(state: GameState,
+			target: SquadronInstance) -> SquadronToken:
+		_token_container = Node2D.new()
+		add_child(_token_container)
+		_panel_mgr = LoadedEntityPanelCapture.new()
+		add_child(_panel_mgr)
+		for player_index: int in Constants.PLAYER_COUNT:
+			var player_state: PlayerState = state.get_player_state(player_index)
+			if player_state != null:
+				_spawn_loaded_tokens_for_player(player_state)
+		_connect_board_damage_and_remote_signals()
+		return _find_squadron_token_for_instance(target)
+
+
 class LiveSpatialBoard:
 	extends GameBoard
 
@@ -412,6 +441,112 @@ func test_remote_lethal_hull_projection_removes_destroyed_ship_token() -> void:
 	assert_false(token.visible,
 			"Defender peer should retire a canonically destroyed ship token "
 			+ "without prediction or duplicate semantic destruction.")
+
+
+func test_canonical_squadron_hull_projection_retires_exact_token_idempotently() -> void:
+	var data: SquadronData = SquadronData.new()
+	data.hull = 2
+	var destroyed: SquadronInstance = SquadronInstance.create_from_data(
+			"destroyed_squadron", data, 1)
+	var survivor: SquadronInstance = SquadronInstance.create_from_data(
+			"surviving_squadron", data, 1)
+	destroyed.current_hull = 0
+	destroyed.mark_destroyed()
+	var board: DestroyedSquadronProjectionBoard = \
+			DestroyedSquadronProjectionBoard.new()
+	add_child_autofree(board)
+	var destroyed_token: SquadronToken = board.setup_capture(destroyed)
+	var survivor_token: SquadronToken = SquadronToken.new()
+	survivor_token.bind_instance(survivor)
+	board._token_container.add_child(survivor_token)
+	destroyed_token.set_process_unhandled_input(true)
+	DebugMode.selected_token = destroyed_token
+
+	EventBus.squadron_hull_changed.emit(destroyed, 0)
+	EventBus.squadron_hull_changed.emit(destroyed, 0)
+
+	assert_null(board._find_squadron_token_for_instance(destroyed))
+	assert_eq(board.get_squadron_tokens().size(), 1)
+	assert_eq(board.get_squadron_tokens()[0], survivor_token)
+	assert_ne(destroyed_token.get_parent(), board._token_container)
+	assert_false(destroyed_token.visible)
+	assert_false(destroyed_token.is_processing_unhandled_input())
+	assert_null(DebugMode.selected_token,
+			"A retired token must no longer remain board-selectable.")
+	assert_true(board._build_other_squad_circles(survivor_token).is_empty(),
+			"A retired token must not remain collision-active.")
+	EventBus.squadron_hull_changed.emit(survivor, survivor.current_hull)
+	assert_eq(board.get_squadron_tokens().size(), 1,
+			"A nonlethal canonical hull update must not retire the token.")
+
+
+func test_host_damage_fallback_retires_loaded_squadron_from_active_attack() -> void:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human())
+	state.current_phase = Constants.GamePhase.SHIP
+	var ship_data: ShipData = AssetLoader.load_ship_data("cr90_corvette_a")
+	var squadron_data: SquadronData = AssetLoader.load_squadron_data(
+			"x_wing_squadron")
+	state.get_player_state(0).ships.append(ShipInstance.create_from_data(
+			"cr90_corvette_a", ship_data, 0, 0))
+	var defender: SquadronInstance = SquadronInstance.create_from_data(
+			"x_wing_squadron", squadron_data, 1)
+	state.get_player_state(1).squadrons.append(defender)
+	var attack: CurrentAttackState = CurrentAttackState.new()
+	assert_true(attack.configure_active("attack:45", {
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SHIP,
+		"attacker_index": 0,
+		"attacker_zone": int(Constants.HullZone.FRONT),
+		"defender_player": 1,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_index": 0,
+		"defender_zone": -1,
+		"attack_kind": "standard",
+		"range_band": Constants.RANGE_BAND_CLOSE,
+		"obstructed": false,
+		"obstruction_resolved": true,
+		"dice_pool": {"RED": 1},
+		"cf_dial_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+		"cf_token_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+	}))
+	assert_true(state.set_current_attack_state(attack))
+	GameManager.current_game_state = state
+	var board: DestroyedSquadronProjectionBoard = \
+			DestroyedSquadronProjectionBoard.new()
+	add_child_autofree(board)
+	var loaded_token: SquadronToken = board.setup_loaded_capture(state, defender)
+	assert_not_null(loaded_token,
+			"The production loaded-state spawner must register the live token.")
+	var peer_board: DestroyedSquadronProjectionBoard = \
+			DestroyedSquadronProjectionBoard.new()
+	add_child_autofree(peer_board)
+	var peer_loaded_token: SquadronToken = peer_board.setup_loaded_capture(
+			state, defender)
+	assert_not_null(peer_loaded_token,
+			"Each reconstructed board must register its live token.")
+	defender.current_hull = 0
+	defender.mark_destroyed()
+
+	# Application-contract envelopes omit presentation_result for damage.  The
+	# host fallback therefore receives only canonical resolved-outcome shape.
+	GameManager._handle_remote_resolve_damage(
+			ResolveDamageCommand.new(0, {
+				"attack_id": "attack:45",
+			}), {
+				"target_kind": CurrentAttackState.KIND_SQUADRON,
+				"post_resolution_hull": 0,
+				"destroyed": true,
+			})
+
+	assert_null(board._find_squadron_token_for_instance(defender))
+	assert_eq(board.get_squadron_tokens().size(), 0,
+			"The host fallback must retire the reconstructed live token.")
+	assert_null(peer_board._find_squadron_token_for_instance(defender))
+	assert_eq(peer_board.get_squadron_tokens().size(), 0,
+			"The canonical projection must retire the peer board token too.")
 
 
 func _load_bug_006_state(filename: String) -> GameState:

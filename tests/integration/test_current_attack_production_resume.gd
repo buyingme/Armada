@@ -663,6 +663,54 @@ func test_network_host_remaining_result_acknowledges_once_and_tears_down_project
 			"Acknowledgement must not recreate or repeat attack completion.")
 
 
+func test_network_client_remaining_result_acknowledges_after_host_first() \
+		-> void:
+	var state: GameState = _pending_two_human_result_state()
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager._local_player_index = 0
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 73))
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_not_null(inspection)
+	var host_ack := AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})
+	host_ack.sequence = 73
+	assert_false(CommandProcessor.submit_mirror(
+			host_ack, _mirror_envelope(host_ack), 0).is_empty())
+	assert_false(state.completed_attack_inspection.is_satisfied())
+	assert_true(state.completed_attack_inspection.has_received(
+			state.principal_id_for_player(0)))
+	assert_false(state.completed_attack_inspection.has_received(
+			state.principal_id_for_player(1)))
+
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			state.principal_id_for_player(1)))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+
+	assert_not_null(panel)
+	assert_true(panel.is_awaiting_result_confirmation(),
+			"The client must receive the result action after host-first acknowledgement.")
+	assert_eq(panel._confirm_button.text, "Acknowledge Result")
+	var commands_before: int = _command_count(
+			CommandProcessor.get_history(), AcknowledgeAttackResultCommand.TYPE)
+	panel._on_confirm_pressed()
+	await get_tree().process_frame
+
+	assert_eq(_command_count(CommandProcessor.get_history(),
+			AcknowledgeAttackResultCommand.TYPE), commands_before + 1)
+	assert_false(panel.visible)
+	assert_false(panel.is_awaiting_result_confirmation())
+	assert_false(board._attack_executor.is_active())
+	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"), 0,
+			"Acknowledgement must not recreate or repeat attack completion.")
+
+
 func test_network_waiting_peer_reconstructs_non_actionable_result_surface() -> void:
 	var state: GameState = _pending_two_human_result_state()
 	var inspection: CompletedAttackInspection = state.completed_attack_inspection
@@ -682,6 +730,9 @@ func test_network_waiting_peer_reconstructs_non_actionable_result_surface() -> v
 	assert_false(panel.is_awaiting_result_confirmation(),
 			"An already-acknowledged principal may inspect but must not acknowledge again.")
 	assert_false(panel._confirm_button.visible)
+	assert_string_contains(panel.get_body_text(),
+			"Waiting for the other player to acknowledge the result.")
+	assert_false(panel.get_body_text().contains("hull zone"))
 	assert_eq(_history_types(), [])
 
 

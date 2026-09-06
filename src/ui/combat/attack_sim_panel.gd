@@ -323,6 +323,21 @@ func show_initial_squadron_exec(squad_name: String) -> void:
 	_request_deferred_layout()
 
 
+## Builds the panel for the canonical completed-attack inspection.
+## This deliberately does not reuse the attack initializer: a completed
+## inspection has no hull-zone selection step.  Whether acknowledgement is
+## actionable remains derived by the caller from canonical inspection state.
+func show_completed_attack_result(waiting_for_other_player: bool) -> void:
+	_attack_execution_mode = true
+	_build_ui()
+	_set_prompt("Completed Attack",
+			"Waiting for the other player to acknowledge the result."
+			if waiting_for_other_player
+			else "Review the completed attack result.")
+	visible = true
+	_request_deferred_layout()
+
+
 ## Builds the panel for a locked Counter attack.
 ## Rules Reference: RRG "Squadron Keywords" — Counter attacks target the
 ## squadron that performed the triggering non-counter attack.

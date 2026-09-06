@@ -519,6 +519,17 @@ func _resolve_resume_references(
 	var defender_token: Variant = ship_token_for_instance.call(defender) \
 			if attack.defender_kind == CurrentAttackState.KIND_SHIP \
 			else squadron_token_for_instance.call(defender)
+	# A lethal accepted squadron-damage projection retires the token from board
+	# lookup immediately.  An executor that was already presenting this attack
+	# may retain that detached token only for transient result presentation; it
+	# never determines canonical destruction or board retirement.
+	if defender_token == null and attack.defender_kind \
+			== CurrentAttackState.KIND_SQUADRON \
+			and defender is SquadronInstance \
+			and (defender as SquadronInstance).is_destroyed() \
+			and _state.defender_squadron != null \
+			and _state.defender_squadron.get_squadron_instance() == defender:
+		defender_token = _state.defender_squadron
 	if attack.attacker_kind == CurrentAttackState.KIND_SHIP \
 			and not attacker_token is ShipToken:
 		return _resume_failure("Canonical attacking ship has no board token.")
@@ -3994,15 +4005,12 @@ func present_completed_attack_result_projection(
 	if panel == null:
 		return
 	_connect_attack_panel_signals()
-	panel.show_initial_attack_exec("Completed Attack")
+	panel.show_completed_attack_result(not acknowledge_actionable)
 	panel.show_dice_results(inspection.get("dice_results", []) as Array[Dictionary])
 	panel.show_damage_info(_completed_attack_result_summary(inspection))
 	if acknowledge_actionable:
 		panel.show_result_confirmation()
 	else:
-		# Reuse the result surface's stale-control cleanup for a non-actionable
-		# waiting/dismissed projection, then suppress only its acknowledgement.
-		panel.show_result_confirmation()
 		panel.hide_confirm_button()
 
 

@@ -674,3 +674,12 @@ func test_acknowledge_result_is_distinct_and_presentation_only() -> void:
 	assert_signal_emitted(_panel, "result_confirmed")
 	assert_signal_not_emitted(_panel, "confirm_pressed")
 	assert_signal_not_emitted(_panel, "declaration_confirm_pressed")
+
+
+func test_completed_result_waiting_never_installs_hull_zone_prompt() -> void:
+	_panel.show_completed_attack_result(true)
+
+	assert_eq(_panel.get_body_text(),
+			"Waiting for the other player to acknowledge the result.")
+	assert_false(_panel.get_body_text().contains("hull zone"))
+	assert_false(_panel._confirm_button.visible)

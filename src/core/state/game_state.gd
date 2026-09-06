@@ -48,6 +48,10 @@ var damage_deck: DamageDeck = null
 ## Ensures deterministic replay when the same seed is used.
 var rng: GameRng = null
 
+## Present only on a passive Network peer. Full authorities and replay never
+## carry both this representation and a DamageDeck/RNG.
+var passive_damage_ledger: PassiveDamageLedger = null
+
 ## Active interactive UI flow (Phase I).
 ## Mutated only inside [GameCommand.execute()].  Always non-null after
 ## [method initialize].  See [code]docs/refactoring_phase_i_plan.md[/code].
@@ -416,9 +420,58 @@ func validate_declaration_adjacent_state() -> bool:
 
 ## Validates all state required before this candidate is published live.
 func validate_for_live_installation() -> bool:
-	return has_valid_match_player_control_binding() \
+	if passive_damage_ledger != null:
+		return validate_for_passive_network_installation()
+	return validate_for_full_authority_installation()
+
+
+func validate_for_full_authority_installation() -> bool:
+	return rng != null and damage_deck != null \
+			and passive_damage_ledger == null \
+			and has_valid_match_player_control_binding() \
 			and validate_declaration_adjacent_state() \
 			and validate_completed_attack_inspection()
+
+
+func validate_for_passive_network_installation() -> bool:
+	if rng != null or damage_deck != null or passive_damage_ledger == null \
+			or not has_valid_match_player_control_binding() \
+			or not stable_ship_identity_error().is_empty() \
+			or not validate_declaration_adjacent_state() \
+			or not validate_completed_attack_inspection():
+		return false
+	for player_state: PlayerState in player_states:
+		if player_state == null:
+			return false
+		for raw_ship: Variant in player_state.ships:
+			if not raw_ship is ShipInstance \
+					or not (raw_ship as ShipInstance).is_passive_damage_bound():
+				return false
+	return true
+
+
+## Returns an empty string when every ship has the stable identity required by
+## passive Network projection, otherwise a local diagnostic. This is a strict
+## live-Network boundary; it does not migrate legacy blank identifiers.
+func stable_ship_identity_error() -> String:
+	var seen: Dictionary = {}
+	for player_state: PlayerState in player_states:
+		if player_state == null:
+			return "Network state contains a missing player state."
+		for raw_ship: Variant in player_state.ships:
+			if not raw_ship is ShipInstance:
+				return "Network state contains an invalid ship instance."
+			var ship: ShipInstance = raw_ship as ShipInstance
+			var roster_id: String = ship.roster_entry_id.strip_edges()
+			if roster_id.is_empty():
+				return "Network state contains a ship with a blank roster_entry_id."
+			var key: String = PassiveDamageLedger.ship_key(
+					player_state.player_index, roster_id)
+			if seen.has(key):
+				return "Network state contains duplicate ship roster_entry_id '%s' for player %d." % [
+						roster_id, player_state.player_index]
+			seen[key] = true
+	return ""
 
 
 ## Installs the immutable binding once, cloning through its canonical boundary.
@@ -652,8 +705,6 @@ func serialize() -> Dictionary:
 				squadron_phase_activations_committed,
 		"objectives": objectives.duplicate(true),
 		"player_states": [],
-		"damage_deck": damage_deck.serialize() if damage_deck else {},
-		"rng": rng.serialize() if rng else {},
 		"interaction_flow": interaction_flow.serialize() if interaction_flow else {},
 		"timing_window_state": _timing_window_state.serialize()
 					if _timing_window_state else _new_timing_window_state().serialize(),
@@ -667,6 +718,11 @@ func serialize() -> Dictionary:
 	}
 	for player_state: PlayerState in player_states:
 		data["player_states"].append(player_state.serialize())
+	if passive_damage_ledger != null:
+		data["passive_damage_ledger"] = passive_damage_ledger.serialize()
+	else:
+		data["damage_deck"] = damage_deck.serialize() if damage_deck else {}
+		data["rng"] = rng.serialize() if rng else {}
 	return data
 
 
@@ -674,6 +730,67 @@ func serialize() -> Dictionary:
 ## Ship/squadron reconstruction inside each PlayerState is left to the
 ## caller because it requires template look-ups (ShipData / SquadronData).
 static func deserialize(data: Dictionary) -> GameState:
+	if data.has("passive_damage_ledger"):
+		return null
+	return _deserialize_representation(data)
+
+
+## Restores the purpose-specific filtered Network representation.
+static func deserialize_passive_network(data: Dictionary) -> GameState:
+	if not data.has("passive_damage_ledger") or data.has("damage_deck") \
+			or data.has("rng"):
+		return null
+	var expected_keys: Array[String] = []
+	var ship_counts: Dictionary = {}
+	for raw_player: Variant in data.get("player_states", []):
+		if not raw_player is Dictionary:
+			return null
+		var player_data: Dictionary = raw_player as Dictionary
+		var owner: int = int(player_data.get("player_index", -1))
+		for raw_ship: Variant in player_data.get("ships", []):
+			if not raw_ship is Dictionary:
+				return null
+			var ship_data: Dictionary = raw_ship as Dictionary
+			if ship_data.has("facedown_damage") \
+					or typeof(ship_data.get("facedown_count")) != TYPE_INT \
+					or int(ship_data.get("facedown_count")) < 0:
+				return null
+			var roster_id: String = str(ship_data.get("roster_entry_id", ""))
+			var key: String = PassiveDamageLedger.ship_key(owner, roster_id)
+			if roster_id.is_empty() or ship_counts.has(key):
+				return null
+			expected_keys.append(key)
+			ship_counts[key] = int(ship_data["facedown_count"])
+	var raw_ledger: Variant = data.get("passive_damage_ledger")
+	if not raw_ledger is Dictionary:
+		return null
+	var ledger: PassiveDamageLedger = PassiveDamageLedger.deserialize(
+			raw_ledger as Dictionary, expected_keys)
+	if ledger == null:
+		return null
+	for key: Variant in ship_counts:
+		if ledger.get_facedown_count(str(key)) != int(ship_counts[key]):
+			return null
+	var ordinary: Dictionary = data.duplicate(true)
+	ordinary.erase("passive_damage_ledger")
+	ordinary["damage_deck"] = {}
+	ordinary["rng"] = {}
+	var state: GameState = _deserialize_representation(ordinary, true)
+	if state == null:
+		return null
+	state.passive_damage_ledger = ledger
+	for player_state: PlayerState in state.player_states:
+		for raw_ship: Variant in player_state.ships:
+			var ship: ShipInstance = raw_ship as ShipInstance
+			var key: String = PassiveDamageLedger.ship_key(
+					player_state.player_index, ship.roster_entry_id)
+			if not ship.bind_passive_damage_ledger(ledger, key):
+				return null
+	return state if state.validate_for_passive_network_installation() else null
+
+
+static func _deserialize_representation(data: Dictionary,
+		passive: bool = false) -> GameState:
 	if not _serialized_declaration_fields_are_complete(data):
 		return null
 	var binding_data: Variant = data.get("match_player_control_binding", null)
@@ -706,6 +823,8 @@ static func deserialize(data: Dictionary) -> GameState:
 	var rng_data: Dictionary = data.get("rng", {})
 	if not rng_data.is_empty():
 		state.rng = GameRng.deserialize(rng_data)
+	if state.damage_deck != null and state.rng != null:
+		state.damage_deck.set_rng(state.rng)
 	var flow_data: Dictionary = data.get("interaction_flow", {})
 	if not flow_data.is_empty():
 		state.interaction_flow = InteractionFlow.deserialize(flow_data)
@@ -732,7 +851,8 @@ static func deserialize(data: Dictionary) -> GameState:
 		state._completed_attack_inspection = inspection
 	if state.interaction_flow != null \
 			and state.interaction_flow.flow_type == Constants.InteractionFlow.ATTACK \
-			and not state._current_attack_state.active:
+			and not state._current_attack_state.active \
+			and state._completed_attack_inspection == null:
 		return null
 	if data.has("timing_window_state"):
 		var timing_state = _new_timing_window_state()
@@ -744,7 +864,9 @@ static func deserialize(data: Dictionary) -> GameState:
 		state._timing_window_state = _new_timing_window_state()
 	if not state.validate_current_attack_references():
 		return null
-	if not state.validate_for_live_installation():
+	if not passive and (not state.has_valid_match_player_control_binding() \
+			or not state.validate_declaration_adjacent_state() \
+			or not state.validate_completed_attack_inspection()):
 		return null
 	if not bool(TIMING_WINDOW_ORCHESTRATOR.validate_reconstructed_state(
 			state).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
@@ -788,7 +910,7 @@ static func _serialized_declaration_fields_are_complete(
 			for key: String in [
 					"activation_id", "activation_context",
 					"commanding_ship_player", "commanding_ship_index",
-					"move_action_committed",
+					"move_action_disposition",
 					"attack_action_disposition"]:
 				if not (raw_squadron as Dictionary).has(key):
 					return false

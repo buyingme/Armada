@@ -50,8 +50,8 @@ func test_protocol_version_is_positive() -> void:
 			"Protocol version should be positive.")
 
 
-func test_protocol_version_is_match_003_cutover_four() -> void:
-	assert_eq(NetworkManager.PROTOCOL_VERSION, 4)
+func test_protocol_version_is_bug_042_cutover_five() -> void:
+	assert_eq(NetworkManager.PROTOCOL_VERSION, 6)
 
 
 func test_heartbeat_interval_is_positive() -> void:
@@ -589,6 +589,9 @@ func _network_roster(fleet_id: String,
 func _two_human_state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	state.install_match_player_control_binding(MatchPlayerControlBinding.create_two_human())
 	return state
 

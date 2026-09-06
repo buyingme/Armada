@@ -140,8 +140,13 @@ row updates to *Peers: 1* as well.
 - Each player only controls their own ships and squadrons; modal
   prompts appear only on the player who needs to act.
 - The host's machine is the source of truth.
-- All commands are deterministic: a replay file is written on both
-  Macs and they should match.
+- The host is the only machine that advances random state. Each accepted
+  random or hidden-information command carries the validated outcome needed
+  for the other Mac to update its permitted view without seeing the host's
+  random generator or hidden decks.
+- The host writes the replay file. Replay remains deterministic from its
+  recorded seed and semantic command history; live authoritative result
+  envelopes are not replay inputs.
 
 ### Save and resume a Network match
 
@@ -181,7 +186,9 @@ lobby order, player name, profile, or peer ID.
    appears exactly once. Missing, duplicate, or competing assignments block
    publication.
 5. Each endpoint receives only the view allowed for its assigned side and
-   acknowledges the restored state.
+   acknowledges the restored state. This filtered view intentionally excludes
+   the host's random-generator state, damage-deck order, and facedown damage
+   identities.
 6. Only then does the board become live. The canonical player identities and
    saved player-to-principal binding are unchanged; only the current-session
    human controllers are new.
@@ -244,6 +251,7 @@ the new assignment is rejected and the incumbent stays in control.
 | Host sees "(no LAN IP)" in lobby | No active LAN interface (Wi-Fi off, Ethernet unplugged) | Connect to Wi-Fi or plug in Ethernet, then re-host. |
 | "Invalid port (1–65535)" toast | Empty or out-of-range port field | Re-enter a valid number; default is `7350`. |
 | Both connect but ships look out of sync | Mixed app versions | Re-install identical builds on both Macs. |
+| A resumed client stops after a dice roll or damage card | Mixed builds or a protocol mismatch | Re-install identical protocol 6 builds on both Macs, then host and resume again. Do not copy saves or random-state data to the client. |
 | Network save is shown as not resumable | The save is unsupported, malformed, or on a foreign installation | Use same-live-match load where applicable. Fresh resume remains limited to the original save-owning installation. |
 | Reconnect assignment is rejected | The old endpoint is still associated, disconnect is not confirmed, or the side already has a controller | Keep the incumbent or wait for confirmed association loss before explicit reassignment. |
 
@@ -255,7 +263,7 @@ the new assignment is rejected and the incumbent stays in control.
 |---|---|
 | Default port | `7350` |
 | Required ports open on host | `7350/UDP` (or your custom port) |
-| Network protocol | ENet over UDP, protocol 4 |
+| Network protocol | ENet over UDP, protocol 6 |
 | Required machines | 2 Macs on the same LAN subnet |
 | Session save | Host machine only, under `saves/` |
 | Fresh-resume authority | Explicit host assignment of each connected human to one saved side before publication |

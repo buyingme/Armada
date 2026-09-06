@@ -115,6 +115,9 @@ func _make_completed_ship_phase_state() -> GameState:
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.initiative_player = 0
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	var cr90: ShipInstance = _make_ship(SHIP_KEY_CR90, 0)
 	var nebulon: ShipInstance = _make_ship(SHIP_KEY_NEBULON, 0)
 	var imperial_ship: ShipInstance = _make_ship(SHIP_KEY_CR90, 1)

@@ -62,8 +62,13 @@ func is_active() -> bool:
 
 
 ## Stores a command result to be broadcast later.
-func hold(command_data: Dictionary, result: Dictionary) -> void:
-	_held.append({"command_data": command_data, "result": result})
+func hold(command_data: Dictionary, result: Dictionary,
+		remote_authored: bool = false) -> void:
+	_held.append({
+		"command_data": command_data,
+		"result": result,
+		"remote_authored": remote_authored,
+	})
 
 
 ## Marks a player as having submitted all their dials.

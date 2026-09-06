@@ -187,6 +187,31 @@ After checking the roadmap and authority rules, classify the work:
 | Needs architecture task | Add a proposed `AT-xxx` only when requested, or report the need. |
 | Tolerate temporarily | Keep changes local; do not spread the tolerated pattern. |
 
+## Replay Fixture Renewal
+
+Replay fixtures are captured behavioral evidence, not implementation-generated
+test data.
+
+When a change requires replay fixture or replay baseline renewal:
+
+- Hot-Seat and Network replay fixtures must be recorded manually through the
+  real application/gameplay path.
+- Codex must not generate, synthesize, reconstruct, patch, transform, or
+  programmatically regenerate replay fixtures.
+- Codex may implement replay-format, serialization, compatibility, playback,
+  validation, and test changes required before new fixtures can be recorded.
+- When fresh replay fixtures are required, Codex must stop at the fixture-capture
+  boundary and report exactly which Hot-Seat and Network fixtures the owner must
+  record and any required capture conditions.
+- The owner records the required fixtures manually.
+- After manual capture, Codex may resume to inspect, validate, hash, integrate,
+  and verify the new fixtures and associated baselines.
+- Existing replay fixtures must not be relabeled, mechanically migrated, or
+  transformed to satisfy a new replay format or changed gameplay semantics.
+
+An accepted implementation workbook does not authorize Codex-generated replay
+fixture renewal unless the owner explicitly overrides this rule for that work.
+
 ## When Code Conflicts With Documentation
 
 1. Check whether the conflict is listed in `REALITY_GAP_REGISTER.md`.
@@ -238,3 +263,5 @@ If the authority order still does not produce a clear answer, ask the owner.
 - Prefer existing command, setup, save/load, replay, and network patterns over
   inventing new patterns.
 - When in doubt, document the uncertainty and ask before implementing.
+- Treat replay fixture renewal as an owner-operated manual capture boundary;
+  follow the Replay Fixture Renewal workflow above.

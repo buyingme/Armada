@@ -37,6 +37,47 @@ func _init(p_player: int = 0,
 	super._init(p_player, "repair_action", p_payload)
 
 
+func application_contract_id() -> String:
+	return "repair_action"
+
+
+func project_application_result(authority_result: Dictionary,
+		_viewer_player: int) -> Dictionary:
+	if str(payload.get("action_type", "")) == "repair_hull" \
+			and str(payload.get("damage_face", "")) == "facedown":
+		return {"discarded_card": authority_result.get(
+				"discarded_card", {}).duplicate(true)}
+	return {}
+
+
+func execute_with_application_result(game_state: GameState,
+		application_result: Dictionary) -> Dictionary:
+	var facedown: bool = str(payload.get("action_type", "")) == "repair_hull" \
+			and str(payload.get("damage_face", "")) == "facedown"
+	if not facedown:
+		if not application_result.is_empty():
+			return {}
+		return execute(game_state)
+	if application_result.size() != 1 \
+			or not application_result.get("discarded_card") is Dictionary:
+		return {}
+	var card: DamageCard = PassiveDamageLedger.deserialize_public_card(
+			application_result["discarded_card"] as Dictionary)
+	if card == null or card.is_faceup:
+		return {}
+	var ship: ShipInstance = _find_ship(game_state)
+	var ledger: PassiveDamageLedger = game_state.passive_damage_ledger
+	if ledger == null or not ledger.decrement_facedown(
+			ship.passive_damage_key()):
+		return {}
+	ledger.append_public_discard(card)
+	return {
+		"action_type": "repair_hull", "damage_face": "facedown",
+		"discarded_card": card.serialize(),
+		"new_hull": ship.ship_data.hull - ship.get_total_damage(),
+	}
+
+
 ## Validates that the repair action is legal in the current game state.
 ## Only allowed during the Ship Phase (repairs happen during activation).
 func validate(game_state: GameState) -> String:
@@ -110,11 +151,13 @@ func _validate_repair_hull(game_state: GameState) -> String:
 	var ship: ShipInstance = _find_ship(game_state)
 	if ship == null:
 		return "Ship not found."
-	var is_faceup: bool = payload.get("card_is_faceup", false) as bool
-	var card_idx: int = payload.get("card_index", -1) as int
-	var arr: Array = ship.faceup_damage if is_faceup else ship.facedown_damage
-	if card_idx < 0 or card_idx >= arr.size():
-		return "Invalid card index %d (array size %d)." % [card_idx, arr.size()]
+	var face: String = str(payload.get("damage_face", ""))
+	var card_idx: int = int(payload.get("card_index", -1)) \
+			if face == "faceup" else int(payload.get("facedown_ordinal", -1))
+	var size: int = ship.faceup_damage.size() \
+			if face == "faceup" else ship.get_facedown_damage_count()
+	if face not in ["faceup", "facedown"] or card_idx < 0 or card_idx >= size:
+		return "Invalid damage-card selection."
 	return ""
 
 
@@ -150,18 +193,21 @@ func _execute_recover_shields(game_state: GameState) -> Dictionary:
 
 func _execute_repair_hull(game_state: GameState) -> Dictionary:
 	var ship: ShipInstance = _find_ship(game_state)
-	var is_faceup: bool = payload.get("card_is_faceup", false) as bool
-	var card_idx: int = payload.get("card_index", -1) as int
+	var is_faceup: bool = str(payload.get("damage_face", "")) == "faceup"
+	var card_idx: int = int(payload.get("card_index", -1)) \
+			if is_faceup else int(payload.get("facedown_ordinal", -1))
 	var arr: Array = ship.faceup_damage if is_faceup else ship.facedown_damage
 	var card: DamageCard = arr[card_idx]
 	ship.remove_damage_card(card)
 	if game_state.damage_deck:
 		game_state.damage_deck.discard(card)
+	elif game_state.passive_damage_ledger:
+		game_state.passive_damage_ledger.append_public_discard(card)
 	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
 	return {
 		"action_type": "repair_hull",
-		"card_title": card.title,
-		"card_is_faceup": is_faceup,
+		"damage_face": "faceup" if is_faceup else "facedown",
+		"discarded_card": card.serialize() if not is_faceup else {},
 		"new_hull": new_hull,
 	}
 

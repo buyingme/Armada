@@ -240,13 +240,20 @@ func test_game_state_deserialize_missing_flow_uses_default() -> void:
 # StateFilter integration
 # ---------------------------------------------------------------------------
 
+func _attach_authority_damage_deck(state: GameState) -> void:
+	var deck := DamageDeck.new()
+	deck.set_rng(state.rng)
+	deck.initialize()
+	state.damage_deck = deck
+
 func test_state_filter_strips_owner_payload_from_non_controller() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
 	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
+	_attach_authority_damage_deck(state)
 	state.interaction_flow = InteractionFlow.make(
-			Constants.InteractionFlow.ATTACK,
-			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+			Constants.InteractionFlow.COMMAND_PHASE,
+			Constants.InteractionStep.SELECT_DIALS,
 			1,
 			Constants.Visibility.OWNER,
 			{"secret_canary": "hidden_data"})
@@ -258,7 +265,7 @@ func test_state_filter_strips_owner_payload_from_non_controller() -> void:
 			"OWNER payload must be stripped from non-controller view.")
 	# Public fields still present
 	assert_eq(int(flow_data.get("flow_type", -1)),
-			int(Constants.InteractionFlow.ATTACK))
+			int(Constants.InteractionFlow.COMMAND_PHASE))
 	assert_eq(int(flow_data.get("controller_player", -1)), 1)
 
 
@@ -266,9 +273,10 @@ func test_state_filter_keeps_owner_payload_for_controller() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
 	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
+	_attach_authority_damage_deck(state)
 	state.interaction_flow = InteractionFlow.make(
-			Constants.InteractionFlow.ATTACK,
-			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+			Constants.InteractionFlow.COMMAND_PHASE,
+			Constants.InteractionStep.SELECT_DIALS,
 			1,
 			Constants.Visibility.OWNER,
 			{"secret_canary": "hidden_data"})
@@ -284,6 +292,7 @@ func test_state_filter_keeps_all_visibility_payload() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
 	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
+	_attach_authority_damage_deck(state)
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.COMMAND_PHASE,
 			Constants.InteractionStep.SELECT_DIALS,

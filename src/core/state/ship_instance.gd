@@ -90,6 +90,10 @@ var defense_tokens: Array[Dictionary] = []
 ## Rules Reference: DM-002, DM-006.
 var facedown_damage: Array = []
 
+## Non-serializing link used only by passive Network states.
+var _passive_damage_ledger: PassiveDamageLedger = null
+var _passive_damage_key: String = ""
+
 ## Faceup damage cards assigned to this ship. Each entry is a DamageCard.
 ## Rules Reference: DM-005.
 var faceup_damage: Array = []
@@ -184,7 +188,37 @@ func get_rotation_rad() -> float:
 ## Returns the total number of damage cards (facedown + faceup).
 ## Rules Reference: DM-003 — ship destroyed when total >= hull.
 func get_total_damage() -> int:
-	return facedown_damage.size() + faceup_damage.size()
+	return get_facedown_damage_count() + faceup_damage.size()
+
+
+func get_facedown_damage_count() -> int:
+	if _passive_damage_ledger != null:
+		return maxi(0, _passive_damage_ledger.get_facedown_count(
+				_passive_damage_key))
+	return facedown_damage.size()
+
+
+func bind_passive_damage_ledger(ledger: PassiveDamageLedger, key: String) -> bool:
+	if ledger == null or ledger.get_facedown_count(key) < 0 \
+			or not facedown_damage.is_empty():
+		return false
+	_passive_damage_ledger = ledger
+	_passive_damage_key = key
+	return true
+
+
+func is_passive_damage_bound() -> bool:
+	return _passive_damage_ledger != null
+
+
+func passive_damage_key() -> String:
+	return _passive_damage_key
+
+
+func increment_passive_facedown_damage(count: int = 1) -> bool:
+	return _passive_damage_ledger != null \
+			and _passive_damage_ledger.increment_facedown(
+					_passive_damage_key, count)
 
 
 ## Returns the remaining hull points (max hull minus damage cards dealt).
@@ -249,6 +283,9 @@ func reduce_shields(zone: String, amount: int) -> int:
 ## Adds a facedown damage card to this ship.
 ## Rules Reference: DM-002, DM-006, DM-007.
 func add_facedown_damage(card: RefCounted) -> void:
+	if is_passive_damage_bound():
+		push_error("Concrete facedown cards are unavailable on a passive ship.")
+		return
 	facedown_damage.append(card)
 
 
@@ -264,6 +301,12 @@ func add_faceup_damage(card: RefCounted) -> void:
 ## the DamageDeck.
 ## Rules Reference: CM-035 — repair hull discards a damage card.
 func remove_damage_card(card: RefCounted) -> bool:
+	if is_passive_damage_bound():
+		var public_idx: int = faceup_damage.find(card)
+		if public_idx < 0:
+			return false
+		faceup_damage.remove_at(public_idx)
+		return true
 	var idx: int = faceup_damage.find(card)
 	if idx >= 0:
 		faceup_damage.remove_at(idx)
@@ -279,6 +322,8 @@ func remove_damage_card(card: RefCounted) -> bool:
 ## Used during destruction cleanup to return cards to the discard pile.
 ## Rules Reference: DM-030 — destroyed ships return their cards.
 func clear_all_damage_cards() -> Array:
+	if is_passive_damage_bound():
+		return []
 	var cards: Array = []
 	cards.append_array(facedown_damage)
 	cards.append_array(faceup_damage)
@@ -796,7 +841,7 @@ static func _default_runtime_upgrade_card_state() -> Dictionary:
 ## The static template data ([member ship_data]) is identified by
 ## [member data_key] and must be re-loaded on deserialization.
 func serialize() -> Dictionary:
-	return {
+	var data: Dictionary = {
 		"data_key": data_key,
 		"roster_entry_id": roster_entry_id,
 		"fleet_points": fleet_points,
@@ -807,7 +852,6 @@ func serialize() -> Dictionary:
 		"pos_y": pos_y,
 		"rotation_deg": rotation_deg,
 		"defense_tokens": _serialize_defense_tokens(),
-		"facedown_damage": _serialize_damage_cards(facedown_damage),
 		"faceup_damage": _serialize_damage_cards(faceup_damage),
 		"activated_this_round": activated_this_round,
 		"attack_step_active": attack_step_active,
@@ -830,6 +874,11 @@ func serialize() -> Dictionary:
 				if command_tokens else {},
 		"runtime_upgrades": _serialize_runtime_upgrades(),
 	}
+	if is_passive_damage_bound():
+		data["facedown_count"] = get_facedown_damage_count()
+	else:
+		data["facedown_damage"] = _serialize_damage_cards(facedown_damage)
+	return data
 
 
 ## Restores a ShipInstance from a serialized dictionary.

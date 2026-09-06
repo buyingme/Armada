@@ -22,6 +22,54 @@ func _init(p_player: int = 0,
 	super._init(p_player, "roll_dice", p_payload)
 
 
+func application_contract_id() -> String:
+	return "roll_dice"
+
+
+func project_application_result(authority_result: Dictionary,
+		_viewer_player: int) -> Dictionary:
+	return {"dice_results": authority_result.get("dice_results", []).duplicate(true)}
+
+
+func execute_with_application_result(game_state: GameState,
+		application_result: Dictionary) -> Dictionary:
+	if application_result.size() != 1 \
+			or not application_result.has("dice_results") \
+			or not application_result.get("dice_results") is Array:
+		return {}
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var results: Array[Dictionary] = []
+	var expected_colors: Array[int] = []
+	var engine_pool: Dictionary = DicePool.to_engine_pool(attack.dice_pool)
+	for color_value: Variant in engine_pool:
+		for _index: int in range(int(engine_pool[color_value])):
+			expected_colors.append(int(color_value))
+	var raw_results: Array = application_result["dice_results"] as Array
+	if raw_results.size() != expected_colors.size():
+		return {}
+	for index: int in range(raw_results.size()):
+		var raw: Variant = raw_results[index]
+		if not raw is Dictionary:
+			return {}
+		var die: Dictionary = raw as Dictionary
+		if die.size() != 2 or not die.has("color") or not die.has("face") \
+				or typeof(die.get("color")) != TYPE_INT \
+				or typeof(die.get("face")) != TYPE_INT \
+				or int(die["color"]) != expected_colors[index] \
+				or not Dice.DICE_FACES.has(int(die["color"])) \
+				or int(die["face"]) not in Dice.DICE_FACES[int(die["color"])]:
+			return {}
+		results.append({"color": int(die["color"]), "face": int(die["face"])})
+	var replacement: CurrentAttackState = attack.with_patch({
+		"dice_results": results,
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	})
+	if replacement == null or not game_state.set_current_attack_state(replacement):
+		return {}
+	_record_ship_target_attack(game_state, attack)
+	return {"attack_id": attack.attack_id, "dice_results": results}
+
+
 ## Validates that rolling dice is legal.
 ## Attack-step-specific validation is handled by [AttackExecutor] before
 ## submitting; this only checks GameState-level preconditions.

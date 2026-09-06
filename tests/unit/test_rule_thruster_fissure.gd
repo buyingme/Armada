@@ -39,8 +39,8 @@ func test_observer_returns_followup_on_speed_change() -> void:
 			"Player-authored speed changes should create one damage follow-up.")
 	assert_eq(followups[0].payload.get("effect_id"), ThrusterFissure.EFFECT_ID,
 			"Follow-up should identify Thruster Fissure as the source.")
-	assert_true(bool(followups[0].payload.get("draw_from_deck", false)),
-			"Observer follow-up should draw the facedown card in execute().")
+	assert_eq(followups[0].payload.keys().size(), 3,
+			"Observer follow-up carries only target and public effect identity.")
 
 
 func test_observer_ignores_zero_speed_delta() -> void:

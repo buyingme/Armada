@@ -80,7 +80,7 @@ func test_active_reconnect_restores_state_cursor_visibility_and_projection() -> 
 			"Owner-only runtime source must not enter an observer snapshot.")
 	assert_false(filtered_json.contains(PARTICIPANT.VISIBILITY_KEY),
 			"Private visibility metadata must not enter an observer snapshot.")
-	var restored: GameState = GameState.deserialize(filtered)
+	var restored: GameState = GameState.deserialize_passive_network(filtered)
 	assert_not_null(restored)
 	var forged_hidden: GameCommand = COMMANDS.make_resolution(
 			COMMANDS.USE_TYPE, restored, "source-b", 0)
@@ -179,7 +179,9 @@ func test_network_mirror_and_replay_preserve_order_without_synthesis() -> void:
 	var mirror_state: GameState = _make_state(["source-a"])
 	var mirror: Node = _make_processor(mirror_state)
 	for command_data: Dictionary in recorded:
-		mirror.submit_mirror(GameCommand.deserialize(command_data))
+		var mirrored: GameCommand = GameCommand.deserialize(command_data)
+		mirror.submit_mirror(mirrored,
+				NetworkManager._build_result_envelope(mirrored, {}, 0), 0)
 		assert_eq(mirror.get_pending_observer_followup_count(), 0,
 				"Network mirror must not synthesize continuation.")
 
@@ -327,6 +329,9 @@ func _make_state(public_source_ids: Array[String],
 	var state: GameState = GameState.new()
 	state.rng = GameRng.new(7007)
 	state.initialize()
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	state.install_match_player_control_binding(
 			MatchPlayerControlBinding.deserialize(TEST_BINDING))
 	state.current_round = 1
@@ -381,9 +386,11 @@ func _broadcast_command_data() -> Array[Dictionary]:
 
 func _apply_broadcast_to_client(index: int) -> void:
 	var entry: Dictionary = _broadcast_results[index]
+	var envelope: Dictionary = (entry.get("result") as Dictionary).duplicate(true)
+	envelope["viewer_player"] = NetworkManager.get_local_player_index()
 	GameManager._on_network_command_result(
 			entry.get("command") as Dictionary,
-			entry.get("result") as Dictionary)
+			envelope)
 
 
 func _make_replay(commands: Array[Dictionary]) -> GameReplay:

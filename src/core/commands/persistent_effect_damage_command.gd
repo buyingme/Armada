@@ -4,15 +4,13 @@
 ## persistent damage-card effect (Ruptured Engine, Damaged Controls,
 ## Thruster Fissure, or Crew Panic).
 ##
-## The card is pre-drawn by the presentation layer and serialized into
-## the payload so the command is deterministic on replay.
+## Authority and replay draw inside this command; a passive Network peer
+## consumes one aggregate hidden draw without learning its identity.
 ##
 ## Payload:
 ##   [code]owner_player[/code] — int — ship owner index
 ##   [code]ship_index[/code]   — int — index in the player's fleet
 ##   [code]effect_id[/code]    — String — which persistent effect triggered
-##   [code]card_data[/code]    — Dictionary — serialized DamageCard, or
-##   [code]draw_from_deck[/code] — bool — draw deterministically in execute()
 ##
 ## Rules Reference: "Ruptured Engine", "Damaged Controls",
 ## "Thruster Fissure", "Crew Panic" card texts.
@@ -44,7 +42,31 @@ func _init(p_player: int = 0,
 	super._init(p_player, "persistent_effect_damage", p_payload)
 
 
-## Validates that the ship exists and card data is provided.
+func application_contract_id() -> String:
+	return "persistent_effect_damage"
+
+
+func project_application_result(_authority_result: Dictionary,
+		_viewer_player: int) -> Dictionary:
+	return {}
+
+
+func execute_with_application_result(game_state: GameState,
+		application_result: Dictionary) -> Dictionary:
+	if not application_result.is_empty() \
+			or game_state.passive_damage_ledger == null:
+		return {}
+	var ship: ShipInstance = game_state.get_ship(
+			int(payload.get("owner_player", -1)),
+			int(payload.get("ship_index", -1)))
+	var ledger: PassiveDamageLedger = game_state.passive_damage_ledger
+	if not ledger.consume_hidden_draws(1) \
+			or not ledger.increment_facedown(ship.passive_damage_key()):
+		return {}
+	return _finish_damage(game_state, ship)
+
+
+## Validates that the public effect source, ship, and draw are available.
 func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
@@ -59,11 +81,7 @@ func validate(game_state: GameState) -> String:
 	var ship: ShipInstance = game_state.get_ship(owner, idx)
 	if ship == null:
 		return "Ship not found."
-	if _has_card_payload():
-		return ""
-	if bool(payload.get("draw_from_deck", false)):
-		return _validate_damage_deck(game_state)
-	return "Missing card_data."
+	return _validate_damage_deck(game_state)
 
 
 ## Deals one facedown damage card, checks for destruction.
@@ -71,14 +89,20 @@ func execute(game_state: GameState) -> Dictionary:
 	var owner: int = int(payload.get("owner_player", -1))
 	var idx: int = int(payload.get("ship_index", -1))
 	var ship: ShipInstance = game_state.get_ship(owner, idx)
-	var card: DamageCard = _damage_card_for_payload(game_state)
+	var card: DamageCard = game_state.damage_deck.draw_card()
 	if card == null:
 		return {}
 	card.is_faceup = false
+	ship.add_facedown_damage(card)
+	return _finish_damage(game_state, ship)
+
+
+func _finish_damage(game_state: GameState, ship: ShipInstance) -> Dictionary:
+	var owner: int = int(payload.get("owner_player", -1))
+	var idx: int = int(payload.get("ship_index", -1))
 	var was_active_ship: bool = ship.has_active_ship_activation()
 	var ended_selection_turn: bool = _ends_current_selection_turn(
 			game_state, ship)
-	ship.add_facedown_damage(card)
 	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
 	var destroyed: bool = ship.is_destroyed()
 	var ship_phase_turn_terminated: bool = false
@@ -100,8 +124,6 @@ func execute(game_state: GameState) -> Dictionary:
 		"owner_player": owner,
 		"ship_index": idx,
 		"cards_added": 1,
-		"card_title": card.title,
-		"card_data": card.serialize(),
 		"new_hull": new_hull,
 		"destroyed": destroyed,
 		"ship_phase_turn_terminated": ship_phase_turn_terminated,
@@ -150,22 +172,12 @@ func _has_unactivated_ship(game_state: GameState, player: int) -> bool:
 	return false
 
 
-func _has_card_payload() -> bool:
-	var raw_card: Variant = payload.get("card_data", {})
-	return raw_card is Dictionary and not (raw_card as Dictionary).is_empty()
-
-
 func _validate_damage_deck(game_state: GameState) -> String:
+	if game_state.passive_damage_ledger != null:
+		return "" if game_state.passive_damage_ledger.can_consume_hidden_draws(1) \
+				else "Passive damage ledger is empty."
 	if game_state.damage_deck == null:
 		return "Missing damage deck."
 	if game_state.damage_deck.get_total_count() <= 0:
 		return "Damage deck is empty."
 	return ""
-
-
-func _damage_card_for_payload(game_state: GameState) -> DamageCard:
-	if _has_card_payload():
-		return DamageCard.deserialize(payload.get("card_data", {}))
-	if bool(payload.get("draw_from_deck", false)) and game_state.damage_deck:
-		return game_state.damage_deck.draw_card()
-	return null

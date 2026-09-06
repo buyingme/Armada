@@ -114,6 +114,9 @@ func test_fresh_lobby_network_save_stages_before_explicit_assignment() -> void:
 	state.initialize()
 	state.install_match_player_control_binding(
 			MatchPlayerControlBinding.create_two_human())
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	var meta := SaveGameMetadata.new()
 	meta.scenario_id = "learning_scenario"
 	meta.game_mode = SaveGameMetadata.MODE_NETWORK

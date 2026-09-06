@@ -446,7 +446,8 @@ func test_bug_018_modal_skip_commits_action_then_allows_next_squadron() -> void:
 
 	assert_eq(skipped.attack_action_disposition,
 			SquadronInstance.ATTACK_ACTION_DECLINED)
-	assert_false(skipped.move_action_committed)
+	assert_eq(skipped.move_action_disposition,
+			SquadronInstance.MOVE_ACTION_AVAILABLE)
 	assert_true(skipped.activated_this_round)
 	assert_eq(state.squadron_phase_activations_committed, 1)
 	assert_eq(_history_types(), ["activate_squadron", "skip_attack"])
@@ -505,7 +506,14 @@ func test_bug_018_network_controller_waits_for_authoritative_skip_result() \
 
 	var mirrored: GameCommand = submitter.submitted[0]
 	mirrored.sequence = CommandProcessor.get_next_sequence()
-	assert_false(CommandProcessor.submit_mirror(mirrored).is_empty())
+	assert_false(CommandProcessor.submit_mirror(mirrored, {
+		"protocol_version": NetworkManager.PROTOCOL_VERSION,
+		"application_contract": "none",
+		"application_contract_version": 0,
+		"viewer_player": 0,
+		"application_result": {},
+		"presentation_result": {},
+	}, 0).is_empty())
 
 	assert_eq(skipped.attack_action_disposition,
 			SquadronInstance.ATTACK_ACTION_DECLINED)

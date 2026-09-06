@@ -443,6 +443,11 @@ func _restore_canonical_token(token: Node2D) -> void:
 
 ## Opens the damage card picker modal for the clicked ship.
 func _open_debug_damage_modal(token: ShipToken) -> void:
+	# A non-negative local player is the board-level Network admission signal.
+	# Debug damage must be unavailable to both Network roles before any hidden
+	# deck query is made.
+	if NetworkManager.get_local_player_index() >= 0:
+		return
 	_debug_damage_targeting = false
 	_debug_damage_target_token = token
 	TooltipManager.hide_tooltip()

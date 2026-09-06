@@ -1,6 +1,7 @@
 ## Tests for G2 Tier 3 movement command subclasses.
 ##
-## Covers: MoveSquadronCommand, ExecuteManeuverCommand.
+## Covers: MoveSquadronCommand, DeclineSquadronMoveCommand,
+## ExecuteManeuverCommand.
 ## Each command is tested for validate (happy + rejection), execute,
 ## and serialize/deserialize roundtrip.
 extends GutTest
@@ -84,11 +85,13 @@ func before_each() -> void:
 	_state.current_round = 1
 	# Register command types.
 	MoveSquadronCommand.register()
+	DeclineSquadronMoveCommand.register()
 	ExecuteManeuverCommand.register()
 
 
 func after_each() -> void:
 	GameCommand._registry.erase("move_squadron")
+	GameCommand._registry.erase(DeclineSquadronMoveCommand.TYPE)
 	GameCommand._registry.erase("execute_maneuver")
 
 
@@ -251,6 +254,85 @@ func test_move_squadron_serialize_roundtrip() -> void:
 			"Restored sequence should match.")
 	assert_eq(restored.payload.get("squadron_index", -1), 2,
 			"Restored squadron_index should match.")
+
+
+# ======================================================================
+# DeclineSquadronMoveCommand
+# ======================================================================
+
+func test_decline_squadron_move_records_decline_without_position_change() -> void:
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_squadron(0)
+	var squadron: SquadronInstance = _state.get_squadron(0, idx)
+	assert_true(squadron.commit_attack_action_begun(
+			SQUADRON_ACTIVATION_ID, false))
+	var original := Vector2(squadron.pos_x, squadron.pos_y)
+	var result: Dictionary = DeclineSquadronMoveCommand.new(0,
+			_decline_payload(idx, squadron)).execute(_state)
+	assert_eq(result.get("move_disposition", ""),
+			SquadronInstance.MOVE_ACTION_DECLINED)
+	assert_eq(squadron.move_action_disposition,
+			SquadronInstance.MOVE_ACTION_DECLINED)
+	assert_eq(Vector2(squadron.pos_x, squadron.pos_y), original)
+
+
+func test_decline_squadron_move_strict_schema_and_stale_identity_reject() -> void:
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_squadron(0)
+	var squadron: SquadronInstance = _state.get_squadron(0, idx)
+	var payload: Dictionary = _decline_payload(idx, squadron)
+	assert_eq(DeclineSquadronMoveCommand.new(0, payload).validate(_state), "")
+	var extra: Dictionary = payload.duplicate(true)
+	extra["unexpected"] = true
+	assert_ne(DeclineSquadronMoveCommand.new(0, extra).validate(_state), "")
+	var stale: Dictionary = payload.duplicate(true)
+	stale["activation_id"] = "squadron-activation:stale"
+	assert_ne(DeclineSquadronMoveCommand.new(0, stale).validate(_state), "")
+	assert_eq(squadron.move_action_disposition,
+			SquadronInstance.MOVE_ACTION_AVAILABLE)
+
+
+func test_decline_squadron_move_duplicate_and_wrong_player_reject() -> void:
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_squadron(0)
+	var squadron: SquadronInstance = _state.get_squadron(0, idx)
+	var payload: Dictionary = _decline_payload(idx, squadron)
+	var command := DeclineSquadronMoveCommand.new(0, payload)
+	assert_eq(command.validate(_state), "")
+	assert_false(command.execute(_state).is_empty())
+	assert_ne(command.validate(_state), "")
+	assert_ne(DeclineSquadronMoveCommand.new(1, payload).validate(_state), "")
+
+
+func test_decline_squadron_move_roundtrip_preserves_exact_payload() -> void:
+	var payload: Dictionary = {
+		"squadron_index": 2,
+		"activation_id": "squadron-activation:12",
+		"activation_context":
+				SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE,
+		"completed_attack_inspection_id": "",
+	}
+	var command := DeclineSquadronMoveCommand.new(1, payload)
+	command.sequence = 12
+	var restored: GameCommand = GameCommand.deserialize(command.serialize())
+	assert_not_null(restored)
+	assert_eq(restored.command_type, DeclineSquadronMoveCommand.TYPE)
+	assert_eq(restored.player_index, 1)
+	assert_eq(restored.sequence, 12)
+	assert_eq(restored.payload, payload)
+
+
+func _decline_payload(index: int,
+		squadron: SquadronInstance) -> Dictionary:
+	var ship: ShipInstance = _state.get_ship(
+			squadron.commanding_ship_player, squadron.commanding_ship_index)
+	return {
+		"squadron_index": index,
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+		"completed_attack_inspection_id": "",
+		"ship_activation_identity": ship.ship_activation_identity,
+	}
 
 
 # ======================================================================

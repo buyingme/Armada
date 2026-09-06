@@ -21,6 +21,56 @@ func _init(p_player: int = 0, p_payload: Dictionary = {}) -> void:
 	super._init(p_player, TYPE, p_payload)
 
 
+func application_contract_id() -> String:
+	return "concentrate_fire_token_reroll"
+
+
+func project_application_result(authority_result: Dictionary,
+		_viewer_player: int) -> Dictionary:
+	var new_result: Dictionary = authority_result.get("new_result", {})
+	return {"new_face": int(new_result.get("face", -1))}
+
+
+func execute_with_application_result(game_state: GameState,
+		application_result: Dictionary) -> Dictionary:
+	if application_result.size() != 1 \
+			or typeof(application_result.get("new_face")) != TYPE_INT:
+		return {}
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var ship: ShipInstance = game_state.get_ship(
+			attack.attacker_player, attack.attacker_index)
+	var dice_results: Array[Dictionary] = attack.dice_results
+	var die_index: int = int(payload.get("die_index", -1))
+	var old_result: Dictionary = dice_results[die_index].duplicate(true)
+	var color: int = int(old_result.get("color", -1))
+	var face: int = int(application_result["new_face"])
+	if not Dice.DICE_FACES.has(color) or face not in Dice.DICE_FACES[color] \
+			or ship == null or ship.command_tokens == null \
+			or not ship.command_tokens.has_token(
+					Constants.CommandType.CONCENTRATE_FIRE):
+		return {}
+	var new_result: Dictionary = {"color": color, "face": face}
+	dice_results[die_index] = new_result
+	var replacement: CurrentAttackState = attack.with_patch({
+		"dice_results": dice_results,
+		"cf_token_resolution": CurrentAttackState.RESOLUTION_USED,
+	})
+	if replacement == null or not game_state.set_current_attack_state(replacement):
+		return {}
+	if not ship.command_tokens.spend_token(Constants.CommandType.CONCENTRATE_FIRE):
+		game_state.set_current_attack_state(attack)
+		return {}
+	return {
+		"attack_id": attack.attack_id,
+		"attacking_ship_id": str(payload.get("attacking_ship_id", "")),
+		"runtime_source_id": str(payload.get("runtime_source_id", "")),
+		"semantic_key": CF_RULE.SEMANTIC_KEY,
+		"resolution": CurrentAttackState.RESOLUTION_USED,
+		"die_index": die_index, "old_result": old_result,
+		"new_result": new_result, "dice_results": dice_results,
+	}
+
+
 func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if not base.is_empty():

@@ -271,8 +271,8 @@ func test_harness_make_handshake_uses_defaults() -> void:
 			"Default client_id should be 'test-uuid'.")
 	assert_eq(hs["display_name"], "TestPlayer",
 			"Default display name should be 'TestPlayer'.")
-	assert_eq(hs["protocol_version"], 4,
-			"MATCH-003 cuts over transport negotiation to protocol 4.")
+	assert_eq(hs["protocol_version"], 6,
+			"BUG-031 cuts over transport negotiation to protocol 6.")
 
 
 func test_protocol_three_handshake_is_not_compatible_with_cutover() -> void:

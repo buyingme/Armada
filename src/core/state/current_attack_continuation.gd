@@ -72,7 +72,7 @@ static func _derive_followup(game_state: GameState,
 		return _derive_defense_followup(
 				game_state, attack, command, result)
 	if command.command_type == "resolve_damage":
-		if not _post_damage_decision_pending(game_state, attack, result):
+		if not _post_damage_decision_pending(game_state, attack, command):
 			return _build_complete_attack(attack)
 	if command.command_type in ["resolve_immediate_effect", "counter_choice"] \
 			and attack.stage == CurrentAttackState.STAGE_RESOLVED:
@@ -287,16 +287,15 @@ static func _build_complete_attack(
 
 static func _post_damage_decision_pending(game_state: GameState,
 		attack: CurrentAttackState,
-		result: Dictionary) -> bool:
+		command: GameCommand) -> bool:
 	if _counter_decision_pending(game_state, attack):
 		return true
-	for raw_card: Variant in result.get("damage_cards", []) as Array:
-		if not raw_card is Dictionary:
-			continue
-		var card: DamageCard = DamageCard.deserialize(raw_card as Dictionary)
-		if card != null and card.is_faceup and card.is_immediate():
-			return true
-	return false
+	# Authority cleanup consumes every damage card owned by a destroyed ship;
+	# there is no surviving public card owner on which to resolve an effect.
+	# A non-lethal immediate draw remains the command-owned blocker.
+	return command is ResolveDamageCommand \
+			and not bool(attack.resolved_outcome.get("destroyed", false)) \
+			and (command as ResolveDamageCommand).drew_immediate_faceup_card()
 
 
 static func _counter_decision_pending(game_state: GameState,

@@ -363,7 +363,8 @@ func test_evade_then_ecm_redirect_resolve_in_correct_order() -> void:
 			"Evade should not consume the pending ECM authorization.")
 	var evade_die := SelectEvadeDieCommand.new(1, {
 		"attack_id": _attack_id(),
-		"ship_index": 0,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+		"defender_index": 0,
 		"token_index": 2,
 		"die_index": 0,
 		"expected_color": int(Constants.DiceColor.RED),
@@ -414,7 +415,8 @@ func test_hot_seat_protocol_preserves_ecm_redirect_through_evade() -> void:
 	evade.execute(_state)
 	var evade_die := SelectEvadeDieCommand.new(1, {
 		"attack_id": _attack_id(),
-		"ship_index": 0,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+		"defender_index": 0,
 		"token_index": 2,
 		"die_index": 0,
 		"expected_color": int(Constants.DiceColor.RED),
@@ -629,7 +631,7 @@ func test_pending_authorization_is_attack_scoped_serialized_and_reconnect_safe()
 			"Save/load should preserve pending ECM authorization.")
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			_state.serialize(), 0)
-	var reconnected: GameState = GameState.deserialize(filtered)
+	var reconnected: GameState = GameState.deserialize_passive_network(filtered)
 	var reconnected_upgrade: Dictionary = reconnected.get_ship(
 			1, 0).get_runtime_upgrade(ECM_RUNTIME_ID)
 	assert_false(ECM_SCRIPT.pending_authorization(
@@ -651,7 +653,7 @@ func test_reconnect_projection_preserves_pending_choice_without_reoffer() -> voi
 	_use_ecm().execute(_state)
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			_state.serialize(), 1)
-	var reconnected: GameState = GameState.deserialize(filtered)
+	var reconnected: GameState = GameState.deserialize_passive_network(filtered)
 	var intent: UIProjector.UIIntent = UIProjector.project(reconnected, 1)
 
 	assert_false(intent.affordances.has(ECM_SCRIPT.AFFORDANCE_KEY),
@@ -1063,6 +1065,9 @@ func _make_state(binding: MatchPlayerControlBinding = null) -> GameState:
 	state.initialize()
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	if binding != null:
 		assert_true(state.install_match_player_control_binding(binding),
 				"ECM fixture requires a valid explicit principal binding.")

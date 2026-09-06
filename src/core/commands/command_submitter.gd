@@ -18,7 +18,7 @@ func submit(command: GameCommand) -> Dictionary:
 
 ## Submits an engine-owned transition, not a player-originated command.
 func submit_authoritative(command: GameCommand) -> Dictionary:
-	return submit(command)
+	return {}
 
 
 ## Submits a replay-recorded command with its authoritative sequence intact.

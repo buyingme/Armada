@@ -59,6 +59,7 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	"move_squadron": [
 		"squadron_index", "commanding_ship_player", "commanding_ship_index",
 	],
+	"decline_squadron_move": ["squadron_index"],
 	"overlap_damage": ["ship_index", "other_owner", "other_ship_index"],
 	"persistent_effect_damage": ["owner_player", "ship_index"],
 	"publish_attack_flow": [
@@ -66,16 +67,15 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 		"defender_player", "chooser_player",
 	],
 	"redirect_done": ["ship_index", "token_index"],
-	"repair_action": ["owner_player", "ship_index", "card_index"],
-	"reroll_attack_die": ["die_index", "expected_color", "expected_face"],
-	"resolve_damage": [
-		"actual_damage", "hull_damage", "owner_player", "shield_damage",
-		"ship_index", "squadron_index",
+	"repair_action": [
+		"owner_player", "ship_index", "card_index", "facedown_ordinal",
 	],
+	"reroll_attack_die": ["die_index", "expected_color", "expected_face"],
+	"resolve_damage": [],
 	"resolve_immediate_effect": ["owner_player", "ship_index", "card_index"],
 	"reveal_dial": ["ship_index"],
 	"select_evade_die": [
-		"ship_index", "die_index", "expected_color", "expected_face",
+		"defender_index", "die_index", "expected_color", "expected_face",
 		"token_index",
 	],
 	"select_redirect_zone": [
@@ -125,6 +125,31 @@ const _NESTED_INTEGER_PAYLOAD_FIELDS: Dictionary = {
 ## their owning serialization boundary.
 const _MAX_SAFE_JSON_INTEGER: float = 9007199254740991.0
 
+const APPLICATION_CONTRACT_VERSION: int = 1
+const _EXACT_LIVE_PAYLOAD_FIELDS: Dictionary = {
+	"roll_dice": ["attack_id"],
+	"reroll_attack_die": [
+		"attack_id", "die_index", "expected_color", "expected_face",
+		"source_rule_id",
+	],
+	"use_concentrate_fire_token_reroll": [
+		"timing_window_id", "lifecycle_id", "attack_id", "attacking_ship_id",
+		"source_owner_kind", "runtime_source_id", "semantic_key", "die_index",
+		"expected_color", "expected_face",
+	],
+	"select_evade_die": [
+		"attack_id", "defender_kind", "defender_index", "token_index",
+		"die_index", "expected_color", "expected_face",
+	],
+	"resolve_damage": ["attack_id"],
+	"overlap_damage": ["ship_index", "other_owner", "other_ship_index"],
+	"persistent_effect_damage": ["owner_player", "ship_index", "effect_id"],
+	"resolve_immediate_effect": [
+		"owner_player", "ship_index", "card_index", "choice",
+	],
+	"destroy_unit": ["owner_player", "ship_index"],
+}
+
 
 ## The player who issued this command (0 or 1).
 var player_index: int = 0
@@ -158,6 +183,71 @@ func execute(_game_state: GameState) -> Dictionary:
 	push_warning("GameCommand.execute() called on base class — "
 			+"override in subclass '%s'." % command_type)
 	return {}
+
+
+## Contract id for the narrow passive-result execution mode. Empty means the
+## command remains deterministic and mirrors through execute().
+func application_contract_id() -> String:
+	return ""
+
+
+func application_contract_version() -> int:
+	return APPLICATION_CONTRACT_VERSION
+
+
+## Projects the result supplied to a specific viewer after a successful
+## authority transaction. Converted commands override this.
+func project_application_result(_authority_result: Dictionary,
+		_viewer_player: int) -> Dictionary:
+	return {}
+
+
+## Applies one validated authority result on a passive peer. Base commands
+## reject this execution mode.
+func execute_with_application_result(_game_state: GameState,
+		_application_result: Dictionary) -> Dictionary:
+	return {}
+
+
+## Exact semantic schema gate for BUG-042 converted commands. Repair is
+## conditional and therefore handled separately here.
+func validate_exact_semantic_payload() -> String:
+	if command_type == "repair_action":
+		return _validate_exact_repair_payload()
+	if not _EXACT_LIVE_PAYLOAD_FIELDS.has(command_type):
+		return ""
+	return _validate_exact_fields(payload,
+			_EXACT_LIVE_PAYLOAD_FIELDS[command_type] as Array)
+
+
+func _validate_exact_repair_payload() -> String:
+	var fields: Array = ["action_type", "owner_player", "ship_index"]
+	match str(payload.get("action_type", "")):
+		"move_shields":
+			fields.append_array(["from_zone", "to_zone"])
+		"recover_shields":
+			fields.append("zone")
+		"repair_hull":
+			fields.append("damage_face")
+			if str(payload.get("damage_face", "")) == "faceup":
+				fields.append("card_index")
+			elif str(payload.get("damage_face", "")) == "facedown":
+				fields.append("facedown_ordinal")
+			else:
+				return "Invalid repair damage_face."
+		_:
+			return "Invalid repair action_type."
+	return _validate_exact_fields(payload, fields)
+
+
+static func _validate_exact_fields(values: Dictionary,
+		expected: Array) -> String:
+	if values.size() != expected.size():
+		return "Command payload does not match its exact schema."
+	for field: Variant in expected:
+		if not values.has(str(field)):
+			return "Command payload does not match its exact schema."
+	return ""
 
 
 ## Validates whether this command is legal in the current game state.

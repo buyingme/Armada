@@ -106,6 +106,10 @@ func _ready() -> void:
 	NetworkManager.fresh_resume_published.connect(
 			_on_fresh_resume_published)
 	NetworkManager.fresh_resume_failed.connect(_on_fresh_resume_failed)
+	NetworkManager.fresh_start_ready_to_commit.connect(
+			_on_fresh_start_ready_to_commit)
+	NetworkManager.fresh_start_published.connect(_on_fresh_start_published)
+	NetworkManager.fresh_start_failed.connect(_on_fresh_start_failed)
 	NetworkManager.resume_commit_received.connect(_on_resume_commit_received)
 	NetworkManager.reconnect_client_released.connect(_on_reconnect_client_released)
 
@@ -196,6 +200,44 @@ func _publish_pending_initial_start(binding: MatchPlayerControlBinding) -> void:
 	var rng_seed: int = int(_pending_initial_start["rng_seed"])
 	var scenario_id: String = str(_pending_initial_start["scenario_id"])
 	var binding_data: Dictionary = binding.serialize()
+	if not ReplayDriver.is_network_replay_bootstrap_active():
+		var candidate: GameState = null
+		if SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(scenario_id):
+			if not can_start_setup_match():
+				_pending_initial_start = {}
+				lobby_error.emit("Both players must choose valid fleets before starting.")
+				return
+			var staged_package: FleetSetupPackage = _prepare_setup_draft_for_start()
+			if staged_package == null:
+				_pending_initial_start = {}
+				lobby_error.emit("Setup package draft is unavailable.")
+				return
+			var built: Dictionary = FleetSetupBootstrapper.build_game_state(
+					staged_package, {"rng_seed": rng_seed,
+					"match_player_control_binding": binding_data})
+			if bool(built.get("ok", false)):
+				candidate = built.get("state") as GameState
+				SetupInteractionFlowResolver.apply_to_state(candidate)
+		else:
+			candidate = GameState.new()
+			candidate.rng = GameRng.new(rng_seed)
+			candidate.initialize()
+			if candidate.install_match_player_control_binding(binding):
+				LearningScenarioPreparer.prepare_game_state(
+						LearningScenarioSetup.new(scenario_id), candidate)
+		if candidate == null \
+				or not candidate.validate_for_full_authority_installation():
+			_pending_initial_start = {}
+			lobby_error.emit("Fresh authority construction failed.")
+			return
+		_pending_initial_start["state"] = candidate
+		if not NetworkManager.begin_fresh_network_start(candidate, scenario_id):
+			_pending_initial_start = {}
+			lobby_error.emit("Fresh Network staging failed.")
+			return
+		# Publication continues only after the staging acknowledgement.  The
+		# ready-to-commit signal below owns the single live-state transition.
+		return
 	if SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(scenario_id):
 		if not can_start_setup_match():
 			_pending_initial_start = {}
@@ -218,6 +260,37 @@ func _publish_pending_initial_start(binding: MatchPlayerControlBinding) -> void:
 	NetworkManager.start_game()
 	_pending_initial_start = {}
 	game_starting.emit()
+
+
+func _on_fresh_start_ready_to_commit(attempt_id: String) -> void:
+	if not NetworkManager.is_server() or _pending_initial_start.is_empty():
+		return
+	var state: GameState = _pending_initial_start.get("state") as GameState
+	var scenario_id: String = str(_pending_initial_start.get("scenario_id", ""))
+	if state == null or not NetworkManager.commit_fresh_network_start(
+			state, attempt_id):
+		NetworkManager.abort_fresh_network_start(
+				"Fresh Network commit revalidation failed.")
+		return
+	if not GameManager.start_new_game_from_state(state, scenario_id, 0, true):
+		NetworkManager.abort_fresh_network_start(
+				"Fresh Network authority installation failed.")
+		return
+	if not NetworkManager.publish_fresh_network_start(attempt_id):
+		_pending_initial_start = {}
+		lobby_error.emit("Fresh Network client publication failed after authority install.")
+
+
+func _on_fresh_start_published(_attempt_id: String) -> void:
+	_pending_initial_start = {}
+	game_starting.emit()
+	if NetworkManager.is_server():
+		GameManager.call_deferred("begin_installed_fresh_game")
+
+
+func _on_fresh_start_failed(reason: String) -> void:
+	_pending_initial_start = {}
+	lobby_error.emit(reason)
 
 
 ## Selects the existing fresh seed for a normal lobby start or the accepted
@@ -284,6 +357,21 @@ func host_load_save(state: GameState, meta: SaveGameMetadata) -> void:
 			_pending_resume = {}
 			lobby_error.emit("Network resume could not be started.")
 		return
+	var peer_snapshots: Dictionary = {}
+	for endpoint: Variant in NetworkManager.peers:
+		var peer_info: Dictionary = NetworkManager.peers[endpoint] as Dictionary
+		var viewer: int = int(peer_info.get("player_index", -1))
+		var filter_result: Dictionary = StateFilter.filter_for_player_checked(
+				state.serialize(), viewer)
+		if not bool(filter_result.get(StateFilter.KEY_OK, false)):
+			var reason: String = str(filter_result.get(
+					StateFilter.KEY_REASON, "filtering failed"))
+			_log.error("Same-live load filtering rejected locally: %s" % reason)
+			lobby_error.emit("Loaded game could not be filtered: %s" % reason)
+			return
+		var filtered: Dictionary = filter_result.get(
+				StateFilter.KEY_STATE, {}) as Dictionary
+		peer_snapshots[int(endpoint)] = filtered
 	_log.info("Host loading save '%s'." % meta.display_name)
 	# Install and reconcile on the host before the snapshot can be broadcast.
 	# GameManager.start_new_game_from_state sets
@@ -292,9 +380,10 @@ func host_load_save(state: GameState, meta: SaveGameMetadata) -> void:
 			state, meta.scenario_id, meta.next_command_sequence):
 		lobby_error.emit("Loaded game state is inconsistent.")
 		return
-	var state_dict: Dictionary = state.serialize()
-	_receive_loaded_state.rpc(
-			state_dict, meta.scenario_id, meta.to_dict())
+	for endpoint: Variant in peer_snapshots:
+		_receive_loaded_state.rpc_id(int(endpoint),
+				peer_snapshots[endpoint] as Dictionary,
+				meta.scenario_id, meta.to_dict())
 	NetworkManager.start_game()
 	game_starting.emit()
 	# Phase J7 in-session: when called mid-game the host is already on
@@ -394,8 +483,10 @@ func _on_resume_commit_received(state: GameState, meta: SaveGameMetadata,
 				attempt_id, "Staged principal assignment no longer matches.")
 		lobby_error.emit("Staged Network assignment is inconsistent.")
 		return
+	var fresh_start: bool = NetworkManager.client_staged_operation(attempt_id) \
+			== "fresh_network_start"
 	if not GameManager.start_new_game_from_state(
-			state, meta.scenario_id, meta.next_command_sequence):
+			state, meta.scenario_id, meta.next_command_sequence, fresh_start):
 		NetworkManager.reject_client_resume_installation(
 				attempt_id, "Restored Network state is inconsistent.")
 		lobby_error.emit("Restored Network state is inconsistent.")
@@ -729,7 +820,7 @@ func _receive_loaded_state(
 	if is_instance_valid(TooltipManager):
 		TooltipManager.show_text(
 				"Host is loading the game…", Vector2.INF, 2.0, true)
-	var state: GameState = GameState.deserialize(state_dict)
+	var state: GameState = GameState.deserialize_passive_network(state_dict)
 	if state == null:
 		_log.error("Failed to deserialise host's loaded state.")
 		lobby_error.emit("Failed to deserialise loaded game from host.")

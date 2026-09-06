@@ -21,6 +21,7 @@
     "tokens": [
         {
             "key": "victory_ii_class_star_destroyer",
+            "roster_entry_id": "learning-imperial-victory-ii-1",
             "pos_x": 0.489,
             "pos_y": 0.123,
             "rotation_deg": 180.0,
@@ -28,6 +29,7 @@
         },
         {
             "key": "cr90_corvette_a",
+            "roster_entry_id": "learning-rebel-cr90-a-1",
             "pos_x": 0.689,
             "pos_y": 0.854,
             "rotation_deg": 0.0,
@@ -35,6 +37,7 @@
         },
         {
             "key": "nebulon_b_escort_frigate",
+            "roster_entry_id": "learning-rebel-nebulon-b-escort-1",
             "pos_x": 0.306,
             "pos_y": 0.854,
             "rotation_deg": 0.0,

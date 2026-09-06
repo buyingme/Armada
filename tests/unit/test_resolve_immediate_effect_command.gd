@@ -71,7 +71,6 @@ func test_validate_wrong_phase() -> void:
 	_add_faceup_card(ps.ships[idx], "structural_damage")
 	_state.current_phase = Constants.GamePhase.COMMAND
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "structural_damage",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -86,7 +85,6 @@ func test_validate_unknown_effect() -> void:
 	var ps: PlayerState = _state.get_player_state(0)
 	_add_faceup_card(ps.ships[idx], "bogus_effect")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "bogus_effect",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -98,7 +96,6 @@ func test_validate_unknown_effect() -> void:
 
 func test_validate_ship_not_found() -> void:
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "structural_damage",
 		"owner_player": 0,
 		"ship_index": 99,
 		"card_index": 0,
@@ -111,7 +108,6 @@ func test_validate_ship_not_found() -> void:
 func test_validate_card_index_oob() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "structural_damage",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 5,
@@ -121,7 +117,7 @@ func test_validate_card_index_oob() -> void:
 			"Should reject when card index is out of bounds")
 
 
-func test_validate_effect_id_mismatch() -> void:
+func test_exact_schema_rejects_removed_effect_id() -> void:
 	var idx: int = _add_ship(0)
 	var ps: PlayerState = _state.get_player_state(0)
 	_add_faceup_card(ps.ships[idx], "structural_damage")
@@ -132,8 +128,8 @@ func test_validate_effect_id_mismatch() -> void:
 		"card_index": 0,
 		"choice": {},
 	})
-	assert_ne(cmd.validate(_state), "",
-			"Should reject when effect_id does not match card's effect_id")
+	assert_ne(cmd.validate_exact_semantic_payload(), "",
+			"The effect identity must be derived from public pre-state")
 
 
 # ======================================================================
@@ -145,7 +141,6 @@ func test_validate_structural_damage_ok() -> void:
 	var ps: PlayerState = _state.get_player_state(0)
 	_add_faceup_card(ps.ships[idx], "structural_damage")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "structural_damage",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -162,15 +157,14 @@ func test_execute_structural_damage_extra_card() -> void:
 	_add_faceup_card(ship, "structural_damage")
 	var before_draw_count: int = _state.damage_deck.get_draw_count()
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "structural_damage",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
 		"choice": {},
 	})
 	var result: Dictionary = cmd.execute(_state)
-	assert_eq(result.get("effect_id"), "structural_damage",
-			"Result should echo effect_id")
+	assert_false(result.has("effect_id"),
+			"A flipped card identity must not be repeated in the result")
 	assert_true(result.get("extra_dealt", false) as bool,
 			"Should report extra card dealt")
 	assert_eq(ship.faceup_damage.size(), 0,
@@ -188,7 +182,6 @@ func test_execute_structural_damage_always_draws_without_caller_card_data() -> v
 	var ship: ShipInstance = ps.ships[idx]
 	_add_faceup_card(ship, "structural_damage")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "structural_damage",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -211,7 +204,6 @@ func test_execute_projector_misaligned_auto() -> void:
 	_add_faceup_card(ship, "projector_misaligned")
 	# FRONT=3 is the unique maximum.
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "projector_misaligned",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -234,7 +226,6 @@ func test_execute_projector_misaligned_choice() -> void:
 	ship.current_shields["FRONT"] = 2
 	_add_faceup_card(ship, "projector_misaligned")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "projector_misaligned",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -262,15 +253,12 @@ func test_execute_life_support_failure() -> void:
 	_add_faceup_card(ship, "life_support_failure",
 			"Life Support Failure", "immediate_persistent")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "life_support_failure",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
 		"choice": {},
 	})
 	var result: Dictionary = cmd.execute(_state)
-	assert_eq(result.get("effect_id"), "life_support_failure",
-			"Result should echo effect_id")
 	assert_true(result.get("tokens_cleared", false) as bool,
 			"Should report tokens cleared")
 	assert_eq(ship.command_tokens.get_token_count(), 0,
@@ -291,7 +279,6 @@ func test_validate_injured_crew_ok() -> void:
 	var ps: PlayerState = _state.get_player_state(0)
 	_add_faceup_card(ps.ships[idx], "injured_crew")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "injured_crew",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -306,7 +293,6 @@ func test_validate_injured_crew_no_choice() -> void:
 	var ps: PlayerState = _state.get_player_state(0)
 	_add_faceup_card(ps.ships[idx], "injured_crew")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "injured_crew",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -322,7 +308,6 @@ func test_execute_injured_crew() -> void:
 	var ship: ShipInstance = ps.ships[idx]
 	_add_faceup_card(ship, "injured_crew")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "injured_crew",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -347,7 +332,6 @@ func test_validate_shield_failure_too_many_zones() -> void:
 	var ps: PlayerState = _state.get_player_state(0)
 	_add_faceup_card(ps.ships[idx], "shield_failure")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "shield_failure",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -363,7 +347,6 @@ func test_execute_shield_failure_two_zones() -> void:
 	var ship: ShipInstance = ps.ships[idx]
 	_add_faceup_card(ship, "shield_failure")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "shield_failure",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -387,7 +370,6 @@ func test_execute_shield_failure_zero_zones() -> void:
 	var ship: ShipInstance = ps.ships[idx]
 	_add_faceup_card(ship, "shield_failure")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "shield_failure",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -409,7 +391,6 @@ func test_validate_comm_noise_no_choice() -> void:
 	var ps: PlayerState = _state.get_player_state(0)
 	_add_faceup_card(ps.ships[idx], "comm_noise")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "comm_noise",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -426,7 +407,6 @@ func test_execute_comm_noise_reduce_speed() -> void:
 	ship.current_speed = 2
 	_add_faceup_card(ship, "comm_noise")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "comm_noise",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -447,7 +427,6 @@ func test_execute_comm_noise_change_dial() -> void:
 	var ship: ShipInstance = ps.ships[idx]
 	_add_faceup_card(ship, "comm_noise")
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "comm_noise",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,
@@ -469,7 +448,6 @@ func test_execute_comm_noise_change_dial() -> void:
 
 func test_serialize_deserialize_structural_damage() -> void:
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "structural_damage",
 		"owner_player": 0,
 		"ship_index": 0,
 		"card_index": 0,
@@ -482,15 +460,13 @@ func test_serialize_deserialize_structural_damage() -> void:
 	assert_eq(restored.command_type, "resolve_immediate_effect",
 			"Type should match")
 	assert_eq(restored.sequence, 42, "Sequence should match")
-	assert_eq(restored.payload.get("effect_id"), "structural_damage",
-			"effect_id survives roundtrip")
+	assert_false(restored.payload.has("effect_id"))
 	assert_false(restored.payload.has("extra_card_data"),
 			"Structural Damage no longer accepts caller-supplied card identity")
 
 
 func test_serialize_deserialize_comm_noise() -> void:
 	var cmd := ResolveImmediateEffectCommand.new(1, {
-		"effect_id": "comm_noise",
 		"owner_player": 1,
 		"ship_index": 0,
 		"card_index": 0,
@@ -500,8 +476,7 @@ func test_serialize_deserialize_comm_noise() -> void:
 	var data: Dictionary = cmd.serialize()
 	var restored: GameCommand = GameCommand.deserialize(data)
 	assert_not_null(restored, "Should deserialize")
-	assert_eq(restored.payload.get("effect_id"), "comm_noise",
-			"effect_id survives roundtrip")
+	assert_false(restored.payload.has("effect_id"))
 	var choice: Dictionary = restored.payload.get("choice", {})
 	assert_eq(choice.get("id"), "reduce_speed",
 			"choice.id survives roundtrip")
@@ -513,7 +488,6 @@ func test_validate_squadron_phase_allowed() -> void:
 	_add_faceup_card(ps.ships[idx], "structural_damage")
 	_state.current_phase = Constants.GamePhase.SQUADRON
 	var cmd := ResolveImmediateEffectCommand.new(0, {
-		"effect_id": "structural_damage",
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_index": 0,

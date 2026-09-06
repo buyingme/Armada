@@ -184,6 +184,11 @@ class StubCommandSubmitter:
 		return result_to_return.duplicate(true)
 
 
+	func submit_authoritative(command: GameCommand) -> Dictionary:
+		submitted_commands.append(command)
+		return result_to_return.duplicate(true)
+
+
 var _router: ModalRouter = null
 var _panel_mgr: UIPanelManager = null
 var _ship_activation_controller: StubShipActivationController = null

@@ -154,7 +154,7 @@ func test_activation_action_defaults_serialize_on_owner() -> void:
 	for key: String in [
 			"activation_id", "activation_context",
 			"commanding_ship_player", "commanding_ship_index",
-			"move_action_committed", "attack_action_disposition"]:
+			"move_action_disposition", "attack_action_disposition"]:
 		assert_true(serialized.has(key),
 				"Slice 2 must serialize owner field '%s'." % key)
 
@@ -248,6 +248,53 @@ func test_commanded_squadron_actions_remain_independent() -> void:
 	assert_true(_instance.is_activation_action_complete(false))
 
 
+func test_move_decline_is_terminal_without_recording_movement() -> void:
+	assert_true(_instance.initialize_activation_action_state(
+			"squadron-activation:decline",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, 2))
+	var original_position := Vector2(_instance.pos_x, _instance.pos_y)
+	assert_true(_instance.commit_attack_action_begun(
+			"squadron-activation:decline", false))
+	assert_true(_instance.decline_move_action(
+			"squadron-activation:decline", false))
+	assert_eq(_instance.move_action_disposition,
+			SquadronInstance.MOVE_ACTION_DECLINED)
+	assert_false(_instance.has_remaining_move_action(false))
+	assert_true(_instance.is_activation_action_complete(false))
+	assert_eq(Vector2(_instance.pos_x, _instance.pos_y), original_position)
+	assert_false(_instance.decline_move_action(
+			"squadron-activation:decline", false),
+			"A retained decline is terminal until activation reset.")
+
+
+func test_move_disposition_round_trips_all_retained_values() -> void:
+	for disposition: String in [
+			SquadronInstance.MOVE_ACTION_AVAILABLE,
+			SquadronInstance.MOVE_ACTION_COMMITTED,
+			SquadronInstance.MOVE_ACTION_DECLINED,
+	]:
+		var instance: SquadronInstance = SquadronInstance.create_from_data(
+				"test_squad", _squad_data, 1)
+		assert_true(instance.initialize_activation_action_state(
+				"squadron-activation:%s" % disposition,
+				SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+		instance.move_action_disposition = disposition
+		var restored: SquadronInstance = SquadronInstance.deserialize(
+				instance.serialize(), _squad_data)
+		assert_not_null(restored)
+		assert_eq(restored.move_action_disposition, disposition)
+
+
+func test_deserialize_rejects_missing_or_invalid_move_disposition() -> void:
+	var missing: Dictionary = _instance.serialize()
+	missing.erase("move_action_disposition")
+	assert_null(SquadronInstance.deserialize(missing, _squad_data))
+	var invalid: Dictionary = _instance.serialize()
+	invalid["move_action_disposition"] = "unknown"
+	assert_null(SquadronInstance.deserialize(invalid, _squad_data))
+
+
 func test_activation_action_snapshot_restore_is_exact_and_owner_local() -> void:
 	_instance.current_hull = 2
 	_instance.is_engaged = true
@@ -291,7 +338,7 @@ func test_activation_action_validation_rejects_partial_or_invalid_state() -> voi
 			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE
 	assert_false(_instance.is_activation_action_state_valid())
 	_instance.reset_activation_action_state()
-	_instance.move_action_committed = true
+	_instance.move_action_disposition = SquadronInstance.MOVE_ACTION_COMMITTED
 	assert_false(_instance.is_activation_action_state_valid())
 
 

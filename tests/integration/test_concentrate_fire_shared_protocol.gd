@@ -88,15 +88,15 @@ func test_save_load_and_reconnect_rederive_pending_choice_at_version_three() -> 
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 5)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 5)
-	assert_eq(GameReplay.FORMAT_VERSION, 7)
+	assert_eq(metadata.save_format_version, 6)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 6)
+	assert_eq(GameReplay.FORMAT_VERSION, 9)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			expected_projection)
 	assert_eq((ORCHESTRATOR.derive_current_opportunities(restored).get(
 			ORCHESTRATOR.KEY_OPPORTUNITIES, []) as Array).size(), 1)
 
-	var reconnect: GameState = GameState.deserialize(
+	var reconnect: GameState = GameState.deserialize_passive_network(
 			StateFilter.filter_for_player(state.serialize(), 0))
 	assert_not_null(reconnect)
 	assert_eq(UIProjector.project(reconnect, 0).timing_window,
@@ -153,10 +153,11 @@ func test_host_client_and_format_five_replay_preserve_use_and_continuation() -> 
 	replay_file.set_commands(authoritative_history)
 	var replay_data: Dictionary = replay_file.serialize()
 	assert_eq((replay_data.get("header", {}) as Dictionary).get(
-			"format_version"), 7)
+			"format_version"), 9)
 	assert_not_null(GameReplay.deserialize(replay_data))
 
-	var client_state: GameState = GameState.deserialize(initial_data)
+	var client_state: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(initial_data, 1))
 	GameManager.current_game_state = client_state
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
@@ -166,7 +167,8 @@ func test_host_client_and_format_five_replay_preserve_use_and_continuation() -> 
 	for index: int in range(_broadcast_results.size()):
 		_apply_broadcast_to_client(index)
 	assert_eq(CommandProcessor.serialize_history(), authoritative_history)
-	assert_eq(client_state.serialize(), authority_final)
+	assert_eq(client_state.serialize(),
+			StateFilter.filter_for_player(authority_final, 1))
 	assert_eq(UIProjector.project(client_state, 1).timing_window,
 			UIProjector.project(authority_state, 1).timing_window)
 	assert_eq(UIProjector.project(client_state, 1).attack_dice_results,
@@ -201,6 +203,9 @@ func _make_pending_state() -> GameState:
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(9917)
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_MODIFY,
@@ -286,9 +291,11 @@ func _broadcast_command_data() -> Array[Dictionary]:
 
 func _apply_broadcast_to_client(index: int) -> void:
 	var entry: Dictionary = _broadcast_results[index]
+	var envelope: Dictionary = (entry.get("result") as Dictionary).duplicate(true)
+	envelope["viewer_player"] = NetworkManager.get_local_player_index()
 	GameManager._on_network_command_result(
 			entry.get("command") as Dictionary,
-			entry.get("result") as Dictionary)
+			envelope)
 
 
 func _history_types(commands: Array[Dictionary]) -> Array[String]:

@@ -573,13 +573,24 @@ func test_create_ship_instances_owner_player() -> void:
 					"Rebel ships should be player 0: %s" % inst.data_key)
 
 
-func test_create_ship_instances_learning_scenario_has_no_runtime_upgrades() -> void:
+func test_create_ship_instances_learning_scenario_has_stable_ship_identities() -> void:
 	var ships: Array[ShipInstance] = _setup.create_ship_instances()
+	var expected: Array[String] = [
+		"learning-imperial-victory-ii-1",
+		"learning-rebel-cr90-a-1",
+		"learning-rebel-nebulon-b-escort-1",
+	]
+	var seen: Dictionary = {}
 	for ship: ShipInstance in ships:
 		assert_eq(ship.runtime_upgrades.size(), 0,
 				"Learning Scenario ships should still load without upgrades")
-		assert_eq(ship.roster_entry_id, "",
-				"Learning Scenario no-upgrade ships should keep legacy identity shape")
+		assert_false(ship.roster_entry_id.is_empty(),
+				"Every production Learning Scenario ship needs a stable identity")
+		assert_true(ship.roster_entry_id in expected)
+		assert_false(seen.has(ship.roster_entry_id),
+				"Production Learning Scenario ship identities must be unique")
+		seen[ship.roster_entry_id] = true
+	assert_eq(seen.size(), expected.size())
 
 
 func test_debug_scenario_runtime_upgrades_satisfy_canonical_invariants() -> void:

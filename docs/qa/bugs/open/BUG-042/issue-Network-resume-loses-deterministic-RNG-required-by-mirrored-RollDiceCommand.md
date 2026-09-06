@@ -4,7 +4,45 @@ Severity: High
 Area: Network save/resume / reconnect / deterministic command application
 Layer: Canonical state / Network command replay
 
-## Current Status — 2026-09-01 Architecture Investigation
+## Current Status — 2026-09-06 Implemented and Verified, Awaiting Owner Acceptance
+
+The accepted BUG-042 workbook has been implemented through its automated
+verification boundary. Live Network RNG and hidden damage-deck authority now
+remain host-only. Passive peers install a validated public/passive projection
+and apply authoritative command results rather than re-executing RNG or hidden
+deck behavior.
+
+The combined BUG-042/BUG-031 cutover supports save format 6, protocol 6, and
+replay format 9. Fresh resume, same-live load, reconnect, save/load, result
+ordering, deterministic replay, and BUG-035 focused regressions pass automated
+production-path coverage. Fresh format-9 canonical replay baselines were
+Owner-recorded and promoted through the repository baseline workflow; prior
+formats remain compatibility/rejection evidence and are not migrated.
+
+The issue remains open until the two-Mac packaged-build manual acceptance in
+`docs/qa/BUG-042-network-rng-authority-manual-acceptance.md` is completed and
+reviewed by the Owner.
+
+## Implementation and Verification Evidence — 2026-09-06
+
+- A strict passive damage ledger carries public damage counts without damage
+  card identities or deck order.
+- Full-authority and passive-state schemas are independently validated; passive
+  state rejects RNG state and hidden damage identities.
+- RNG and hidden-information commands publish exact, versioned application
+  contracts. Passive application validates and consumes those results without
+  invoking RNG or drawing from a damage deck.
+- Authority-first publication stages, installs, acknowledges, and only then
+  admits or releases Network play for fresh resume and reconnect.
+- Converted command history remains semantic input only; authoritative result
+  payloads are not serialized into replay command history.
+- Automated unit and integration verification, real-ENet focused acceptance,
+  replay baselines, architecture lint, and repository checks pass in the
+  combined BUG-042/BUG-031 worktree.
+
+The original investigation and defect record follow for audit history.
+
+## Prior Status — 2026-09-01 Architecture Investigation
 
 BUG-042 is confirmed as a general Network reconstruction invariant failure,
 not a RollDice-specific defect.

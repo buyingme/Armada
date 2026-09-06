@@ -85,6 +85,8 @@ static var _DECLARATIONS: Dictionary = {
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"move_squadron": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
+	"decline_squadron_move": {KEY_SCOPE: Constants.CommandScope.PHASE,
+			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"skip_attack": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"begin_attack": {KEY_SCOPE: Constants.CommandScope.PHASE,

@@ -219,8 +219,8 @@ func test_validate_repair_hull_ok_facedown() -> void:
 		"action_type": "repair_hull",
 		"owner_player": 0,
 		"ship_index": idx,
-		"card_is_faceup": false,
-		"card_index": 0,
+		"damage_face": "facedown",
+		"facedown_ordinal": 0,
 	})
 	assert_eq(cmd.validate(_state), "",
 			"repair_hull should validate for valid facedown card index")
@@ -234,7 +234,7 @@ func test_validate_repair_hull_ok_faceup() -> void:
 		"action_type": "repair_hull",
 		"owner_player": 0,
 		"ship_index": idx,
-		"card_is_faceup": true,
+		"damage_face": "faceup",
 		"card_index": 0,
 	})
 	assert_eq(cmd.validate(_state), "",
@@ -247,8 +247,8 @@ func test_validate_repair_hull_bad_index() -> void:
 		"action_type": "repair_hull",
 		"owner_player": 0,
 		"ship_index": idx,
-		"card_is_faceup": false,
-		"card_index": 5,
+		"damage_face": "facedown",
+		"facedown_ordinal": 5,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject when card index is out of bounds")
@@ -260,8 +260,8 @@ func test_validate_repair_hull_negative_index() -> void:
 		"action_type": "repair_hull",
 		"owner_player": 0,
 		"ship_index": idx,
-		"card_is_faceup": false,
-		"card_index": - 1,
+		"damage_face": "facedown",
+		"facedown_ordinal": - 1,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject negative card index")
@@ -381,8 +381,8 @@ func test_execute_repair_hull_facedown() -> void:
 		"action_type": "repair_hull",
 		"owner_player": 0,
 		"ship_index": idx,
-		"card_is_faceup": false,
-		"card_index": 0,
+		"damage_face": "facedown",
+		"facedown_ordinal": 0,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("action_type"), "repair_hull",
@@ -403,16 +403,15 @@ func test_execute_repair_hull_faceup() -> void:
 		"action_type": "repair_hull",
 		"owner_player": 0,
 		"ship_index": idx,
-		"card_is_faceup": true,
+		"damage_face": "faceup",
 		"card_index": 0,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(ship.faceup_damage.size(), 0,
 			"Faceup card should be removed")
-	assert_eq(result.get("card_title"), "Structural Damage",
-			"Result should include card title")
-	assert_true(result.get("card_is_faceup", false) as bool,
-			"Result should indicate faceup")
+	assert_eq(result.get("damage_face"), "faceup")
+	assert_eq(result.get("discarded_card"), {},
+			"Faceup repair transports no application identity.")
 
 
 func test_execute_repair_hull_discard_to_deck() -> void:
@@ -425,8 +424,8 @@ func test_execute_repair_hull_discard_to_deck() -> void:
 		"action_type": "repair_hull",
 		"owner_player": 0,
 		"ship_index": idx,
-		"card_is_faceup": false,
-		"card_index": 0,
+		"damage_face": "facedown",
+		"facedown_ordinal": 0,
 	})
 	cmd.execute(_state)
 	assert_eq(_state.damage_deck.get_discard_count(), initial_discard + 1,
@@ -466,7 +465,7 @@ func test_serialize_deserialize_repair_hull() -> void:
 		"action_type": "repair_hull",
 		"owner_player": 1,
 		"ship_index": 0,
-		"card_is_faceup": true,
+		"damage_face": "faceup",
 		"card_index": 2,
 	})
 	cmd.sequence = 7
@@ -475,7 +474,7 @@ func test_serialize_deserialize_repair_hull() -> void:
 	assert_not_null(restored, "Deserialized command should not be null")
 	assert_eq(restored.payload.get("action_type"), "repair_hull",
 			"action_type should survive roundtrip")
-	assert_eq(restored.payload.get("card_is_faceup"), true,
-			"card_is_faceup should survive roundtrip")
+	assert_eq(restored.payload.get("damage_face"), "faceup",
+			"damage_face should survive roundtrip")
 	assert_eq(int(restored.payload.get("card_index")), 2,
 			"card_index should survive roundtrip")

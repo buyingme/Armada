@@ -159,6 +159,8 @@ func _route_to_controllers(cmd: GameCommand, result: Dictionary) -> void:
 		_project_debug_reposition(result)
 	if cmd != null and cmd.command_type == "persistent_effect_damage":
 		_emit_persistent_damage_events(cmd, result)
+	if cmd != null and cmd.command_type == "destroy_unit":
+		_emit_destroyed_ship_presentation(cmd)
 
 
 func _project_debug_reposition(result: Dictionary) -> void:
@@ -191,10 +193,20 @@ func _emit_persistent_damage_events(cmd: GameCommand,
 		return
 	EventBus.damage_card_dealt.emit(ship, null, false)
 	EventBus.ship_hull_changed.emit(ship, int(result.get("new_hull", 0)))
-	if bool(result.get("destroyed", false)):
-		var target: Node = _destroyed_ship_signal_target(ship)
-		if target != null:
-			EventBus.ship_destroyed.emit(target)
+
+
+func _emit_destroyed_ship_presentation(cmd: GameCommand) -> void:
+	var state: GameState = GameManager.current_game_state
+	if state == null:
+		return
+	var ship: ShipInstance = state.get_ship(
+			int(cmd.payload.get("owner_player", -1)),
+			int(cmd.payload.get("ship_index", -1)))
+	var target: Node = _destroyed_ship_signal_target(ship)
+	if target != null:
+		EventBus.ship_destroyed.emit(target)
+		if target is CanvasItem:
+			(target as CanvasItem).visible = false
 
 
 func _persistent_damage_ship(cmd: GameCommand,

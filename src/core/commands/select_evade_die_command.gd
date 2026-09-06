@@ -36,6 +36,45 @@ func _init(p_player: int = 0,
 	super._init(p_player, "select_evade_die", p_payload)
 
 
+func application_contract_id() -> String:
+	return "select_evade_die"
+
+
+func project_application_result(authority_result: Dictionary,
+		_viewer_player: int) -> Dictionary:
+	var new_result: Dictionary = authority_result.get("new_result", {})
+	if new_result.is_empty():
+		return {"operation": "remove"}
+	return {"operation": "reroll", "new_face": int(new_result.get("face", -1))}
+
+
+func execute_with_application_result(game_state: GameState,
+		application_result: Dictionary) -> Dictionary:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var expected_operation: String = "remove" \
+			if attack.range_band == Constants.RANGE_BAND_LONG else "reroll"
+	if str(application_result.get("operation", "")) != expected_operation \
+			or application_result.size() != (1 if expected_operation == "remove" else 2):
+		return {}
+	var dice: Array[Dictionary] = attack.dice_results
+	var die_index: int = int(payload.get("die_index", -1))
+	var old_result: Dictionary = dice[die_index].duplicate(true)
+	var new_result: Dictionary = {}
+	if expected_operation == "remove":
+		dice.remove_at(die_index)
+	else:
+		if typeof(application_result.get("new_face")) != TYPE_INT:
+			return {}
+		var color: int = int(old_result.get("color", -1))
+		var face: int = int(application_result["new_face"])
+		if not Dice.DICE_FACES.has(color) or face not in Dice.DICE_FACES[color]:
+			return {}
+		new_result = {"color": color, "face": face}
+		dice[die_index] = new_result
+	return _commit_evade(game_state, attack, dice, die_index,
+			old_result, new_result)
+
+
 ## Validates that the canonical defender exists and the die index is
 ## non-negative.  Whether the index is in range of the current attack's
 ## dice pool is validated by [AttackExecutor] (which holds the
@@ -89,18 +128,27 @@ func execute(game_state: GameState) -> Dictionary:
 	var dice: Array[Dictionary] = attack.dice_results
 	var old_result: Dictionary = dice[die_index].duplicate(true)
 	var new_result: Dictionary = {}
-	var rng_state: int = game_state.rng.get_state()
+	var rng_state: int = 0
 	var rng_used: bool = false
 	if attack.range_band == Constants.RANGE_BAND_LONG:
 		dice.remove_at(die_index)
 	else:
 		rng_used = true
+		rng_state = game_state.rng.get_state()
 		var color: Constants.DiceColor = old_result.get("color") as Constants.DiceColor
 		new_result = {
 			"color": int(color),
 			"face": int(Dice.roll_die(color, game_state.rng)),
 		}
 		dice[die_index] = new_result
+	return _commit_evade(game_state, attack, dice, die_index,
+			old_result, new_result, rng_used, rng_state)
+
+
+func _commit_evade(game_state: GameState, attack: CurrentAttackState,
+		dice: Array[Dictionary], die_index: int, old_result: Dictionary,
+		new_result: Dictionary, rng_used: bool = false,
+		rng_state: int = 0) -> Dictionary:
 	var token_index: int = int(payload.get("token_index", -1))
 	var defender: RefCounted = _defender(game_state, attack)
 	var tokens: Array[Dictionary] = _defense_tokens(defender)
@@ -124,8 +172,6 @@ func execute(game_state: GameState) -> Dictionary:
 		"attack_id": attack.attack_id,
 		"defender_kind": attack.defender_kind,
 		"defender_index": attack.defender_index,
-		"ship_index": attack.defender_index \
-				if attack.defender_kind == CurrentAttackState.KIND_SHIP else -1,
 		"token_index": token_index,
 		"die_index": die_index,
 		"old_result": old_result,
@@ -137,8 +183,7 @@ func execute(game_state: GameState) -> Dictionary:
 func _payload_matches_defender(attack: CurrentAttackState) -> bool:
 	var kind: String = str(payload.get(
 			"defender_kind", CurrentAttackState.KIND_SHIP))
-	var index: int = int(payload.get(
-			"defender_index", payload.get("ship_index", -1)))
+	var index: int = int(payload.get("defender_index", -1))
 	return kind == attack.defender_kind and index == attack.defender_index
 
 

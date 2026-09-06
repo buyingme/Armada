@@ -42,6 +42,9 @@ func _make_state() -> GameState:
 	var gs: GameState = GameState.new()
 	gs.initialize()
 	gs.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
+	gs.damage_deck = DamageDeck.new()
+	gs.damage_deck.set_rng(gs.rng)
+	gs.damage_deck.initialize()
 	gs.current_round = 2
 	gs.current_phase = Constants.GamePhase.SHIP
 	gs.initiative_player = 0

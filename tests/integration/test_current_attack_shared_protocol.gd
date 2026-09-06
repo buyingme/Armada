@@ -259,7 +259,8 @@ func test_bug_002_progress_matches_hotseat_host_client_replay_and_restore() -> v
 	assert_eq(authority_history, hotseat_history)
 	assert_eq(authority_final, hotseat_final)
 
-	var client_state: GameState = GameState.deserialize(initial_data)
+	var client_state: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(initial_data, 1))
 	GameManager.current_game_state = client_state
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
@@ -268,7 +269,8 @@ func test_bug_002_progress_matches_hotseat_host_client_replay_and_restore() -> v
 	GameManager.set_command_submitter(NetworkCommandSubmitter.new())
 	for index: int in range(_broadcast_results.size()):
 		_apply_broadcast_to_client(index)
-	assert_eq(client_state.serialize(), authority_final)
+	assert_eq(client_state.serialize(),
+			StateFilter.filter_for_player(authority_final, 1))
 	assert_eq(CommandProcessor.serialize_history(), authority_history)
 
 	var replay_state: GameState = GameState.deserialize(initial_data)
@@ -380,8 +382,14 @@ func test_production_composed_cross_kind_matrix_uses_canonical_capabilities() ->
 		assert_true(state.current_attack_state.is_inactive())
 		var types: Array[String] = _history_types(
 				processor.serialize_history())
-		assert_eq(types.slice(types.size() - 2),
-				["resolve_damage", "complete_attack"])
+		if state.completed_attack_inspection != null \
+				and bool(state.completed_attack_inspection.serialize().get(
+						"outcome", {}).get("destroyed", false)):
+			assert_eq(types.slice(types.size() - 3),
+					["resolve_damage", "destroy_unit", "complete_attack"])
+		else:
+			assert_eq(types.slice(types.size() - 2),
+					["resolve_damage", "complete_attack"])
 		assert_eq(state.current_phase,
 				Constants.GamePhase.SHIP \
 				if str(spec["attacker_kind"]) == CurrentAttackState.KIND_SHIP \
@@ -613,7 +621,8 @@ func test_host_client_mirror_and_replay_preserve_identity_and_state() -> void:
 			"The production semantic history must load as format 6.")
 	var authority_final: Dictionary = authority_state.serialize()
 
-	var client_state: GameState = GameState.deserialize(initial.serialize())
+	var client_state: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(initial.serialize(), 1))
 	GameManager.current_game_state = client_state
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
@@ -625,7 +634,8 @@ func test_host_client_mirror_and_replay_preserve_identity_and_state() -> void:
 	for index: int in [0, 1, 3, 4, 5, 6]:
 		_apply_broadcast_to_client(index)
 	assert_eq(CommandProcessor.serialize_history(), authoritative_history)
-	assert_eq(client_state.serialize(), authority_final)
+	assert_eq(client_state.serialize(),
+			StateFilter.filter_for_player(authority_final, 1))
 
 	var replay_state: GameState = GameState.deserialize(initial.serialize())
 	var replay: Node = _make_processor(replay_state)
@@ -678,7 +688,8 @@ func test_confirmed_replacement_target_matches_hotseat_host_client_and_replay() 
 	assert_eq(authority_final, hotseat_final)
 	assert_eq(CanonicalJson.hash(authority_final), hotseat_hash)
 
-	var client_state: GameState = GameState.deserialize(initial_data)
+	var client_state: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(initial_data, 1))
 	GameManager.current_game_state = client_state
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
@@ -691,8 +702,8 @@ func test_confirmed_replacement_target_matches_hotseat_host_client_and_replay() 
 	for index: int in [0, 1, 3, 4, 5, 6, 7]:
 		_apply_broadcast_to_client(index)
 	assert_eq(CommandProcessor.serialize_history(), authoritative_history)
-	assert_eq(client_state.serialize(), authority_final)
-	assert_eq(CanonicalJson.hash(client_state.serialize()), hotseat_hash)
+	assert_eq(client_state.serialize(),
+			StateFilter.filter_for_player(authority_final, 1))
 
 	var replay_state: GameState = GameState.deserialize(initial_data)
 	var replay: Node = _make_processor(replay_state)
@@ -741,7 +752,8 @@ func test_squadron_to_ship_matches_hotseat_host_client_and_replay() -> void:
 	assert_eq(authority_final, hotseat_final)
 	assert_eq(CanonicalJson.hash(authority_final), hotseat_hash)
 
-	var client_state: GameState = GameState.deserialize(initial_data)
+	var client_state: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(initial_data, 1))
 	GameManager.current_game_state = client_state
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
@@ -750,8 +762,8 @@ func test_squadron_to_ship_matches_hotseat_host_client_and_replay() -> void:
 	GameManager.set_command_submitter(NetworkCommandSubmitter.new())
 	for index: int in range(authoritative_history.size()):
 		_apply_broadcast_to_client(index)
-	assert_eq(client_state.serialize(), authority_final)
-	assert_eq(CanonicalJson.hash(client_state.serialize()), hotseat_hash)
+	assert_eq(client_state.serialize(),
+			StateFilter.filter_for_player(authority_final, 1))
 
 	var replay_state: GameState = GameState.deserialize(initial_data)
 	var replay: Node = _make_processor(replay_state)
@@ -812,7 +824,7 @@ func test_all_declaration_contexts_match_filtered_host_client_replay() \
 
 			var filtered_initial: Dictionary = StateFilter.filter_for_player(
 					initial_data, 1)
-			var client_state: GameState = GameState.deserialize(filtered_initial)
+			var client_state: GameState = GameState.deserialize_passive_network(filtered_initial)
 			assert_not_null(client_state)
 			_apply_protocol_static_context(client_state, context)
 			assert_eq(_declaration_protocol_snapshot(client_state, context),
@@ -882,7 +894,7 @@ func test_declaration_state_matrix_round_trips_save_filter_and_reconnect() \
 
 			var filtered: Dictionary = StateFilter.filter_for_player(
 					source.serialize(), 1)
-			var reconnect: GameState = GameState.deserialize(filtered)
+			var reconnect: GameState = GameState.deserialize_passive_network(filtered)
 			assert_not_null(reconnect)
 			_apply_protocol_static_context(reconnect, context)
 			PlayMode.set_mode(PlayMode.Mode.NETWORK)
@@ -1047,7 +1059,8 @@ func test_ecm_completion_cleanup_matches_hotseat_host_mirror_and_replay() -> voi
 	assert_eq(authority_final, hotseat_final,
 			"Host authority and hot-seat must produce the same semantic state.")
 
-	var client_state: GameState = GameState.deserialize(initial.serialize())
+	var client_state: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(initial.serialize(), 1))
 	GameManager.current_game_state = client_state
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
@@ -1056,7 +1069,8 @@ func test_ecm_completion_cleanup_matches_hotseat_host_mirror_and_replay() -> voi
 	GameManager.set_command_submitter(NetworkCommandSubmitter.new())
 	_apply_broadcast_to_client(0)
 	_assert_ecm_pending_empty(client_state, runtime_upgrade_id)
-	assert_eq(client_state.serialize(), authority_final)
+	assert_eq(client_state.serialize(),
+			StateFilter.filter_for_player(authority_final, 1))
 	assert_eq(_history_types(CommandProcessor.serialize_history()),
 			["complete_attack"])
 
@@ -1448,10 +1462,12 @@ func _make_state() -> GameState:
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(8108)
 	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
 	state.damage_deck.initialize()
 	for owner: int in range(Constants.PLAYER_COUNT):
 		for index: int in range(2):
 			var ship: ShipInstance = _make_ship(owner)
+			ship.roster_entry_id = "protocol-ship-%d-%d" % [owner, index]
 			var squadron: SquadronInstance = _make_squadron(owner)
 			_set_protocol_position(ship, squadron, owner, index)
 			if owner == 0 and index == 0:
@@ -1474,6 +1490,7 @@ func _make_cross_kind_state(attacker_kind: String,
 			else Constants.GamePhase.SQUADRON
 	state.rng = GameRng.new(8841)
 	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
 	state.damage_deck.initialize()
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SHIP_ACTIVATION \
@@ -1523,9 +1540,11 @@ func _make_commanded_squadron_protocol_state() -> GameState:
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(8841)
 	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
 	state.damage_deck.initialize()
 	var ship := ShipInstance.create_from_data(
 			SHIP_KEY, AssetLoader.load_ship_data(SHIP_KEY), 2, 0)
+	ship.roster_entry_id = "protocol-command-ship-0"
 	ship.pos_x = 0.50
 	ship.pos_y = 0.60
 	assert_true(ship.command_dial_stack.assign_dials(
@@ -1763,6 +1782,7 @@ func _make_network_topology_state(
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(8841)
 	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
 	state.damage_deck.initialize()
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
@@ -2116,8 +2136,10 @@ func _make_squadron(owner: int) -> SquadronInstance:
 
 
 func _make_ship_with_key(key: String, owner: int) -> ShipInstance:
-	return ShipInstance.create_from_data(
+	var ship: ShipInstance = ShipInstance.create_from_data(
 			key, AssetLoader.load_ship_data(key), 2, owner)
+	ship.roster_entry_id = "protocol-%d-%s" % [owner, key]
+	return ship
 
 
 func _make_squadron_with_key(key: String, owner: int) -> SquadronInstance:
@@ -2175,9 +2197,11 @@ func _broadcast_command_data() -> Array[Dictionary]:
 
 func _apply_broadcast_to_client(index: int) -> void:
 	var entry: Dictionary = _broadcast_results[index]
+	var envelope: Dictionary = (entry.get("result") as Dictionary).duplicate(true)
+	envelope["viewer_player"] = NetworkManager.get_local_player_index()
 	GameManager._on_network_command_result(
 			entry.get("command") as Dictionary,
-			entry.get("result") as Dictionary)
+			envelope)
 
 
 func _history_sequences(commands: Array[Dictionary]) -> Array[int]:

@@ -49,8 +49,8 @@ func test_observer_returns_draw_followup_above_speed_one() -> void:
 			"Speed greater than 1 should create one damage follow-up.")
 	assert_eq(followups[0].command_type, "persistent_effect_damage",
 			"Follow-up should be a persistent-effect damage command.")
-	assert_true(bool(followups[0].payload.get("draw_from_deck", false)),
-			"Observer follow-up should draw the facedown card in execute().")
+	assert_eq(followups[0].payload.keys().size(), 3,
+			"Observer follow-up carries only target and public effect identity.")
 	assert_eq(followups[0].payload.get("effect_id"), RupturedEngine.EFFECT_ID,
 			"Follow-up should identify Ruptured Engine as the source.")
 

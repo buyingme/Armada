@@ -24,10 +24,13 @@ cleanup() {
 trap cleanup EXIT INT TERM
 GODOT_BIN="${GODOT_BIN:-godot}"
 RUN_SECTION_D_ONLY=false
+RUN_BUG031_ONLY=false
 if [[ "${1:-}" == "--section-d-only" ]]; then
   RUN_SECTION_D_ONLY=true
+elif [[ "${1:-}" == "--bug-031-only" ]]; then
+  RUN_BUG031_ONLY=true
 elif [[ $# -ne 0 ]]; then
-  echo "Usage: $0 [--section-d-only]" >&2
+  echo "Usage: $0 [--section-d-only|--bug-031-only]" >&2
   exit 2
 fi
 wait_for_child() {
@@ -61,8 +64,8 @@ run_compatibility_network() {
     >"$LOGS/compat-network-client.log" 2>&1 &
   local client=$!
   CHILD_PIDS+=("$client")
-  wait_for_child "$host" "Network same-live compatibility host"
   wait_for_child "$client" "Network same-live compatibility client"
+  wait_for_child "$host" "Network same-live compatibility host"
 }
 run_compatibility_hot_seat() {
   local home="$RUN_ROOT/home-compat-hot-seat"
@@ -74,7 +77,7 @@ run_compatibility_hot_seat() {
 }
 run_network_replay() {
   local port="$1"
-  local replay="$PROJECT_DIR/tests/acceptance/network_resume/network_replay_v7.json"
+  local replay="$PROJECT_DIR/tests/fixtures/baseline_traces/replay_network.json"
   local host_home="$RUN_ROOT/home-compat-replay-host"
   local client_home="$RUN_ROOT/home-compat-replay-client"
   if [[ ! -f "$replay" ]]; then
@@ -95,8 +98,8 @@ run_network_replay() {
     >"$LOGS/compat-replay-client.log" 2>&1 &
   local client=$!
   CHILD_PIDS+=("$client")
-  wait_for_child "$host" "Network replay host"
   wait_for_child "$client" "Network replay client"
+  wait_for_child "$host" "Network replay host"
 }
 run_mapping() {
   local mapping="$1" port="$2"
@@ -116,8 +119,71 @@ run_mapping() {
     >"$LOGS/client-$mapping.log" 2>&1 &
   local client=$!
   CHILD_PIDS+=("$client")
-  wait_for_child "$host" "host mapping $mapping"
   wait_for_child "$client" "client mapping $mapping"
+  wait_for_child "$host" "host mapping $mapping"
+}
+run_commanded_squadron() {
+  local port="$1"
+  local host_home="$RUN_ROOT/home-commanded-host"
+  local client_home="$RUN_ROOT/home-commanded-client"
+  mkdir -p "$host_home" "$client_home"
+  HOME="$host_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=host --scenario=commanded_squadron --mapping=0 --port="$port" \
+    --shared="$SHARED" >"$LOGS/commanded-host.log" 2>&1 &
+  local host=$!
+  CHILD_PIDS+=("$host")
+  sleep 1
+  HOME="$client_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=client --scenario=commanded_squadron --mapping=0 --port="$port" \
+    --shared="$SHARED" >"$LOGS/commanded-client.log" 2>&1 &
+  local client=$!
+  CHILD_PIDS+=("$client")
+  wait_for_child "$client" "commanded-squadron ordering client"
+  wait_for_child "$host" "commanded-squadron ordering host"
+}
+run_bug031_scenario() {
+  local scenario="$1" label="$2" port="$3"
+  local host_home="$RUN_ROOT/home-$scenario-host"
+  local client_home="$RUN_ROOT/home-$scenario-client"
+  mkdir -p "$host_home" "$client_home"
+  HOME="$host_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=host --scenario="$scenario" --mapping=0 --port="$port" \
+    --shared="$SHARED" >"$LOGS/$scenario-host.log" 2>&1 &
+  local host=$!
+  CHILD_PIDS+=("$host")
+  sleep 1
+  HOME="$client_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=client --scenario="$scenario" --mapping=0 --port="$port" \
+    --shared="$SHARED" >"$LOGS/$scenario-client.log" 2>&1 &
+  local client=$!
+  CHILD_PIDS+=("$client")
+  wait_for_child "$client" "$label client"
+  wait_for_child "$host" "$label host"
+}
+run_ship_end_activation() {
+  local port="$1"
+  local host_home="$RUN_ROOT/home-end-activation-host"
+  local client_home="$RUN_ROOT/home-end-activation-client"
+  mkdir -p "$host_home" "$client_home"
+  HOME="$host_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=host --scenario=ship_end_activation --mapping=0 --port="$port" \
+    --shared="$SHARED" >"$LOGS/end-activation-host.log" 2>&1 &
+  local host=$!
+  CHILD_PIDS+=("$host")
+  sleep 1
+  HOME="$client_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=client --scenario=ship_end_activation --mapping=0 --port="$port" \
+    --shared="$SHARED" >"$LOGS/end-activation-client.log" 2>&1 &
+  local client=$!
+  CHILD_PIDS+=("$client")
+  wait_for_child "$client" "client End Activation control"
+  wait_for_child "$host" "authoritative End Activation"
 }
 run_reconnect() {
   local port="$1" host_home="$RUN_ROOT/home-reconnect-host"
@@ -154,18 +220,32 @@ run_reconnect() {
   wait_for_child "$reconnect" "clean reconnect endpoint"
   wait_for_child "$host" "reconnect host"
 }
-if [[ "$RUN_SECTION_D_ONLY" == false ]]; then
+if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false ]]; then
   run_mapping 0 $((26000 + ($$ % 1000)))
   run_mapping 1 $((27000 + ($$ % 1000)))
+  run_commanded_squadron $((27500 + ($$ % 400)))
+fi
+if [[ "$RUN_SECTION_D_ONLY" == false ]]; then
+  run_bug031_scenario commanded_decline \
+    "BUG-031 commanded Move decline" $((27700 + ($$ % 120)))
+  run_bug031_scenario commanded_activation_gate \
+    "BUG-031 activation acceptance gate" $((27820 + ($$ % 60)))
+  run_bug031_scenario commanded_activation_reject \
+    "BUG-031 activation rejection recovery" $((27880 + ($$ % 20)))
+fi
+if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false ]]; then
+  run_ship_end_activation $((27900 + ($$ % 80)))
   run_reconnect $((28000 + ($$ % 1000)))
 fi
-run_compatibility_network $((29000 + ($$ % 1000)))
-run_compatibility_hot_seat
-run_network_replay $((30000 + ($$ % 1000)))
+if [[ "$RUN_BUG031_ONLY" == false ]]; then
+  run_compatibility_network $((29000 + ($$ % 1000)))
+  run_compatibility_hot_seat
+  run_network_replay $((30000 + ($$ % 1000)))
+fi
 HOME="$RUN_ROOT/home-assertions" "$GODOT_BIN" --headless --path "$PROJECT_DIR" --script \
   res://tests/acceptance/network_resume/assertions.gd -- --shared="$SHARED" \
-  --replay="$PROJECT_DIR/tests/acceptance/network_resume/network_replay_v7.json" \
+	--replay="$PROJECT_DIR/tests/fixtures/baseline_traces/replay_network.json" \
   --logs="$LOGS" \
-  --section-d-only="$RUN_SECTION_D_ONLY"
+  --section-d-only="$RUN_SECTION_D_ONLY" --bug-031-only="$RUN_BUG031_ONLY"
 echo "PASS: MATCH-003 real ENet fresh-resume and compatibility scenarios completed."
 RESULT="passed"

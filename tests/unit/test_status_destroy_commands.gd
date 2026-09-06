@@ -273,6 +273,8 @@ func test_cleanup_deserialize() -> void:
 func test_destroy_validate_ok() -> void:
 	var ship: ShipInstance = _make_ship(0)
 	_state.get_player_state(0).ships.append(ship)
+	for i: int in ship.ship_data.hull:
+		ship.add_facedown_damage(DamageCard.create("structural", "Structural Damage"))
 	var cmd := DestroyUnitCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": 0,

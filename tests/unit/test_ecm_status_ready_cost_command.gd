@@ -414,7 +414,7 @@ func test_reconnect_preserves_pending_choice_projection_from_authoritative_state
 	_state.interaction_flow.payload.clear()
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			_state.serialize(), 0)
-	var reconnected: GameState = GameState.deserialize(filtered)
+	var reconnected: GameState = GameState.deserialize_passive_network(filtered)
 	var intent: UIProjector.UIIntent = UIProjector.project(reconnected, 0)
 	var choices: Array = intent.affordances.get(
 			ECM_SCRIPT.READY_COST_AFFORDANCE_KEY, []) as Array
@@ -478,7 +478,7 @@ func test_reconnect_preserves_declined_guard_and_public_projection() -> void:
 	_decline_ecm_ready().execute(_state)
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			_state.serialize(), 0)
-	var reconnected: GameState = GameState.deserialize(filtered)
+	var reconnected: GameState = GameState.deserialize_passive_network(filtered)
 	var runtime_upgrade: Dictionary = reconnected.get_ship(
 			1, 0).get_runtime_upgrade(ECM_RUNTIME_ID)
 	var intent: UIProjector.UIIntent = UIProjector.project(reconnected, 0)
@@ -562,6 +562,9 @@ func _make_status_state(has_repair_token: bool = true) -> GameState:
 	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_round = 2
 	state.current_phase = Constants.GamePhase.STATUS
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	var ship: ShipInstance = _add_ship_to_state(state, 1, "defender")
 	ship.add_runtime_upgrade(
 			"electronic_countermeasures", ECM_ASSIGNMENT_ID,

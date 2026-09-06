@@ -151,8 +151,14 @@ static func _ensure_entity(game_state: GameState, kind: String,
 	if kind == CurrentAttackState.KIND_SHIP:
 		var ship_data: ShipData = AssetLoader.load_ship_data(SHIP_KEY)
 		while player_state.ships.size() <= index:
-			player_state.ships.append(ShipInstance.create_from_data(
-					SHIP_KEY, ship_data, 2, player))
+			var ship_index: int = player_state.ships.size()
+			var ship: ShipInstance = ShipInstance.create_from_data(
+					SHIP_KEY, ship_data, 2, player)
+			ship.roster_entry_id = "fixture-ship-%d-%d" % [player, ship_index]
+			player_state.ships.append(ship)
+		var existing: ShipInstance = player_state.ships[index] as ShipInstance
+		if existing != null and existing.roster_entry_id.is_empty():
+			existing.roster_entry_id = "fixture-ship-%d-%d" % [player, index]
 	elif kind == CurrentAttackState.KIND_SQUADRON:
 		var squadron_data: SquadronData = AssetLoader.load_squadron_data(
 				SQUADRON_KEY)

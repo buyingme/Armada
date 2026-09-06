@@ -302,14 +302,12 @@ func _add_repair_hull_buttons() -> void:
 			btn.custom_minimum_size = Vector2(0, 28)
 			btn.pressed.connect(_on_repair_card.bind(dc))
 			_actions_container.add_child(btn)
-	for card: Variant in _ship.facedown_damage:
-		if card is DamageCard:
-			var dc: DamageCard = card as DamageCard
-			var btn: Button = Button.new()
-			btn.text = "▼ Damage Card (facedown)"
-			btn.custom_minimum_size = Vector2(0, 28)
-			btn.pressed.connect(_on_repair_card.bind(dc))
-			_actions_container.add_child(btn)
+	for ordinal: int in range(_ship.get_facedown_damage_count()):
+		var btn: Button = Button.new()
+		btn.text = "▼ Damage Card %d (facedown)" % (ordinal + 1)
+		btn.custom_minimum_size = Vector2(0, 28)
+		btn.pressed.connect(_on_repair_facedown.bind(ordinal))
+		_actions_container.add_child(btn)
 
 
 # ---------------------------------------------------------------------------
@@ -344,6 +342,11 @@ func _on_repair_card(card: DamageCard) -> void:
 	var ok: bool = _resolver.repair_hull(card)
 	if ok:
 		_log.info("Repaired card: %s." % card.title)
+		_refresh_actions()
+
+
+func _on_repair_facedown(ordinal: int) -> void:
+	if _resolver != null and _resolver.repair_facedown_hull(ordinal):
 		_refresh_actions()
 
 

@@ -404,6 +404,9 @@ func _make_tarkin_state() -> GameState:
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.COMMAND
 	state.initiative_player = 0
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	state.get_player_state(0).ships.append(_make_ship(0, "rebel-ship-1", false))
 	state.get_player_state(1).ships.append(_make_ship(1, "imperial-ship-1", true))
 	return state
@@ -472,7 +475,7 @@ func _project_after_reconnect(
 		viewer: int) -> UIProjector.UIIntent:
 	var raw: Dictionary = server_state.serialize()
 	var filtered: Dictionary = StateFilter.filter_for_player(raw, viewer)
-	var client_state: GameState = GameState.deserialize(filtered)
+	var client_state: GameState = GameState.deserialize_passive_network(filtered)
 	return UIProjector.project(client_state, viewer)
 
 

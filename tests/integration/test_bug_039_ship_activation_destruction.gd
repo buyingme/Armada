@@ -36,8 +36,8 @@ func test_ruptured_engine_destruction_ends_active_activation_and_advances_phase(
 	assert_eq(state.current_phase, Constants.GamePhase.SQUADRON,
 			"The existing recorded phase transition must converge when no ships remain.")
 	assert_eq(_history_types(processor), [
-			"persistent_effect_damage", "advance_phase"],
-			"Replay must preserve damage before the existing phase transition.")
+			"persistent_effect_damage", "destroy_unit", "advance_phase"],
+			"Cleanup must precede the existing phase transition.")
 
 
 func test_crew_panic_destruction_at_pre_reveal_boundary_advances_phase() -> void:
@@ -52,7 +52,7 @@ func test_crew_panic_destruction_at_pre_reveal_boundary_advances_phase() -> void
 	assert_eq(state.current_phase, Constants.GamePhase.SQUADRON,
 			"Crew Panic destruction must not leave Ship Phase waiting for a dead ship.")
 	assert_eq(_history_types(processor), [
-			"persistent_effect_damage", "advance_phase"])
+			"persistent_effect_damage", "destroy_unit", "advance_phase"])
 
 
 func test_destruction_with_another_legal_ship_projects_next_controller() -> void:
@@ -71,7 +71,7 @@ func test_destruction_with_another_legal_ship_projects_next_controller() -> void
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT)
 	assert_eq(state.interaction_flow.controller_player, 1,
 			"The surviving opponent must receive the next canonical Ship Phase choice.")
-	assert_eq(_history_types(processor), ["persistent_effect_damage"])
+	assert_eq(_history_types(processor), ["persistent_effect_damage", "destroy_unit"])
 
 
 func _state_with_active_ship_at_final_hull() -> GameState:
@@ -134,7 +134,6 @@ func _lethal_damage_command(effect_id: String,
 		"owner_player": owner,
 		"ship_index": 0,
 		"effect_id": effect_id,
-		"card_data": _damage_card("lethal").serialize(),
 	})
 
 

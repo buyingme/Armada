@@ -2,34 +2,35 @@
 ##
 ## Applies all damage-resolution mutations atomically for replay safety.
 ## Handles both ship and squadron targets. For ships: absorbs shields,
-## deals pre-drawn damage cards (faceup/facedown), registers persistent
+## draws damage cards inside the authority/replay command, registers persistent
 ## faceup damage-card effects, and marks destruction.
 ## For squadrons: applies hull damage and marks destruction.
 ##
 ## Damage, shield absorption, and card draws are derived inside the command
 ## from canonical current-attack and target state.
 ##
-## Payload (ship target):
-##   "target_type"      — "ship"
-##   "owner_player"     — player index owning the defender
-##   "ship_index"       — index into the player's ships array
-##   "hull_zone"        — zone string ("FRONT", "LEFT", "RIGHT", "REAR")
-##   "shield_damage"    — shields to absorb (pre-computed)
-##   "damage_cards"     — Array of serialized card dicts (see DamageCard)
-##   "target_destroyed" — whether the unit is destroyed after resolution
-##
-## Payload (squadron target):
-##   "target_type"       — "squadron"
-##   "owner_player"      — player index owning the defender
-##   "squadron_index"    — index into the player's squadrons array
-##   "hull_damage"       — damage to apply to hull
-##   "actual_damage"     — damage actually applied (capped by current hull)
-##   "target_destroyed"  — whether the squadron is destroyed
+## Payload: only the active canonical [code]attack_id[/code]. Target and damage
+## are derived from [CurrentAttackState].
 ##
 ## Rules Reference: "Damage", p.4 — "Damage is the sum of all [hit] and
 ## [crit] icons in the attack pool."
 class_name ResolveDamageCommand
 extends GameCommand
+
+var _last_faceup_draws: Array[Dictionary] = []
+
+
+## Returns whether this command's accepted public faceup draw requires its
+## immediate effect to resolve before attack completion. The answer remains
+## command-owned and does not expose any facedown identity.
+func drew_immediate_faceup_card() -> bool:
+	for entry: Dictionary in _last_faceup_draws:
+		var raw_card: Variant = entry.get("card")
+		if raw_card is Dictionary:
+			var card: DamageCard = DamageCard.deserialize(raw_card as Dictionary)
+			if card != null and card.is_faceup and card.is_immediate():
+				return true
+	return false
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -42,6 +43,27 @@ static func register() -> void:
 func _init(p_player: int = 0,
 		p_payload: Dictionary = {}) -> void:
 	super._init(p_player, "resolve_damage", p_payload)
+
+
+func application_contract_id() -> String:
+	return "resolve_damage"
+
+
+func project_application_result(_authority_result: Dictionary,
+		_viewer_player: int) -> Dictionary:
+	if _last_faceup_draws.is_empty():
+		return {}
+	return {"faceup_draws": _last_faceup_draws.duplicate(true)}
+
+
+func execute_with_application_result(game_state: GameState,
+		application_result: Dictionary) -> Dictionary:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack.defender_kind == CurrentAttackState.KIND_SQUADRON:
+		if not application_result.is_empty():
+			return {}
+		return _execute_squadron(game_state, attack)
+	return _execute_passive_ship(game_state, attack, application_result)
 
 
 ## Validates that damage resolution is legal in the current game state.
@@ -101,6 +123,11 @@ func _validate_ship(game_state: GameState,
 		return "Invalid hull_zone: '%s'." % hull_zone
 	var cards_required: int = maxi(0, attack.derive_damage(game_state) \
 			- int(ship.current_shields.get(hull_zone, 0)))
+	if game_state.passive_damage_ledger != null:
+		if not game_state.passive_damage_ledger.can_consume_hidden_draws(
+				cards_required):
+			return "Passive damage ledger does not contain enough cards."
+		return ""
 	if game_state.damage_deck == null and cards_required > 0:
 		return "Damage deck is unavailable."
 	if game_state.damage_deck != null \
@@ -152,11 +179,17 @@ func _execute_ship(game_state: GameState,
 	# Remaining steps are non-fallible after validation and CAS install.
 	var shield_absorbed: int = ship.reduce_shields(hull_zone, shield_damage)
 	var cards_added: Array[Dictionary] = []
-	for card_dict: Variant in card_data_array:
+	_last_faceup_draws.clear()
+	for ordinal: int in range(card_data_array.size()):
+		var card_dict: Dictionary = card_data_array[ordinal]
 		var card: DamageCard = DamageCard.deserialize(
-				card_dict as Dictionary)
+				card_dict)
 		if card.is_faceup:
 			ship.add_faceup_damage(card)
+			_last_faceup_draws.append({
+				"ordinal": ordinal,
+				"card": card.serialize(),
+			})
 		else:
 			ship.add_facedown_damage(card)
 		cards_added.append(card.serialize())
@@ -171,11 +204,92 @@ func _execute_ship(game_state: GameState,
 		"shield_absorbed": shield_absorbed,
 		"new_shields": int(ship.current_shields.get(hull_zone, 0)),
 		"cards_added": cards_added.size(),
-		"damage_cards": cards_added,
 		"final_damage": damage,
 		"persistent_registered": 0,
 		"destroyed": destroyed,
 	}
+
+
+func _execute_passive_ship(game_state: GameState,
+		attack: CurrentAttackState, application_result: Dictionary) -> Dictionary:
+	if application_result.size() > 1 \
+			or (not application_result.is_empty() \
+			and not application_result.has("faceup_draws")):
+		return {}
+	var owner: int = attack.defender_player
+	var ship_index: int = attack.defender_index
+	var ship: ShipInstance = game_state.get_ship(owner, ship_index)
+	var zone: String = Constants.hull_zone_to_string(
+			attack.defender_zone as Constants.HullZone)
+	var damage: int = attack.derive_damage(game_state)
+	var shield_damage: int = mini(int(ship.current_shields.get(zone, 0)), damage)
+	var draws: int = damage - shield_damage
+	var faceup_expected: bool = draws > 0 and _first_card_faceup(game_state, attack)
+	var raw_faceup: Variant = application_result.get("faceup_draws", [])
+	if not raw_faceup is Array:
+		return {}
+	var faceup_entries: Array = raw_faceup as Array
+	if faceup_entries.size() != (1 if faceup_expected else 0):
+		return {}
+	var public_card: DamageCard = null
+	if faceup_expected:
+		var entry: Variant = faceup_entries[0]
+		if not entry is Dictionary or (entry as Dictionary).size() != 2 \
+				or typeof((entry as Dictionary).get("ordinal")) != TYPE_INT \
+				or int((entry as Dictionary).get("ordinal")) != 0 \
+				or not (entry as Dictionary).get("card") is Dictionary:
+			return {}
+		public_card = PassiveDamageLedger.deserialize_public_card(
+				(entry as Dictionary)["card"] as Dictionary, true)
+		if public_card == null:
+			return {}
+		if game_state.passive_damage_ledger.draw_count == 0 \
+				and not game_state.passive_damage_ledger.public_discard_contains(
+						public_card):
+			return {}
+	var replacement: CurrentAttackState = _resolved_ship_attack(
+			game_state, attack, ship, zone, damage, shield_damage, draws)
+	if replacement == null or not game_state.set_current_attack_state(replacement):
+		return {}
+	var ledger: PassiveDamageLedger = game_state.passive_damage_ledger
+	if not ledger.consume_hidden_draws(draws):
+		game_state.set_current_attack_state(attack)
+		return {}
+	var facedown_count: int = draws - (1 if public_card != null else 0)
+	if facedown_count > 0 and not ledger.increment_facedown(
+			ship.passive_damage_key(), facedown_count):
+		return {}
+	if public_card != null:
+		ship.add_faceup_damage(public_card)
+	ship.reduce_shields(zone, shield_damage)
+	var destroyed: bool = ship.is_destroyed()
+	if destroyed:
+		ship.mark_destroyed()
+	return {
+		"attack_id": attack.attack_id, "target_type": "ship",
+		"owner_player": owner, "ship_index": ship_index, "hull_zone": zone,
+		"shield_absorbed": shield_damage,
+		"new_shields": int(ship.current_shields.get(zone, 0)),
+		"cards_added": draws, "final_damage": damage,
+		"persistent_registered": 0, "destroyed": destroyed,
+	}
+
+
+func _resolved_ship_attack(game_state: GameState, attack: CurrentAttackState,
+		ship: ShipInstance, zone: String, damage: int, shield_damage: int,
+		draws: int) -> CurrentAttackState:
+	return attack.with_patch({
+		"stage": CurrentAttackState.STAGE_RESOLVED,
+		"damage_stage": CurrentAttackState.DAMAGE_RESOLVED,
+		"resolved_outcome": {
+			"target_kind": CurrentAttackState.KIND_SHIP,
+			"affected_zone": int(attack.defender_zone),
+			"final_damage": damage, "shield_absorbed": shield_damage,
+			"post_resolution_shields": int(ship.current_shields.get(zone, 0)) - shield_damage,
+			"hull_damage": draws,
+			"destroyed": ship.get_total_damage() + draws >= ship.ship_data.hull,
+		},
+	})
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +365,7 @@ func _restore_damage_deck(game_state: GameState,
 		deck_snapshot: Dictionary) -> void:
 	if not deck_snapshot.is_empty():
 		game_state.damage_deck = DamageDeck.deserialize(deck_snapshot)
+		game_state.damage_deck.set_rng(game_state.rng)
 
 
 func _first_card_faceup(game_state: GameState,

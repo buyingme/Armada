@@ -103,4 +103,6 @@ func _on_choice_confirmed(selection: Dictionary) -> void:
 		# Hot-seat has no remote-result mirror to emit these derived visuals.
 		# The command remains the sole gameplay mutation; this only projects the
 		# resulting canonical state through the same shared signal surface.
-		ImmediateEffectSignals.emit(card, ship, result)
+		var presentation: Dictionary = result.duplicate(true)
+		presentation["effect_id"] = card.effect_id
+		ImmediateEffectSignals.emit(card, ship, presentation)

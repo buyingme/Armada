@@ -133,13 +133,17 @@ func test_destroyed_ship_cards_returned_to_discard() -> void:
 	assert_true(si.is_destroyed(), "Ship should be destroyed (5 damage >= 5 hull)")
 	var deck: DamageDeck = GameManager.current_game_state.damage_deck
 	var discard_before: int = deck.get_discard_count()
-	# Act — emit ship_destroyed.
-	var token: Node2D = _make_token(si)
-	EventBus.ship_destroyed.emit(token)
+	# Act — cleanup is an authoritative command accepted after lethal damage.
+	var command := DestroyUnitCommand.new(0, {
+		"owner_player": 0,
+		"ship_index": 0,
+	})
+	assert_eq(command.validate(GameManager.current_game_state), "")
+	command.execute(GameManager.current_game_state)
 	# Assert — cards should be in discard pile.
 	assert_eq(deck.get_discard_count(), discard_before + 5,
 			"Discard pile should grow by 5 (DM-030)")
-	assert_eq(si.facedown_damage.size(), 0,
+	assert_eq(si.get_facedown_damage_count(), 0,
 			"Ship should have no facedown damage after cleanup")
 
 
@@ -157,7 +161,11 @@ func test_destroyed_ship_faceup_cards_also_returned() -> void:
 	assert_true(si.is_destroyed(), "Ship should be destroyed (5 damage >= 5 hull)")
 	var deck: DamageDeck = GameManager.current_game_state.damage_deck
 	var discard_before: int = deck.get_discard_count()
-	var token: Node2D = _make_token(si)
-	EventBus.ship_destroyed.emit(token)
+	var command := DestroyUnitCommand.new(0, {
+		"owner_player": 0,
+		"ship_index": 0,
+	})
+	assert_eq(command.validate(GameManager.current_game_state), "")
+	command.execute(GameManager.current_game_state)
 	assert_eq(deck.get_discard_count(), discard_before + 5,
 			"All 5 cards (3 facedown + 2 faceup) returned to discard (DM-030)")

@@ -896,7 +896,7 @@ func _refresh_damage_for_ship(ship_instance: RefCounted) -> void:
 					% inst.ship_data.ship_name
 					+"(faceup=%d, facedown=%d)"
 					% [inst.faceup_damage.size(),
-						inst.facedown_damage.size()])
+						inst.get_facedown_damage_count()])
 			var scale_factor: float = (
 					GameScale.card_panel_magnify_factor
 					if entry["magnified"] else 1.0)

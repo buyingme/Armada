@@ -13,6 +13,23 @@ var _drag_started_count: int = 0
 var _drag_cancelled_count: int = 0
 
 
+class EndActivationBoundarySubmitter:
+	extends CommandSubmitter
+
+	var submitted: Array[GameCommand] = []
+	var authoritative: Array[GameCommand] = []
+
+
+	func submit(command: GameCommand) -> Dictionary:
+		submitted.append(command)
+		return {"awaiting_remote": true}
+
+
+	func submit_authoritative(command: GameCommand) -> Dictionary:
+		authoritative.append(command)
+		return {}
+
+
 func before_each() -> void:
 	_active_player_changes.clear()
 	_dials_changed_ships.clear()
@@ -191,6 +208,40 @@ func test_activation_ended_advances_turn() -> void:
 			"activation_ended should advance turn to next player")
 	assert_eq(_active_player_changes[-1], 1,
 			"Turn should pass to player 1 after player 0 activates")
+
+
+func test_network_client_end_activation_uses_player_submission_boundary() -> void:
+	var rebel: ShipInstance = _create_ship_with_dials(0, 1)
+	var imperial: ShipInstance = _create_ship_with_dials(1, 1)
+	_setup_game_in_ship_phase([rebel], [imperial])
+	GameManager.activate_ship(rebel)
+	assert_false(GameManager.submit_advance_activation_step(
+			rebel, "repair_step").is_empty())
+	assert_false(GameManager.submit_advance_activation_step(
+			rebel, "attack_step").is_empty())
+	assert_false(GameManager.submit_advance_activation_step(
+			rebel, "maneuver_step").is_empty())
+	assert_false(GameManager.submit_execute_maneuver(
+			rebel, 0, [], rebel.pos_x, rebel.pos_y,
+			rebel.rotation_deg).is_empty())
+
+	PlayMode.current_mode = PlayMode.Mode.NETWORK
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 0
+	var submitter := EndActivationBoundarySubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	EventBus.activation_ended.emit()
+
+	assert_eq(submitter.submitted.size(), 1)
+	assert_eq(submitter.submitted[0].command_type, "end_activation")
+	assert_eq(submitter.submitted[0].player_index, 0)
+	assert_eq(submitter.authoritative.size(), 0,
+			"Player-authored End Activation must not use the authority-only API.")
+	assert_false(rebel.ship_activation_identity.is_empty(),
+			"The client must wait for authority before clearing activation state.")
+	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	NetworkManager.role = NetworkManager.Role.NONE
+	NetworkManager._local_player_index = -1
 
 
 # ---------------------------------------------------------------------------

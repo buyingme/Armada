@@ -2,16 +2,18 @@
 
 Contract ID: CON-007
 Title: Post-Attack Continuation Release Contract
-Status: Accepted, Accepted Update
+Status: Accepted, Accepted Updates
 Derived From: ADR-007 and PAC-OD-001 through PAC-OD-007
 Related ADRs: ADR-001, ADR-006, ADR-007
 Related Contracts: CON-001, CON-006
 Related Decision Workbooks: ODR-001, accepted ODR-002
+Related Implementation Workbooks: accepted BUG-031 Squadron Move decline repair
 Related Evidence: MA-ATTACK-001
 
 Accepted by: Project Owner
 Accepted date: 2026-08-18
 Accepted update date: 2026-08-22
+Accepted second update date: 2026-09-05
 Supersedes: None
 Superseded by: None
 
@@ -164,6 +166,57 @@ post-Attack release boundary. It SHALL preserve the at-most-one release rule
 and derived-only choices and SHALL NOT create an implementation mechanism,
 canonical continuation fact, or new progression owner.
 
+### 3.1 Squadron Move Decline Amendment
+
+This amendment records the accepted Project Owner decision needed by BUG-031.
+It refines the existing Squadron Activation owner and transactions; it does not
+create a generic action, continuation, or interaction framework.
+
+CON-007-SQMOVE-001: `SquadronInstance` SHALL canonically distinguish a Move
+action that is `available`, `committed`, or `declined`. An inactive sentinel
+outside retained Squadron Activation state is permitted. The disposition is
+activation-local, purpose-specific action history owned by the existing
+Squadron Activation owner.
+
+CON-007-SQMOVE-002: A legal remaining Move MAY be declined only by an explicit,
+replayable, authoritative Squadron Move-decline semantic transaction. A
+zero-distance `MoveSquadronCommand`, presentation callback, local modal state,
+or `CompleteSquadronActivationCommand` SHALL NOT encode or imply decline.
+
+CON-007-SQMOVE-003: `MoveSquadronCommand` MAY change Move only from `available`
+to `committed`. The accepted Move-decline transaction MAY change Move only from
+`available` to `declined`. Neither terminal disposition returns to `available`
+within that activation.
+
+CON-007-SQMOVE-004: Where a satisfied completed-result inspection guards the
+post-Attack Move decision, an accepted Move or Move-decline transaction SHALL
+consume the matching inspection atomically. Missing, unsatisfied, stale,
+duplicate, wrong-controller, wrong-squadron, or wrong-activation requests SHALL
+reject without changing either action state or inspection state.
+
+CON-007-SQMOVE-005: `CompleteSquadronActivationCommand` SHALL remain terminal-
+only. It MAY accept only after canonical state proves that neither Move nor
+Attack remains. It SHALL NOT choose, synthesize, or record a decline.
+
+CON-007-SQMOVE-006: After an accepted Move decline, the existing authoritative
+Squadron Activation owner SHALL re-evaluate its remaining Attack action. If no
+action remains, the existing live-authority composed-return seam MAY select the
+existing `CompleteSquadronActivationCommand` exactly once. Passive mirrors and
+presentation SHALL synthesize neither decline nor completion; replay SHALL
+apply only recorded commands in history order.
+
+CON-007-SQMOVE-007: These semantics SHALL be identical in Hot-Seat, Network,
+replay, save/load, reconnect, and future non-human-controller execution.
+Canonical disposition and accepted command history, not modal state or scene
+position, SHALL determine recovery.
+
+CON-007-SQMOVE-008: Presentation SHALL NOT expose the current Squadron
+Activation's action controls before authoritative `ActivateSquadronCommand`
+acceptance. It SHALL NOT expose another squadron as actionable or report the
+current activation complete before authoritative completion succeeds. A
+rejected activation or completion SHALL recover from canonical state without
+consuming command capacity or abandoning the current canonical owner.
+
 ## 4. Supported Context Mapping
 
 The following is a conceptual mapping to existing continuation paths. It does
@@ -173,8 +226,8 @@ not prescribe APIs, payloads, field layouts, or serialization schemas.
 | --- | --- | --- | --- | --- |
 | Normal ship attack | Activating `ShipInstance` attack-step facts, committed normal-attack count, and used hull zones | When the ship Attack boundary is complete, the existing `AdvanceActivationStepCommand` ship Attack-to-Maneuver transition | A further legal normal declaration remains a canonical-state-derived opportunity. | The enclosing Ship Attack opportunity re-evaluates to another declaration, its valid stable result, or the existing Maneuver transition where immediately required. |
 | Ship anti-squadron attack / iteration | The same `ShipInstance`'s locked anti-squadron zone and canonical target history, together with current target eligibility | The existing `SkipAttackCommand` `squadron_done` branch closes an exhausted iteration; the existing ship Attack-to-Maneuver transition remains applicable when the Attack boundary is then complete | An eligible untargeted squadron remains a derived next target opportunity; post-iteration normal-attack availability remains derived where legal. | The enclosing Ship Attack opportunity re-evaluates after iteration termination to another declaration, its valid stable result, or the existing Maneuver transition where immediately required. |
-| Squadron Phase squadron attack | `SquadronInstance` activation/action history and canonical Squadron Phase progress in `GameState` | The existing `CompleteSquadronActivationCommand` completes an exhausted squadron activation and applies its existing phase/turn-control consequence | A remaining independent squadron movement action, including the applicable Rogue case, remains derived. | The existing Squadron Activation owner re-evaluates to its next recoverable action or completion through its accepted existing path to a stable result. |
-| Ship-commanded squadron attack | `SquadronInstance` activation/action history plus the commanding `ShipInstance`'s activation identity, open Squadron-command opportunity, and committed count | The existing `CompleteSquadronActivationCommand` completes the commanded squadron; the existing Squadron-command path continues from the commanding ship, and its existing activation-step path proceeds when that opportunity is exhausted | A remaining commanded-squadron movement action or another eligible Squadron-command choice remains derived. | The existing Squadron Command owner re-evaluates to another commanded-squadron choice or its exhausted result, then the existing enclosing ship-activation path re-evaluates to a stable result. |
+| Squadron Phase squadron attack | `SquadronInstance` activation/action history, including Move disposition, and canonical Squadron Phase progress in `GameState` | The purpose-specific Move-decline transaction records an optional legal Move decline; the existing `CompleteSquadronActivationCommand` completes only an exhausted squadron activation and applies its existing phase/turn-control consequence | A remaining independent squadron movement decision, including the applicable Rogue case, remains derived while Move is `available`. | The existing Squadron Activation owner re-evaluates to its next recoverable action or completion through its accepted existing path to a stable result. |
+| Ship-commanded squadron attack | `SquadronInstance` activation/action history, including Move disposition, plus the commanding `ShipInstance`'s activation identity, open Squadron-command opportunity, and committed count | The purpose-specific Move-decline transaction records an optional legal Move decline; the existing `CompleteSquadronActivationCommand` completes only the exhausted commanded squadron; the existing Squadron-command path continues from the commanding ship, and its existing activation-step path proceeds when that opportunity is exhausted | A remaining commanded-squadron movement decision remains derived while Move is `available`; another eligible Squadron-command choice is not actionable until the current activation completes authoritatively. | The existing Squadron Command owner re-evaluates to another commanded-squadron choice or its exhausted result only after current activation completion, then the existing enclosing ship-activation path re-evaluates to a stable result. |
 
 CON-007-CONTEXT-001: The mapping above SHALL be proven separately for every
 supported context. Similarity between contexts SHALL NOT be used to infer a

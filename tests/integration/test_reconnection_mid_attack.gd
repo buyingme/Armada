@@ -34,6 +34,9 @@ const TimingWindowStateScript: GDScript = preload(
 func _server_state_mid_attack() -> GameState:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	state.install_match_player_control_binding(
 			MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_phase = Constants.GamePhase.SHIP
@@ -83,7 +86,7 @@ func _project_after_reconnect(server_state: GameState,
 		viewer: int) -> UIProjector.UIIntent:
 	var raw: Dictionary = server_state.serialize()
 	var filtered: Dictionary = StateFilter.filter_for_player(raw, viewer)
-	var client_state: GameState = GameState.deserialize(filtered)
+	var client_state: GameState = GameState.deserialize_passive_network(filtered)
 	return UIProjector.project(client_state, viewer)
 
 
@@ -151,6 +154,9 @@ func test_reconnect_filter_strips_owner_only_payload_for_opponent() -> void:
 	# guarantee.  Use an OWNER-visible flow (e.g. command-dial selection).
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	state.install_match_player_control_binding(
 			MatchPlayerControlBinding.create_hot_seat_human())
 	state.interaction_flow = InteractionFlow.make(
@@ -191,6 +197,9 @@ func test_reconnect_no_flow_yields_empty_intent() -> void:
 func test_reconnect_before_begin_restores_no_preview_or_active_attack() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	state.install_match_player_control_binding(
 			MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_phase = Constants.GamePhase.SHIP
@@ -201,7 +210,7 @@ func test_reconnect_before_begin_restores_no_preview_or_active_attack() -> void:
 
 	var raw: Dictionary = state.serialize()
 	var filtered: Dictionary = StateFilter.filter_for_player(raw, 0)
-	var reconnected: GameState = GameState.deserialize(filtered)
+	var reconnected: GameState = GameState.deserialize_passive_network(filtered)
 
 	assert_not_null(reconnected)
 	assert_true(reconnected.current_attack_state.is_inactive(),
@@ -243,7 +252,7 @@ func test_reconnect_snapshot_preserves_timing_window_lifecycle_state() -> void:
 
 	var raw: Dictionary = server_state.serialize()
 	var filtered: Dictionary = StateFilter.filter_for_player(raw, 1)
-	var client_state: GameState = GameState.deserialize(filtered)
+	var client_state: GameState = GameState.deserialize_passive_network(filtered)
 
 	assert_not_null(client_state,
 			"Filtered reconnect snapshot should deserialize")

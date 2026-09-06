@@ -175,8 +175,6 @@ func test_overlap_validate_ok() -> void:
 		"ship_index": m_idx,
 		"other_owner": 1,
 		"other_ship_index": o_idx,
-		"moving_card": _make_card_data("Moving"),
-		"other_card": _make_card_data("Other"),
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid overlap damage")
@@ -190,8 +188,6 @@ func test_overlap_validate_wrong_phase() -> void:
 		"ship_index": m_idx,
 		"other_owner": 1,
 		"other_ship_index": o_idx,
-		"moving_card": _make_card_data(),
-		"other_card": _make_card_data(),
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject when not in Ship Phase")
@@ -203,8 +199,6 @@ func test_overlap_validate_moving_not_found() -> void:
 		"ship_index": 99,
 		"other_owner": 1,
 		"other_ship_index": 0,
-		"moving_card": _make_card_data(),
-		"other_card": _make_card_data(),
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject when moving ship not found")
@@ -216,25 +210,22 @@ func test_overlap_validate_other_not_found() -> void:
 		"ship_index": m_idx,
 		"other_owner": 1,
 		"other_ship_index": 99,
-		"moving_card": _make_card_data(),
-		"other_card": _make_card_data(),
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject when overlapped ship not found")
 
 
-func test_overlap_validate_missing_cards() -> void:
+func test_overlap_exact_schema_rejects_removed_card_identities() -> void:
 	var m_idx: int = _add_ship(0)
 	var o_idx: int = _add_ship(1)
 	var cmd := OverlapDamageCommand.new(0, {
 		"ship_index": m_idx,
 		"other_owner": 1,
 		"other_ship_index": o_idx,
-		"moving_card": {},
-		"other_card": _make_card_data(),
+		"moving_card": _make_card_data(),
 	})
-	assert_ne(cmd.validate(_state), "",
-			"Should reject when moving_card data is empty")
+	assert_ne(cmd.validate_exact_semantic_payload(), "",
+			"Removed moving_card identity must fail exact admission")
 
 
 # ======================================================================
@@ -252,8 +243,6 @@ func test_overlap_execute_both_survive() -> void:
 		"ship_index": m_idx,
 		"other_owner": 1,
 		"other_ship_index": o_idx,
-		"moving_card": _make_card_data("M"),
-		"other_card": _make_card_data("O"),
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(moving.facedown_damage.size(), 1,
@@ -285,8 +274,6 @@ func test_overlap_execute_moving_destroyed() -> void:
 		"ship_index": m_idx,
 		"other_owner": 1,
 		"other_ship_index": o_idx,
-		"moving_card": _make_card_data("M"),
-		"other_card": _make_card_data("O"),
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_true(result.get("moving_destroyed", false) as bool,
@@ -304,8 +291,6 @@ func test_mirrored_overlap_result_refreshes_both_ship_presentations() -> void:
 		"ship_index": moving_index,
 		"other_owner": 1,
 		"other_ship_index": other_index,
-		"moving_card": _make_card_data("Moving"),
-		"other_card": _make_card_data("Other"),
 	})
 	var result: Dictionary = command.execute(_state)
 	GameManager.current_game_state = _state
@@ -336,8 +321,6 @@ func test_overlap_serialize_roundtrip() -> void:
 		"ship_index": 0,
 		"other_owner": 1,
 		"other_ship_index": 0,
-		"moving_card": _make_card_data("M"),
-		"other_card": _make_card_data("O"),
 	})
 	cmd.sequence = 25
 	var data: Dictionary = cmd.serialize()
@@ -346,9 +329,9 @@ func test_overlap_serialize_roundtrip() -> void:
 	assert_eq(restored.command_type, "overlap_damage",
 			"Type should match")
 	assert_eq(restored.sequence, 25, "Sequence should match")
-	var m: Dictionary = restored.payload.get("moving_card", {})
-	assert_eq(m.get("title"), "M",
-			"moving_card title survives roundtrip")
+	assert_eq(restored.payload, {
+		"ship_index": 0, "other_owner": 1, "other_ship_index": 0,
+	})
 
 
 # ======================================================================
@@ -361,7 +344,6 @@ func test_persistent_validate_ok() -> void:
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "ruptured_engine",
-		"card_data": _make_card_data(),
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid persistent damage")
@@ -374,7 +356,6 @@ func test_persistent_validate_wrong_phase() -> void:
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "ruptured_engine",
-		"card_data": _make_card_data(),
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject when not in Ship Phase")
@@ -386,7 +367,6 @@ func test_persistent_validate_unknown_effect() -> void:
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "fake_effect",
-		"card_data": _make_card_data(),
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject unknown effect_id")
@@ -397,34 +377,32 @@ func test_persistent_validate_ship_not_found() -> void:
 		"owner_player": 0,
 		"ship_index": 99,
 		"effect_id": "crew_panic",
-		"card_data": _make_card_data(),
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject when ship not found")
 
 
-func test_persistent_validate_missing_card_data() -> void:
+func test_persistent_exact_schema_rejects_removed_card_data() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := PersistentEffectDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "thruster_fissure",
-		"card_data": {},
+		"card_data": _make_card_data(),
 	})
-	assert_ne(cmd.validate(_state), "",
-			"Should reject when card_data is empty")
+	assert_ne(cmd.validate_exact_semantic_payload(), "",
+			"Removed card_data identity must fail exact admission")
 
 
-func test_persistent_validate_draw_from_deck_ok() -> void:
+func test_persistent_minimal_schema_is_exact() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := PersistentEffectDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "damaged_controls",
-		"draw_from_deck": true,
 	})
-	assert_eq(cmd.validate(_state), "",
-			"Observer follow-ups should validate with draw_from_deck.")
+	assert_eq(cmd.validate_exact_semantic_payload(), "")
+	assert_eq(cmd.validate(_state), "")
 
 
 # ======================================================================
@@ -439,7 +417,6 @@ func test_persistent_execute_ruptured_engine() -> void:
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "ruptured_engine",
-		"card_data": _make_card_data("Ruptured Engine Extra"),
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(ship.facedown_damage.size(), 1,
@@ -450,7 +427,7 @@ func test_persistent_execute_ruptured_engine() -> void:
 			"Ship should survive")
 
 
-func test_persistent_execute_draw_from_deck() -> void:
+func test_persistent_execute_draws_inside_command_without_identity_result() -> void:
 	var idx: int = _add_ship(0)
 	var ps: PlayerState = _state.get_player_state(0)
 	var ship: ShipInstance = ps.ships[idx]
@@ -459,7 +436,6 @@ func test_persistent_execute_draw_from_deck() -> void:
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "thruster_fissure",
-		"draw_from_deck": true,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(ship.facedown_damage.size(), 1,
@@ -468,8 +444,8 @@ func test_persistent_execute_draw_from_deck() -> void:
 			"Damage deck should lose the drawn card.")
 	assert_eq(int(result.get("cards_added", 0)), 1,
 			"Result should report one card added.")
-	assert_false(result.get("card_data", {}).is_empty(),
-			"Result should include serialized drawn card data for replay/debug.")
+	assert_false(result.has("card_data"),
+			"Result must not expose the facedown identity.")
 
 
 func test_persistent_execute_crew_panic() -> void:
@@ -480,7 +456,6 @@ func test_persistent_execute_crew_panic() -> void:
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "crew_panic",
-		"card_data": _make_card_data("Crew Panic Extra"),
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(ship.facedown_damage.size(), 1,
@@ -502,7 +477,6 @@ func test_persistent_execute_destroyed() -> void:
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "damaged_controls",
-		"card_data": _make_card_data("Fatal"),
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_true(result.get("destroyed", false) as bool,
@@ -518,7 +492,6 @@ func test_persistent_execute_all_valid_effects() -> void:
 			"owner_player": 0,
 			"ship_index": idx,
 			"effect_id": eff_id,
-			"card_data": _make_card_data(eff_id),
 		})
 		assert_eq(cmd.validate(_state), "",
 				"Effect '%s' should validate" % eff_id)
@@ -533,7 +506,6 @@ func test_persistent_serialize_roundtrip() -> void:
 		"owner_player": 0,
 		"ship_index": 0,
 		"effect_id": "thruster_fissure",
-		"card_data": _make_card_data("TF"),
 	})
 	cmd.sequence = 33
 	var data: Dictionary = cmd.serialize()
@@ -544,6 +516,7 @@ func test_persistent_serialize_roundtrip() -> void:
 	assert_eq(restored.sequence, 33, "Sequence should match")
 	assert_eq(restored.payload.get("effect_id"), "thruster_fissure",
 			"effect_id survives roundtrip")
-	var cd: Dictionary = restored.payload.get("card_data", {})
-	assert_eq(cd.get("title"), "TF",
-			"card_data title survives roundtrip")
+	assert_eq(restored.payload, {
+		"owner_player": 0, "ship_index": 0,
+		"effect_id": "thruster_fissure",
+	})

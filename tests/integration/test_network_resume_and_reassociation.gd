@@ -12,6 +12,9 @@ const SHIP_KEY_NEBULON: String = "nebulon_b_escort_frigate"
 func _state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	state.install_match_player_control_binding(MatchPlayerControlBinding.create_two_human())
 	return state
 
@@ -35,7 +38,9 @@ func _ready_two_endpoint_lobby() -> LobbyState:
 func _make_ship(key: String, owner: int) -> ShipInstance:
 	var template: ShipData = AssetLoader.load_ship_data(key)
 	assert_not_null(template, "Resume fixture requires ship data for %s" % key)
-	return ShipInstance.create_from_data(key, template, 2, owner)
+	var ship: ShipInstance = ShipInstance.create_from_data(key, template, 2, owner)
+	ship.roster_entry_id = "resume-%d-%s" % [owner, key]
+	return ship
 
 
 func _assign_hidden_dials(ship: ShipInstance, command: int) -> void:
@@ -185,7 +190,7 @@ func test_filtered_remote_reveal_hydrates_public_dial_before_spend() -> void:
 	var authoritative: GameState = _completed_ship_activation_state()
 	var filtered_data: Dictionary = StateFilter.filter_for_player(
 		authoritative.serialize(), 0)
-	var mirrored: GameState = GameState.deserialize(filtered_data)
+	var mirrored: GameState = GameState.deserialize_passive_network(filtered_data)
 	assert_not_null(mirrored)
 	var remote_ship: ShipInstance = mirrored.get_ship(1, 0)
 	assert_false(remote_ship.command_dial_stack.peek_top().has("command"),
@@ -214,6 +219,56 @@ func test_incomplete_or_duplicate_assignment_fails_before_distribution() -> void
 	assert_false(NetworkManager.submit_fresh_resume_assignment({1: 0}))
 	assert_false(NetworkManager.submit_fresh_resume_assignment({1: 0, 42: 0}))
 	assert_eq(NetworkManager._resume_attempt.get("phase", ""), "CANDIDATE_STAGED")
+
+
+func test_blank_ship_identity_aborts_before_fresh_resume_distribution() -> void:
+	NetworkManager.peers[42] = {"authenticated": true, "player_index": 1}
+	var state := _state()
+	var ship: ShipInstance = _make_ship(SHIP_KEY_CR90, 0)
+	ship.roster_entry_id = ""
+	state.get_player_state(0).ships.append(ship)
+	var failures: Array[String] = []
+	var capture: Callable = func(reason: String) -> void: failures.append(reason)
+	NetworkManager.fresh_resume_failed.connect(capture)
+	assert_true(NetworkManager.begin_fresh_session_resume(state, _meta()))
+	assert_true(NetworkManager.submit_fresh_resume_assignment({1: 0, 42: 1}))
+	assert_false(NetworkManager.stage_fresh_resume_snapshots(state, _meta()))
+	assert_true(NetworkManager._resume_attempt.is_empty())
+	assert_eq(failures.size(), 1)
+	assert_true(failures[0].contains("blank roster_entry_id"),
+			"The local rejection must identify the stable-identity failure")
+	NetworkManager.fresh_resume_failed.disconnect(capture)
+
+
+func test_blank_ship_identity_aborts_fresh_start_and_restores_admission() -> void:
+	NetworkManager._host_match_principal_id = "player-0"
+	NetworkManager._local_player_index = 0
+	NetworkManager.peers[42] = {
+		"authenticated": true,
+		"player_index": 1,
+		"match_principal_id": "player-1",
+		"command_admission_enabled": true,
+	}
+	var state := _state()
+	var ship: ShipInstance = _make_ship(SHIP_KEY_CR90, 0)
+	ship.roster_entry_id = ""
+	state.get_player_state(0).ships.append(ship)
+	var failures: Array[String] = []
+	var capture: Callable = func(reason: String) -> void: failures.append(reason)
+	NetworkManager.fresh_start_failed.connect(capture)
+
+	assert_false(NetworkManager.begin_fresh_network_start(
+			state, "learning_scenario"))
+	assert_true(NetworkManager._resume_attempt.is_empty())
+	assert_true(NetworkManager.is_player_command_admission_enabled())
+	assert_true(bool(NetworkManager.peers[42].get(
+			"command_admission_enabled", false)))
+	assert_eq(failures.size(), 1)
+	assert_true(failures[0].contains("blank roster_entry_id"),
+			"The local rejection must identify the stable-identity failure")
+	assert_push_error(1,
+			"The rejected fresh start should surface one local diagnostic")
+	NetworkManager.fresh_start_failed.disconnect(capture)
 
 
 func test_commit_revalidates_complete_staged_metadata_and_current_lobby() -> void:

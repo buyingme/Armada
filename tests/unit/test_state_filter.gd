@@ -12,6 +12,14 @@ func _make_dial(command: int, round_num: int, state: String) -> Dictionary:
 
 func _make_ship(owner: int, hidden_dials: int = 0, revealed_dials: int = 0,
 		facedown: int = 0, faceup: int = 0) -> Dictionary:
+	var data_key := "cr90_corvette_a"
+	var ship_data: ShipData = AssetLoader.load_ship_data(data_key)
+	var instance: ShipInstance = ShipInstance.create_from_data(
+			data_key, ship_data, 2, owner)
+	instance.roster_entry_id = "ship-%d" % owner
+	instance.pos_x = 0.5
+	instance.pos_y = 0.3
+	instance.rotation_deg = 90.0
 	var dials: Array[Dictionary] = []
 	for i: int in hidden_dials:
 		dials.append(_make_dial(i % 4, 1, CommandDialStack.STATE_HIDDEN))
@@ -27,42 +35,25 @@ func _make_ship(owner: int, hidden_dials: int = 0, revealed_dials: int = 0,
 		fu_cards.append({"trait_type": "crew", "title": "Injured Crew",
 				"is_faceup": true, "effect_text": "effect", "timing": "", "effect_id": ""})
 
-	return {
-		"data_key": "cr90a",
-		"current_shields": {"front": 2, "rear": 1, "left": 2, "right": 2},
-		"current_hull": 4,
-		"current_speed": 2,
-		"pos_x": 0.5,
-		"pos_y": 0.3,
-		"rotation_deg": 90.0,
-		"defense_tokens": [],
-		"facedown_damage": fd_cards,
-		"faceup_damage": fu_cards,
-		"activated_this_round": false,
-		"owner_player": owner,
-		"destroyed": false,
-		"command_dial_stack": {
+	var result: Dictionary = instance.serialize()
+	result["facedown_damage"] = fd_cards
+	result["faceup_damage"] = fu_cards
+	result["command_dial_stack"] = {
 			"command_value": 1,
 			"dials": dials,
 			"spent_history": [],
-		},
-		"command_tokens": {"max_tokens": 1, "tokens": []},
 	}
+	return result
 
 
 func _make_squadron(owner: int) -> Dictionary:
-	return {
-		"data_key": "x_wing",
-		"current_hull": 5,
-		"activated_this_round": false,
-		"is_engaged": false,
-		"owner_player": owner,
-		"pos_x": 0.6,
-		"pos_y": 0.4,
-		"rotation_deg": 0.0,
-		"destroyed": false,
-		"defense_tokens": [],
-	}
+	var key := "x_wing_squadron"
+	var instance: SquadronInstance = SquadronInstance.create_from_data(
+			key, AssetLoader.load_squadron_data(key), owner)
+	instance.roster_entry_id = "squadron-%d" % owner
+	instance.pos_x = 0.6
+	instance.pos_y = 0.4
+	return instance.serialize()
 
 
 func _make_player_state(player_index: int, ships: Array[Dictionary] = [],
@@ -88,17 +79,20 @@ func _make_game_state(p0_ships: Array[Dictionary] = [],
 	for i: int in discard_size:
 		discard.append({"trait_type": "crew", "title": "Injured Crew",
 				"is_faceup": true, "effect_text": "effect", "timing": "", "effect_id": ""})
-	return {
-		"current_round": 1,
-		"current_phase": 1,
-		"initiative_player": 0,
-		"player_states": [
-			_make_player_state(0, p0_ships),
-			_make_player_state(1, p1_ships),
-		],
-		"damage_deck": {"draw_pile": draw, "discard_pile": discard},
-		"rng": {"initial_seed": 42, "state": 9999},
-	}
+	var state := GameState.new()
+	state.rng = GameRng.new(42)
+	state.initialize()
+	state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human())
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.COMMAND
+	var result: Dictionary = state.serialize()
+	result["player_states"] = [
+		_make_player_state(0, p0_ships),
+		_make_player_state(1, p1_ships),
+	]
+	result["damage_deck"] = {"draw_pile": draw, "discard_pile": discard}
+	return result
 
 
 # ---------------------------------------------------------------------------
@@ -124,36 +118,36 @@ func test_filter_strips_rng_for_player_1() -> void:
 func test_filter_replaces_draw_pile_with_count() -> void:
 	var state: Dictionary = _make_game_state([], [], 33, 2)
 	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
-	var deck: Dictionary = filtered["damage_deck"]
-	assert_false(deck.has("draw_pile"), "draw_pile must be stripped")
-	assert_eq(deck["draw_count"], 33, "draw_count must equal original draw_pile size")
+	assert_false(filtered.has("damage_deck"), "authority deck must be stripped")
+	var ledger: Dictionary = filtered["passive_damage_ledger"]
+	assert_eq(ledger["draw_count"], 33, "draw_count must equal original draw_pile size")
 
 
 func test_filter_preserves_discard_pile() -> void:
 	var state: Dictionary = _make_game_state([], [], 30, 3)
 	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
-	var deck: Dictionary = filtered["damage_deck"]
-	assert_eq(deck["discard_pile"].size(), 3, "discard_pile must be kept")
+	var ledger: Dictionary = filtered["passive_damage_ledger"]
+	assert_eq(ledger["discard_pile"].size(), 3, "discard_pile must be kept")
 
 
 func test_filter_handles_empty_damage_deck() -> void:
 	var state: Dictionary = _make_game_state()
 	state["damage_deck"] = {}
 	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
-	assert_true(filtered["damage_deck"].is_empty(), "Empty deck stays empty")
+	assert_true(filtered.is_empty(), "Malformed authority deck must reject")
 
 
 # ---------------------------------------------------------------------------
 # §3  Owner's state is preserved fully
 # ---------------------------------------------------------------------------
 
-func test_filter_preserves_own_ships_fully() -> void:
+func test_filter_hides_own_facedown_damage_and_preserves_own_dials() -> void:
 	var ship: Dictionary = _make_ship(0, 2, 1, 3, 1)
 	var state: Dictionary = _make_game_state([ship])
 	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
 	var own_ship: Dictionary = filtered["player_states"][0]["ships"][0]
-	assert_true(own_ship.has("facedown_damage"), "Owner must see facedown_damage")
-	assert_eq(own_ship["facedown_damage"].size(), 3, "Owner sees all facedown cards")
+	assert_false(own_ship.has("facedown_damage"), "Owner must not see facedown identities")
+	assert_eq(own_ship["facedown_count"], 3, "Owner sees only facedown count")
 	var dials: Array = own_ship["command_dial_stack"]["dials"]
 	assert_eq(dials.size(), 3, "Owner sees all dials")
 	for dial: Dictionary in dials:
@@ -241,7 +235,7 @@ func test_filter_preserves_opponent_public_fields() -> void:
 	assert_eq(opp_ship["current_hull"], 4, "Hull is public")
 	assert_eq(opp_ship["current_speed"], 2, "Speed is public")
 	assert_eq(opp_ship["pos_x"], 0.5, "Position is public")
-	assert_eq(opp_ship["data_key"], "cr90a", "Data key is public")
+	assert_eq(opp_ship["data_key"], "cr90_corvette_a", "Data key is public")
 	assert_eq(opp_ship["activated_this_round"], false, "Activation is public")
 
 
@@ -253,14 +247,14 @@ func test_debug_public_result_projection_keeps_transform_and_faceup_card_only() 
 	var state: Dictionary = _make_game_state([], [ship], 31, 2)
 	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
 	var opponent: Dictionary = filtered["player_states"][1]["ships"][0]
-	var deck: Dictionary = filtered["damage_deck"]
+	var ledger: Dictionary = filtered["passive_damage_ledger"]
 	assert_eq(opponent["pos_x"], 0.73)
 	assert_eq(opponent["rotation_deg"], 135.0)
 	assert_eq(opponent["faceup_damage"].size(), 1)
 	assert_eq(opponent["facedown_count"], 2)
-	assert_eq(deck["draw_count"], 31)
-	assert_eq(deck["discard_pile"].size(), 2)
-	assert_false(deck.has("draw_pile"))
+	assert_eq(ledger["draw_count"], 31)
+	assert_eq(ledger["discard_pile"].size(), 2)
+	assert_false(filtered.has("damage_deck"))
 	assert_false(filtered.has("rng"))
 
 
@@ -278,7 +272,7 @@ func test_filter_preserves_opponent_squadrons() -> void:
 	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
 	var squads: Array = filtered["player_states"][1]["squadrons"]
 	assert_eq(squads.size(), 1, "Opponent squadrons pass through")
-	assert_eq(squads[0]["data_key"], "x_wing", "Squadron data intact")
+	assert_eq(squads[0]["data_key"], "x_wing_squadron", "Squadron data intact")
 
 
 # ---------------------------------------------------------------------------
@@ -401,10 +395,51 @@ func test_filter_multiple_ships_mixed_owners() -> void:
 	var opp_ship: Dictionary = _make_ship(1, 1, 0, 2, 1)
 	var state: Dictionary = _make_game_state([own_ship], [opp_ship])
 	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
-	# Own ship: fully visible
+	# Both ships hide facedown identities; only own dials remain visible.
 	var my_ship: Dictionary = filtered["player_states"][0]["ships"][0]
-	assert_true(my_ship.has("facedown_damage"), "Own ship keeps facedown_damage")
+	assert_false(my_ship.has("facedown_damage"), "Own ship facedown identities are stripped")
+	assert_eq(my_ship["facedown_count"], 3)
 	# Opponent ship: filtered
 	var their_ship: Dictionary = filtered["player_states"][1]["ships"][0]
 	assert_false(their_ship.has("facedown_damage"), "Opponent facedown stripped")
 	assert_eq(their_ship["facedown_count"], 2, "Opponent facedown_count correct")
+
+
+func test_checked_filter_rejects_blank_ship_identity_with_diagnostic() -> void:
+	var ship: Dictionary = _make_ship(0)
+	ship["roster_entry_id"] = ""
+	var result: Dictionary = StateFilter.filter_for_player_checked(
+			_make_game_state([ship]), 0)
+	assert_false(bool(result.get(StateFilter.KEY_OK, true)))
+	assert_true(str(result.get(StateFilter.KEY_REASON, "")).contains(
+			"blank roster_entry_id"))
+	assert_eq(result.get(StateFilter.KEY_STATE, {}), {},
+			"A rejected filter operation must expose no transmissible snapshot")
+
+
+func test_checked_filter_rejects_duplicate_ship_identity_with_diagnostic() -> void:
+	var first: Dictionary = _make_ship(0)
+	var second: Dictionary = _make_ship(0)
+	var result: Dictionary = StateFilter.filter_for_player_checked(
+			_make_game_state([first, second]), 1)
+	assert_false(bool(result.get(StateFilter.KEY_OK, true)))
+	assert_true(str(result.get(StateFilter.KEY_REASON, "")).contains(
+			"duplicate ship roster_entry_id"))
+	assert_eq(result.get(StateFilter.KEY_STATE, {}), {})
+
+
+func test_production_learning_scenario_filters_with_stable_ship_ids() -> void:
+	var state := GameState.new()
+	state.rng = GameRng.new(42042)
+	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human()))
+	LearningScenarioPreparer.prepare_game_state(
+			LearningScenarioSetup.new(), state)
+	assert_eq(state.stable_ship_identity_error(), "")
+	for viewer: int in range(Constants.PLAYER_COUNT):
+		var result: Dictionary = StateFilter.filter_for_player_checked(
+				state.serialize(), viewer)
+		assert_true(bool(result.get(StateFilter.KEY_OK, false)))
+		assert_not_null(GameState.deserialize_passive_network(
+				result.get(StateFilter.KEY_STATE, {}) as Dictionary))

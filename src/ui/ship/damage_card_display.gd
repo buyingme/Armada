@@ -54,7 +54,7 @@ func populate_damage_cards(col: VBoxContainer,
 
 	var dmg_h: float = DAMAGE_CARD_HEIGHT_PX * scale_factor
 	var faceup: Array = instance.faceup_damage
-	var facedown_count: int = instance.facedown_damage.size()
+	var facedown_count: int = instance.get_facedown_damage_count()
 	_log.info("Populating damage col for '%s': %d faceup, %d facedown"
 			% [instance.ship_data.ship_name, faceup.size(),
 				facedown_count])

@@ -341,6 +341,7 @@ func _spawn_tokens_from_loaded_state() -> void:
 			_token_container.get_child_count())
 	_panel_mgr.update_card_panel_positions()
 	_refresh_activation_sidebar_ui()
+	_apply_fixed_round1_commands_if_configured(setup)
 
 ## Wires [member _attack_executor] / damage deck from the loaded
 ## [GameState] (no fresh deck construction).  Phase J5.6.
@@ -953,13 +954,7 @@ func _fade_out_destroyed_token(token: Node2D) -> void:
 ## Returns the submitted command result, or an empty dictionary on failure.
 func _submit_persistent_damage(ship: ShipInstance,
 		eff_id: String) -> Dictionary:
-	if _damage_deck == null:
-		return {}
-	var card: DamageCard = _damage_deck.draw_card()
-	if card == null:
-		return {}
-	return GameManager.submit_persistent_effect_damage(
-			ship, eff_id, card.serialize())
+	return GameManager.submit_persistent_effect_damage(ship, eff_id)
 
 ## Shows a brief toast when a damage card is dealt to a ship.
 ## Faceup cards show the card name in red; facedown cards show a generic message.
@@ -1511,6 +1506,8 @@ func _connect_board_passive_peer_visual_signals() -> void:
 
 func _apply_fixed_round1_commands_if_configured(
 		setup: LearningScenarioSetup) -> void:
+	if GameManager.fixed_commands_applied:
+		return
 	if not setup.has_fixed_round1_commands():
 		return
 	var fixed_cmds: Dictionary = setup.get_fixed_round1_commands()

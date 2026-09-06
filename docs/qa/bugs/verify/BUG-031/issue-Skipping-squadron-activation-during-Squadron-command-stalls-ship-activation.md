@@ -5,27 +5,33 @@ Area: Squadron command / ship activation
 Layer: Command Flow
 
 > [!IMPORTANT]
-> ## Current Status — 2026-08-31
+> ## Current Status — 2026-09-06
 >
-> **VERIFY / RELATED INVESTIGATION PENDING.**
+> **VERIFY / IMPLEMENTED AND VERIFIED, AWAITING OWNER ACCEPTANCE.**
 >
 > The historical sections below describe the original BUG-031 reproduction and
 > its investigation state. They remain preserved for traceability.
 >
-> The 2026-08-31 BUG-035 reproduction does **not** currently reproduce BUG-031
-> directly.
+> The 2026-09-05 two-human Network reproduction proves the BUG-031 failure
+> mechanism on the post-Attack branch: presentation locally completes and
+> exposes the next commanded squadron while a legal Move remains and the
+> authority correctly rejects completion.
 >
-> BUG-031 is relevant to the current forensic investigation only because both
-> issues may depend on the authoritative predicate that determines whether a
-> Squadron Activation still has a legal remaining action and may complete.
+> The Project Owner has accepted explicit canonical Squadron Move decline and
+> authoritative activation/completion presentation gating. The binding repair
+> specification is the accepted
+> [BUG-031 implementation workbook](../../../../architecture/implementation_workbooks/BUG-031-squadron-move-decline-and-network-activation-gating-implementation-workbook.md).
 >
-> Do not merge BUG-031 with BUG-035 or treat them as the same defect unless
-> current implementation evidence proves a shared root cause.
+> The accepted repair is implemented with the combined save 6, replay 9, and
+> protocol 6 compatibility cutover. Focused unit and integration coverage,
+> real two-process Network decline and activation-gating acceptance, the full
+> suite, and replay baselines pass on the current worktree.
 >
-> Historical range-message evidence associated with older BUG-031 logs should
-> not be treated as current behavior unless reproduced against the present code.
+> BUG-035 action-order recovery and CON-007 composed return remain preserved.
+> Historical range-message evidence remains outside the accepted repair unless
+> independently reproduced against current code.
 
-### Investigation Cross-Reference — 2026-08-31
+### Historical Investigation Cross-Reference — 2026-08-31
 
 A new Network stall during a ship-commanded Squadron Activation has been
 recorded under BUG-035.
@@ -105,8 +111,19 @@ Relevant log sequence:
 
 ## Resolution
 
-Root cause: TBD. Evidence indicates that the Skip path leaves authoritative squadron-activation/declaration state inconsistent while presentation proceeds as though the activation was completed.
+Root cause: current presentation maps a post-Attack Skip with legal Move
+remaining to local activation completion. It exposes later Squadron-command
+choices even though authoritative completion correctly rejects the still-
+available action. The canonical model also lacks the explicit Move-decline
+disposition and command now selected by the Project Owner.
 
-Fix: TBD.
+Implemented repair: the bounded canonical decline and presentation gating
+specified by the accepted BUG-031 implementation workbook linked above. The
+implementation preserves terminal completion validation and does not encode
+decline as movement.
 
-Verification: Reproduce and verify the Squadron-command Skip / early-end path in network play. Confirm that skipping does not leave an active squadron activation or declaration-adjacent state and that the commanding ship proceeds normally to the next activation step.
+Verification: the workbook's real two-process regressions pass for post-Attack
+Move decline through authoritative completion and for non-actionable client
+selection pending authoritative activation acceptance. Focused regressions
+also preserve recovery of the same squadron after Attack when Move becomes
+legal. BUG-031 remains VERIFY pending Owner acceptance.

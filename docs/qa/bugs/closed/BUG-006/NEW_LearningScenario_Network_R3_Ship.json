@@ -523,7 +523,7 @@
 						"owner_player": 0,
 						"pos_x": 0.688999995478877,
 						"pos_y": 0.655017768012153,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-01",
 						"rotation_deg": 0.0,
 						"runtime_upgrades": []
 					},
@@ -588,7 +588,7 @@
 						"owner_player": 0,
 						"pos_x": 0.399489932590061,
 						"pos_y": 0.354204389784071,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-02",
 						"rotation_deg": 45.0000012522391,
 						"runtime_upgrades": []
 					}
@@ -602,10 +602,11 @@
 						"destroyed": false,
 						"fleet_points": 13,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 0,
 						"pos_x": 0.544383013689959,
 						"pos_y": 0.552476897063079,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-03",
 						"rotation_deg": 0.0
 					},
 					{
@@ -616,10 +617,11 @@
 						"destroyed": false,
 						"fleet_points": 13,
 						"is_engaged": true,
+						"move_action_disposition": "",
 						"owner_player": 0,
 						"pos_x": 0.448009123625579,
 						"pos_y": 0.515614431875723,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-04",
 						"rotation_deg": 2.9
 					},
 					{
@@ -630,10 +632,11 @@
 						"destroyed": false,
 						"fleet_points": 13,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 0,
 						"pos_x": 0.526514858669705,
 						"pos_y": 0.513162740071615,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-05",
 						"rotation_deg": 0.0
 					},
 					{
@@ -644,10 +647,11 @@
 						"destroyed": false,
 						"fleet_points": 13,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 0,
 						"pos_x": 0.488674870243779,
 						"pos_y": 0.513162740071615,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-06",
 						"rotation_deg": 0.0
 					}
 				]
@@ -727,7 +731,7 @@
 						"owner_player": 1,
 						"pos_x": 0.480491920753762,
 						"pos_y": 0.340811891908999,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-07",
 						"rotation_deg": 157.500009505479,
 						"runtime_upgrades": []
 					}
@@ -741,10 +745,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.35823570534035,
 						"pos_y": 0.414894471345124,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-08",
 						"rotation_deg": 180.0
 					},
 					{
@@ -755,10 +760,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": true,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.408649755407263,
 						"pos_y": 0.413268873426649,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-09",
 						"rotation_deg": 180.0
 					},
 					{
@@ -769,10 +775,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.363868600350839,
 						"pos_y": 0.329511289243345,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-10",
 						"rotation_deg": 180.0
 					},
 					{
@@ -783,10 +790,11 @@
 						"destroyed": true,
 						"fleet_points": 8,
 						"is_engaged": true,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.523150860821759,
 						"pos_y": 0.404201479311343,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-11",
 						"rotation_deg": 180.0
 					},
 					{
@@ -797,10 +805,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.656783831561053,
 						"pos_y": 0.497850658275463,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-12",
 						"rotation_deg": 180.0
 					},
 					{
@@ -811,10 +820,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.660560833966291,
 						"pos_y": 0.456288938169126,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-network-entry-13",
 						"rotation_deg": 180.0
 					}
 				]

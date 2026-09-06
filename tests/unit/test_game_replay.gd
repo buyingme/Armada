@@ -111,9 +111,9 @@ func test_create_replay_rejects_unpaired_reconstructed_cursor() -> void:
 	GameManager.current_game_state = previous_state
 
 
-func test_ux_005_cutover_uses_replay_format_seven() -> void:
-	assert_eq(GameReplay.FORMAT_VERSION, 7,
-			"UX-005 acknowledgement semantics require replay format 7")
+func test_bug_031_cutover_uses_replay_format_nine() -> void:
+	assert_eq(GameReplay.FORMAT_VERSION, 9,
+			"BUG-031 Move decline semantics require replay format 9")
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION,
 			"Signing must not create a second semantic replay format")
 
@@ -276,7 +276,7 @@ func test_deserialize_accepts_contiguous_reconstructed_sequence_column() -> void
 
 
 func test_deserialize_rejects_every_non_current_semantic_format() -> void:
-	for format: int in [1, 2, 3, 4, 99]:
+	for format: int in [1, 2, 3, 4, 5, 6, 7, 99]:
 		var data: Dictionary = _make_replay(1).serialize()
 		(data["header"] as Dictionary)["format_version"] = format
 		(data["commands"] as Array)[0]["type"] = "unknown_before_apply"

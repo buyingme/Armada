@@ -133,7 +133,7 @@ func test_submit_mirror_suppresses_observer_followups_but_emits() -> void:
 			"spawn_followup", Callable(self, "_observer_followup")))
 	var mirrored := _HookCommand.new(TEST_TYPE, 0, {"source": "root"})
 	mirrored.sequence = 0
-	_processor.submit_mirror(mirrored)
+	_processor.submit_mirror(mirrored, _empty_result_envelope(), 0)
 	assert_eq(_processor.get_command_count(), 1,
 			"Mirrored commands should not synthesize observer follow-ups.")
 	assert_eq(_executed_sources, ["root"],
@@ -174,6 +174,17 @@ func _set_phase_and_flow(phase: Constants.GamePhase,
 		step: Constants.InteractionStep) -> void:
 	_state.current_phase = phase
 	_state.interaction_flow = InteractionFlow.make(flow, step, -1)
+
+
+func _empty_result_envelope() -> Dictionary:
+	return {
+		"protocol_version": NetworkManager.PROTOCOL_VERSION,
+		"application_contract": "none",
+		"application_contract_version": 0,
+		"viewer_player": 0,
+		"application_result": {},
+		"presentation_result": {},
+	}
 
 
 func _validator(rule_id: String,

@@ -939,8 +939,7 @@ func _on_choice_confirmed(selection: Dictionary) -> void:
 				% card_index)
 		return
 	GameManager.submit_resolve_immediate_effect(ship, card, selection)
-	_log.info("Choice submitted: card='%s' selection=%s."
-			% [card.title, str(selection)])
+	_log.info("Immediate-effect choice submitted.")
 
 
 ## Submits a [CommitDefenseCommand] from the defender peer.

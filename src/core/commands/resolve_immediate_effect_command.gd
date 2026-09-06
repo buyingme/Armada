@@ -52,6 +52,22 @@ func _init(p_player: int = 0,
 	super._init(p_player, "resolve_immediate_effect", p_payload)
 
 
+func application_contract_id() -> String:
+	return "resolve_immediate_effect"
+
+
+func project_application_result(_authority_result: Dictionary,
+		_viewer_player: int) -> Dictionary:
+	return {}
+
+
+func execute_with_application_result(game_state: GameState,
+		application_result: Dictionary) -> Dictionary:
+	if not application_result.is_empty():
+		return {}
+	return execute(game_state)
+
+
 # ---------------------------------------------------------------------------
 # Validate
 # ---------------------------------------------------------------------------
@@ -65,23 +81,19 @@ func validate(game_state: GameState) -> String:
 	if game_state.current_phase != Constants.GamePhase.SHIP \
 			and game_state.current_phase != Constants.GamePhase.SQUADRON:
 		return "Not in Ship or Squadron Phase."
-	var effect_id: String = payload.get("effect_id", "") as String
-	if effect_id not in VALID_EFFECTS:
-		return "Unknown effect_id: '%s'." % effect_id
 	var ship: ShipInstance = _find_ship(game_state)
 	if ship == null:
 		return "Ship not found."
-	var card_idx: int = payload.get("card_index", -1) as int
+	var card_idx: int = int(payload.get("card_index", -1))
 	if card_idx < 0 or card_idx >= ship.faceup_damage.size():
 		return "Invalid card_index %d (faceup size %d)." % [
 				card_idx, ship.faceup_damage.size()]
 	var card: DamageCard = ship.faceup_damage[card_idx]
-	if card.effect_id != effect_id:
-		return "Card at index %d has effect '%s', expected '%s'." % [
-				card_idx, card.effect_id, effect_id]
+	var effect_id: String = card.effect_id
+	if effect_id not in VALID_EFFECTS:
+		return "Unknown public immediate effect."
 	if effect_id == "structural_damage" \
-			and (game_state.damage_deck == null \
-			or game_state.damage_deck.get_total_count() <= 0):
+			and not _has_available_hidden_draw(game_state):
 		return "Structural Damage requires an available damage card."
 	return _validate_choice(effect_id, ship)
 
@@ -89,10 +101,12 @@ func validate(game_state: GameState) -> String:
 ## Validates the choice dictionary for effects that require one.
 func _validate_choice(effect_id: String,
 		ship: ShipInstance) -> String:
-	var choice: Dictionary = payload.get("choice", {})
+	if not payload.get("choice") is Dictionary:
+		return "Immediate effect choice must be a dictionary."
+	var choice: Dictionary = payload.get("choice", {}) as Dictionary
 	match effect_id:
 		"structural_damage", "life_support_failure":
-			return "" # No choice needed.
+			return "" if choice.is_empty() else "This effect accepts no choice."
 		"projector_misaligned":
 			return _validate_projector_choice(choice, ship)
 		"injured_crew":
@@ -108,12 +122,24 @@ func _validate_choice(effect_id: String,
 func _validate_projector_choice(choice: Dictionary,
 		ship: ShipInstance) -> String:
 	var chosen_id: String = str(choice.get("id", ""))
-	if chosen_id.is_empty():
-		return "" # Auto-resolve (unique max).
+	var maximum: int = 0
+	var tied: Array[String] = []
+	for zone_value: Variant in ship.current_shields:
+		var zone_name: String = str(zone_value)
+		var value: int = int(ship.current_shields[zone_value])
+		if value > maximum:
+			maximum = value
+			tied = [zone_name]
+		elif value == maximum and value > 0:
+			tied.append(zone_name)
+	if tied.size() <= 1:
+		return "" if choice.is_empty() else "Projector choice is not applicable."
+	if choice.size() != 1 or typeof(choice.get("id")) != TYPE_STRING:
+		return "Projector choice has an invalid schema."
 	if not chosen_id.begins_with("zone_"):
 		return "Invalid projector choice id: '%s'." % chosen_id
 	var zone: String = chosen_id.substr(5)
-	if not ship.current_shields.has(zone):
+	if zone not in tied:
 		return "Invalid projector zone: '%s'." % zone
 	return ""
 
@@ -121,6 +147,8 @@ func _validate_projector_choice(choice: Dictionary,
 func _validate_injured_crew_choice(choice: Dictionary,
 		ship: ShipInstance) -> String:
 	var chosen_id: String = str(choice.get("id", ""))
+	if choice.size() != 1 or typeof(choice.get("id")) != TYPE_STRING:
+		return "Injured Crew choice has an invalid schema."
 	if chosen_id.is_empty():
 		return "Injured Crew requires a choice."
 	if not chosen_id.begins_with("discard_defense_"):
@@ -135,23 +163,38 @@ func _validate_injured_crew_choice(choice: Dictionary,
 
 
 func _validate_shield_failure_choice(choice: Dictionary,
-		_ship: ShipInstance) -> String:
-	var zones: Array = choice.get("zones", [])
+		ship: ShipInstance) -> String:
+	if choice.size() != 1 or not choice.get("zones") is Array:
+		return "Shield Failure choice has an invalid schema."
+	var zones: Array = choice.get("zones", []) as Array
 	if zones.size() > 2:
 		return "Shield Failure: more than 2 zones selected."
 	if zones.size() == 2 and str(zones[0]) == str(zones[1]):
 		return "Shield Failure: duplicate zone '%s'." % str(zones[0])
+	for zone: Variant in zones:
+		if typeof(zone) != TYPE_STRING or not ship.current_shields.has(str(zone)):
+			return "Shield Failure contains an invalid zone."
 	return ""
 
 
 func _validate_comm_noise_choice(choice: Dictionary,
 		ship: ShipInstance) -> String:
 	var chosen_id: String = str(choice.get("id", ""))
+	if choice.size() != 1 or typeof(choice.get("id")) != TYPE_STRING:
+		return "Comm Noise choice has an invalid schema."
 	if chosen_id.is_empty():
 		return "Comm Noise requires a choice."
 	if chosen_id == "reduce_speed":
-		return ""
+		return "" if ship.current_speed > 0 else "Speed cannot be reduced."
 	if chosen_id.begins_with("change_dial_"):
+		if ship.command_dial_stack == null \
+				or ship.command_dial_stack.get_hidden_count() <= 0:
+			return "No hidden top dial is available."
+		var suffix: String = chosen_id.substr("change_dial_".length())
+		if not suffix.is_valid_int() or int(suffix) not in [
+				Constants.CommandType.NAVIGATE, Constants.CommandType.SQUADRON,
+				Constants.CommandType.CONCENTRATE_FIRE, Constants.CommandType.REPAIR]:
+			return "Invalid command dial choice."
 		return ""
 	return "Unknown Comm Noise choice: '%s'." % chosen_id
 
@@ -162,10 +205,10 @@ func _validate_comm_noise_choice(choice: Dictionary,
 
 ## Executes the immediate effect — mutates [GameState]-owned objects.
 func execute(game_state: GameState) -> Dictionary:
-	var effect_id: String = payload.get("effect_id", "") as String
 	var ship: ShipInstance = _find_ship(game_state)
 	var card_idx: int = payload.get("card_index", -1) as int
 	var card: DamageCard = ship.faceup_damage[card_idx]
+	var effect_id: String = card.effect_id
 	var choice: Dictionary = payload.get("choice", {})
 	match effect_id:
 		"structural_damage":
@@ -191,15 +234,23 @@ func execute(game_state: GameState) -> Dictionary:
 ## Structural Damage: deal 1 extra facedown card, flip this card facedown.
 func _execute_structural_damage(game_state: GameState,
 		ship: ShipInstance, card: DamageCard) -> Dictionary:
-	var extra: DamageCard = game_state.damage_deck.draw_card()
-	if extra == null:
-		return {}
-	extra.is_faceup = false
-	ship.add_facedown_damage(extra)
+	var extra: DamageCard = null
+	if game_state.passive_damage_ledger != null:
+		if not game_state.passive_damage_ledger.consume_hidden_draws(1) \
+				or not game_state.passive_damage_ledger.increment_facedown(
+						ship.passive_damage_key()):
+			return {}
+	else:
+		extra = game_state.damage_deck.draw_card()
+		if extra == null:
+			return {}
+		extra.is_faceup = false
+		ship.add_facedown_damage(extra)
 	card.flip_facedown()
 	_move_to_facedown(card, ship)
+	if ship.is_destroyed():
+		ship.mark_destroyed()
 	return {
-		"effect_id": "structural_damage",
 		"extra_dealt": true,
 		"new_hull": ship.ship_data.hull - ship.get_total_damage(),
 	}
@@ -217,7 +268,6 @@ func _execute_projector_misaligned(ship: ShipInstance,
 	card.flip_facedown()
 	_move_to_facedown(card, ship)
 	return {
-		"effect_id": "projector_misaligned",
 		"zone": zone,
 		"shields_lost": shields_lost,
 		"new_shields": int(ship.current_shields.get(zone, 0)),
@@ -232,7 +282,6 @@ func _execute_life_support_failure(ship: ShipInstance,
 		had_tokens = ship.command_tokens.get_token_count() > 0
 		ship.command_tokens.clear()
 	return {
-		"effect_id": "life_support_failure",
 		"tokens_cleared": had_tokens,
 		"stays_faceup": true,
 	}
@@ -247,7 +296,6 @@ func _execute_injured_crew(ship: ShipInstance,
 	card.flip_facedown()
 	_move_to_facedown(card, ship)
 	return {
-		"effect_id": "injured_crew",
 		"token_index": idx,
 	}
 
@@ -269,7 +317,6 @@ func _execute_shield_failure(ship: ShipInstance,
 	card.flip_facedown()
 	_move_to_facedown(card, ship)
 	return {
-		"effect_id": "shield_failure",
 		"shield_changes": shield_changes,
 	}
 
@@ -278,7 +325,7 @@ func _execute_shield_failure(ship: ShipInstance,
 func _execute_comm_noise(ship: ShipInstance,
 		card: DamageCard, choice: Dictionary) -> Dictionary:
 	var chosen_id: String = str(choice.get("id", ""))
-	var result: Dictionary = {"effect_id": "comm_noise"}
+	var result: Dictionary = {}
 	if chosen_id == "reduce_speed":
 		ship.set_speed(ship.current_speed - 1)
 		result["action"] = "reduce_speed"
@@ -317,7 +364,17 @@ func _move_to_facedown(card: DamageCard,
 	var idx: int = ship.faceup_damage.find(card)
 	if idx >= 0:
 		ship.faceup_damage.remove_at(idx)
-		ship.facedown_damage.append(card)
+		if ship.is_passive_damage_bound():
+			ship.increment_passive_facedown_damage()
+		else:
+			ship.facedown_damage.append(card)
+
+
+func _has_available_hidden_draw(game_state: GameState) -> bool:
+	if game_state.passive_damage_ledger != null:
+		return game_state.passive_damage_ledger.can_consume_hidden_draws(1)
+	return game_state.damage_deck != null \
+			and game_state.damage_deck.get_total_count() > 0
 
 
 ## Determines which zone Projector Misaligned strips.

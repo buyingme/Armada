@@ -3,8 +3,22 @@ extends SceneTree
 
 func _initialize() -> void:
 	var shared := _arg("--shared=")
+	if _arg("--bug-031-only=") == "true":
+		if _assert_bug031_commanded_decline(shared) \
+				and _assert_bug031_activation_gate(shared):
+			print("BUG-031 REAL ENET ACCEPTANCE: decline and activation gating passed")
+			quit(0)
+		return
 	if _arg("--section-d-only=") != "true":
 		if not _assert_fresh_and_reconnect(shared):
+			return
+		if not _assert_commanded_squadron_ordering(shared):
+			return
+		if not _assert_bug031_commanded_decline(shared):
+			return
+		if not _assert_bug031_activation_gate(shared):
+			return
+		if not _assert_client_end_activation(shared):
 			return
 	if not _assert_network_same_live_compatibility(shared):
 		return
@@ -18,17 +32,55 @@ func _initialize() -> void:
 
 func _assert_fresh_and_reconnect(shared: String) -> bool:
 	for mapping: int in [0, 1]:
+		var final_cursors: Dictionary = {}
 		for role: String in ["host", "client"]:
 			var path := shared.path_join("fresh-" + role + "-" + str(mapping) + ".json")
 			var record := _load_record(path)
 			if record.is_empty():
 				return false
-			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 4 \
+			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 6 \
 					or not bool(record.get("admission", false)) \
 					or int(record.get("canonical_installs", 0)) != 1 \
-					or int(record.get("board_releases", 0)) != 1:
+					or int(record.get("board_releases", 0)) != 1 \
+					or int(record.get("board_entries", 0)) != 1 \
+					or int(record.get("resume_publications", 0)) != 1 \
+					or int(record.get("resume_commits", -1)) != (0 if role == "host" else 1):
 				_fail("fresh-resume process evidence is incomplete: " + path)
 				return false
+			var saved: Dictionary = record.get("saved", {}) as Dictionary
+			var installed: Dictionary = record.get("installed", {}) as Dictionary
+			var gameplay: Dictionary = record.get("gameplay", {}) as Dictionary
+			var ship_ids: Array = installed.get("ship_ids", []) as Array
+			var unique_ids: Dictionary = {}
+			for raw_id: Variant in ship_ids:
+				var ship_id := str(raw_id)
+				if ship_id.is_empty() or unique_ids.has(ship_id):
+					_fail("Learning Scenario ship identity is not stable/unique: " + path)
+					return false
+				unique_ids[ship_id] = true
+			if ship_ids.size() != 3 \
+					or int(installed.get("ship_count", 0)) != 3 \
+					or int(installed.get("squadron_count", 0)) != 10 \
+					or int(installed.get("cursor", -1)) != 8 \
+					or str(installed.get("attack", "")).is_empty() \
+					or int(installed.get("damage_draw_count", -1)) != 52:
+				_fail("Learning Scenario resume state was not preserved: " + path)
+				return false
+			if role == "host" and saved != installed:
+				_fail("authority save/load changed cursor, attack, or deck state: " + path)
+				return false
+			if not bool(gameplay.get("dice_rolled", false)) \
+					or not bool(gameplay.get("damage_resolved", false)) \
+					or int(gameplay.get("defender_damage", 0)) <= 0 \
+					or not bool(gameplay.get("repair_command", false)) \
+					or not bool(gameplay.get("repair_applied", false)):
+				_fail("post-resume dice, damage, or repair evidence is incomplete: " + path)
+				return false
+			if role == "client" and not bool(gameplay.get(
+					"projection_converged", false)):
+				_fail("passive projection did not converge: " + path)
+				return false
+			final_cursors[role] = int(gameplay.get("final_cursor", -1))
 			if mapping == 0 and int(record.get("player_index", -1)) != \
 					(0 if role == "host" else 1):
 				_fail("swapped assignment did not reach the selected side: " + path)
@@ -40,6 +92,10 @@ func _assert_fresh_and_reconnect(shared: String) -> bool:
 			if role == "host" and not bool(record.get("persisted_save_loaded", false)):
 				_fail("host did not resume through a persisted save/load candidate: " + path)
 				return false
+		if final_cursors.get("host", -1) != final_cursors.get("client", -2) \
+				or int(final_cursors.get("host", -1)) <= 8:
+			_fail("post-resume command cursors did not converge for mapping %d" % mapping)
+			return false
 	for role: String in ["host", "incumbent", "failed_reconnect", "reconnect"]:
 		var path := shared.path_join("reconnect-" + role + ".json")
 		var record := _load_record(path)
@@ -59,6 +115,246 @@ func _assert_fresh_and_reconnect(shared: String) -> bool:
 	return true
 
 
+func _assert_commanded_squadron_ordering(shared: String) -> bool:
+	var records: Dictionary = {}
+	for role: String in ["host", "client"]:
+		var path := shared.path_join("commanded-" + role + ".json")
+		var record := _load_record(path)
+		if record.is_empty():
+			return false
+		if not bool(record.get("ok", false)) \
+				or int(record.get("protocol", 0)) != 6 \
+				or not bool(record.get("admission", false)) \
+				or int(record.get("player_index", -1)) \
+						!= (0 if role == "host" else 1) \
+				or int(record.get("canonical_installs", 0)) != 1 \
+				or int(record.get("board_releases", 0)) != 1 \
+				or int(record.get("board_entries", 0)) != 1 \
+				or int(record.get("resume_publications", 0)) != 1 \
+				or int(record.get("resume_commits", -1)) \
+						!= (0 if role == "host" else 1):
+			_fail("commanded-squadron Network boundary incomplete: " + path)
+			return false
+		var installed: Dictionary = record.get("installed", {}) as Dictionary
+		var ids: Array = installed.get("ship_ids", []) as Array
+		var unique_ids: Dictionary = {}
+		for raw_id: Variant in ids:
+			var ship_id := str(raw_id)
+			if ship_id.is_empty() or unique_ids.has(ship_id):
+				_fail("commanded-squadron save has unstable ship identity: " + path)
+				return false
+			unique_ids[ship_id] = true
+		if ids.size() != 3 or int(installed.get("ship_count", 0)) != 3 \
+				or int(installed.get("squadron_count", 0)) != 10 \
+				or int(installed.get("cursor", -1)) != 8:
+			_fail("commanded-squadron Learning save did not resume intact: " + path)
+			return false
+		if role == "host" and record.get("saved", {}) != installed:
+			_fail("commanded-squadron persisted save changed on authority load")
+			return false
+		var evidence: Dictionary = record.get("commanded", {}) as Dictionary
+		if not bool(evidence.get("defender_destroyed", false)) \
+				or int(evidence.get("move_count", 0)) != 1 \
+				or int(evidence.get("completion_count", 0)) != 1 \
+				or int(evidence.get("ack_count", 0)) != 2 \
+				or int(evidence.get("activate_count", -1)) != 0 \
+				or not bool(evidence.get("completion_without_inspection", false)) \
+				or not bool(evidence.get("move_consumed_inspection", false)) \
+				or not bool(evidence.get("no_stale_rejection", false)) \
+				or not bool(evidence.get("attacker_activated", false)) \
+				or not bool(evidence.get("attacker_moved", false)) \
+				or int(evidence.get("ship_committed", -1)) != 1 \
+				or not bool(evidence.get("dial_still_revealed", false)):
+			_fail("commanded-squadron canonical outcome failed: " + path)
+			return false
+		var order: Array = evidence.get("order", []) as Array
+		if order.count("complete_attack") != 1 \
+				or order.find("move_squadron") < 0 \
+				or order.find("complete_squadron_activation") \
+						<= order.find("move_squadron"):
+			_fail("commanded-squadron command ordering failed: " + path)
+			return false
+		records[role] = record
+	var client: Dictionary = (records.get("client", {}) as Dictionary).get(
+			"commanded", {}) as Dictionary
+	if not bool(client.get("pending_after_move_submit", false)) \
+			or not bool(client.get("same_squadron_after_move_submit", false)) \
+			or not bool(client.get("no_early_ready", false)) \
+			or not bool(client.get("no_completion_at_move_submit", false)) \
+			or not bool(client.get("no_second_activation_at_move_submit", false)) \
+			or not bool(client.get("no_premature_resource_spend", false)) \
+			or not bool(client.get("pending_at_move_acceptance", false)) \
+			or not bool(client.get("no_completion_at_move_acceptance", false)) \
+			or not bool(client.get("next_choice_ready", false)) \
+			or not bool(client.get("projection_converged", false)):
+		_fail("client UI crossed the authoritative Move boundary early")
+		return false
+	var host_evidence: Dictionary = (records.get("host", {}) as Dictionary).get(
+			"commanded", {}) as Dictionary
+	if int(host_evidence.get("cursor", -1)) \
+			!= int(client.get("cursor", -2)) \
+			or int(host_evidence.get("cursor", -1)) <= 8:
+		_fail("commanded-squadron host/client cursor did not converge")
+		return false
+	return true
+
+
+func _assert_bug031_commanded_decline(shared: String) -> bool:
+	var evidence_by_role: Dictionary = {}
+	for role: String in ["host", "client"]:
+		var path := shared.path_join("decline-" + role + ".json")
+		var record := _load_record(path)
+		if record.is_empty():
+			return false
+		if not bool(record.get("ok", false)) \
+				or int(record.get("protocol", 0)) != 6 \
+				or not bool(record.get("admission", false)) \
+				or int(record.get("canonical_installs", 0)) != 1 \
+				or int(record.get("board_releases", 0)) != 1 \
+				or int(record.get("board_entries", 0)) != 1 \
+				or int(record.get("resume_publications", 0)) != 1 \
+				or int(record.get("resume_commits", -1)) \
+						!= (0 if role == "host" else 1):
+			_fail("BUG-031 decline Network boundary incomplete: " + path)
+			return false
+		var evidence: Dictionary = record.get("decline", {}) as Dictionary
+		if int(evidence.get("decline_count", 0)) != 1 \
+				or int(evidence.get("move_count", -1)) != 0 \
+				or int(evidence.get("completion_count", 0)) != 1 \
+				or int(evidence.get("ack_count", 0)) != 2 \
+				or not bool(evidence.get("inspection_consumed", false)) \
+				or not bool(evidence.get("attacker_declined", false)) \
+				or not bool(evidence.get("attacker_activated", false)) \
+				or int(evidence.get("ship_committed", -1)) != 2 \
+				or not bool(evidence.get("no_rejection", false)):
+			_fail("BUG-031 decline canonical outcome failed: " + path)
+			return false
+		if role == "host" and (not bool(evidence.get(
+				"save_restored_decline", false)) \
+				or not bool(evidence.get("reconnect_restored_decline", false))):
+			_fail("BUG-031 decline did not survive save/reconnect restoration")
+			return false
+		evidence_by_role[role] = evidence
+	var client: Dictionary = evidence_by_role.get("client", {}) as Dictionary
+	for key: String in ["pending_after_submit", "same_squadron_after_submit",
+			"no_early_ready", "no_position_change_at_submit",
+			"no_completion_at_submit", "matching_activation_identity",
+			"matching_ship_identity", "matching_inspection_identity",
+			"matching_squadron_index", "next_pending_before_acceptance",
+			"no_second_capacity_before_acceptance", "next_activation_accepted",
+			"projection_converged"]:
+		if not bool(client.get(key, false)):
+			_fail("BUG-031 decline client boundary missing: " + key)
+			return false
+	var host: Dictionary = evidence_by_role.get("host", {}) as Dictionary
+	if int(host.get("cursor", -1)) != int(client.get("cursor", -2)) \
+			or int(host.get("cursor", -1)) <= 8:
+		_fail("BUG-031 decline host/client cursor did not converge")
+		return false
+	return true
+
+
+func _assert_bug031_activation_gate(shared: String) -> bool:
+	var accepted: Dictionary = {}
+	for role: String in ["host", "client"]:
+		var path := shared.path_join("activation-gate-" + role + ".json")
+		var record := _load_record(path)
+		if record.is_empty() or not bool(record.get("ok", false)) \
+				or int(record.get("protocol", 0)) != 6:
+			_fail("BUG-031 activation gate process failed: " + path)
+			return false
+		var evidence: Dictionary = record.get("activation_gate", {}) as Dictionary
+		if int(evidence.get("activate_count", 0)) != 1 \
+				or not bool(evidence.get("identity_installed", false)) \
+				or not bool(evidence.get("capacity_installed", false)) \
+				or not bool(evidence.get("no_rejection", false)):
+			_fail("BUG-031 accepted activation was not canonical: " + path)
+			return false
+		accepted[role] = evidence
+	var client: Dictionary = accepted.get("client", {}) as Dictionary
+	for key: String in ["pending_before_acceptance", "one_candidate_retained",
+			"controls_non_actionable", "second_selection_blocked",
+			"no_local_identity", "no_local_capacity", "no_ready_progress",
+			"controls_enabled_once", "projection_converged"]:
+		if not bool(client.get(key, false)):
+			_fail("BUG-031 activation acceptance gate missing: " + key)
+			return false
+	var host: Dictionary = accepted.get("host", {}) as Dictionary
+	if int(host.get("cursor", -1)) != int(client.get("cursor", -2)):
+		_fail("BUG-031 activation gate cursor did not converge")
+		return false
+	for role: String in ["host", "client"]:
+		var reject_path := shared.path_join("activation-reject-" + role + ".json")
+		var reject_record := _load_record(reject_path)
+		if reject_record.is_empty() or not bool(reject_record.get("ok", false)):
+			return false
+		if role == "client":
+			var rejected: Dictionary = reject_record.get(
+					"activation_gate", {}) as Dictionary
+			if not bool(rejected.get("rejection_recovered", false)) \
+					or not bool(rejected.get("no_phantom_capacity", false)) \
+					or not bool(rejected.get("no_phantom_activation", false)) \
+					or int(rejected.get("activate_count", -1)) != 0:
+				_fail("BUG-031 rejected activation left phantom state")
+				return false
+			var rejections: Array = rejected.get("rejections", []) as Array
+			if rejections.size() != 1 \
+					or str(rejections[0]).find("Controlled activation rejection") == -1 \
+					or str(rejections[0]).find("Not your squadron") != -1:
+				_fail("BUG-031 activation rejection diagnostic was incorrect")
+				return false
+	return true
+
+
+func _assert_client_end_activation(shared: String) -> bool:
+	var records: Dictionary = {}
+	for role: String in ["host", "client"]:
+		var path := shared.path_join("end-activation-" + role + ".json")
+		var record := _load_record(path)
+		if record.is_empty():
+			return false
+		if not bool(record.get("ok", false)) \
+				or int(record.get("protocol", 0)) != 6 \
+				or not bool(record.get("admission", false)) \
+				or int(record.get("player_index", -1)) \
+						!= (0 if role == "host" else 1) \
+				or int(record.get("canonical_installs", 0)) != 1 \
+				or int(record.get("board_releases", 0)) != 1 \
+				or int(record.get("board_entries", 0)) != 1 \
+				or int(record.get("resume_publications", 0)) != 1 \
+				or int(record.get("resume_commits", -1)) \
+						!= (0 if role == "host" else 1):
+			_fail("client End Activation Network boundary incomplete: " + path)
+			return false
+		var evidence: Dictionary = record.get("end_activation", {}) as Dictionary
+		if int(evidence.get("maneuver_count", 0)) != 1 \
+				or int(evidence.get("done_count", 0)) != 1 \
+				or int(evidence.get("end_count", 0)) != 1 \
+				or not bool(evidence.get("end_payload_identity", false)) \
+				or not bool(evidence.get("identity_cleared", false)) \
+				or not bool(evidence.get("ship_activated", false)) \
+				or not bool(evidence.get("control_returned_player_zero", false)) \
+				or not bool(evidence.get("no_rejection", false)):
+			_fail("client End Activation canonical outcome failed: " + path)
+			return false
+		records[role] = evidence
+	var client: Dictionary = records.get("client", {}) as Dictionary
+	if not bool(client.get("done_before_input", false)) \
+			or not bool(client.get("identity_before_input", false)) \
+			or not bool(client.get("not_activated_before_input", false)) \
+			or not bool(client.get("no_end_before_input", false)) \
+			or not bool(client.get("done_persisted_before_click", false)) \
+			or not bool(client.get("projection_converged", false)):
+		_fail("DONE did not persist until the real client End Activation input")
+		return false
+	var host: Dictionary = records.get("host", {}) as Dictionary
+	if int(host.get("cursor", -1)) != int(client.get("cursor", -2)) \
+			or int(host.get("cursor", -1)) <= 8:
+		_fail("End Activation host/client cursor did not converge")
+		return false
+	return true
+
+
 func _assert_network_same_live_compatibility(shared: String) -> bool:
 	for role: String in ["host", "client"]:
 		var path := shared.path_join("compat-network-" + role + ".json")
@@ -67,7 +363,7 @@ func _assert_network_same_live_compatibility(shared: String) -> bool:
 			return false
 		var compatibility: Dictionary = record.get("compatibility", {}) as Dictionary
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 4 \
+				or int(record.get("protocol", 0)) != 6 \
 				or int(record.get("canonical_installs", 0)) != 3 \
 				or int(record.get("board_releases", 0)) != 3 \
 				or bool(record.get("resume_attempt_active", true)) \
@@ -75,11 +371,11 @@ func _assert_network_same_live_compatibility(shared: String) -> bool:
 			_fail("same-live Network named/checkpoint compatibility failed: " + path)
 			return false
 		if role == "host":
-			if int(compatibility.get("named_save_v5", 0)) != 5 \
-					or int(compatibility.get("checkpoint_v5", 0)) != 5 \
+			if int(compatibility.get("named_save_v6", 0)) != 6 \
+					or int(compatibility.get("checkpoint_v6", 0)) != 6 \
 					or not bool(compatibility.get("checkpoint_persisted", false)) \
 					or int(compatibility.get("assignment_events_after_initial", -1)) != 0:
-				_fail("same-live Network save v5/checkpoint or no-assignment boundary failed: " + path)
+				_fail("same-live Network save v6/checkpoint or no-assignment boundary failed: " + path)
 				return false
 	return true
 
@@ -94,8 +390,8 @@ func _assert_hot_seat_compatibility(shared: String) -> bool:
 			or int(record.get("canonical_installs", 0)) != 2 \
 			or int(record.get("assignment_events", -1)) != 0 \
 			or bool(record.get("resume_attempt_active", true)) \
-			or int(compatibility.get("named_save_v5", 0)) != 5 \
-			or int(compatibility.get("checkpoint_v5", 0)) != 5 \
+			or int(compatibility.get("named_save_v6", 0)) != 6 \
+			or int(compatibility.get("checkpoint_v6", 0)) != 6 \
 			or not bool(compatibility.get("checkpoint_persisted", false)) \
 			or compatibility.get("binding_before", {}) != compatibility.get("binding_after", {}) \
 			or int(compatibility.get("network_role", -1)) != 0 \
@@ -117,10 +413,10 @@ func _assert_network_replay_compatibility(
 		return false
 	var replay_data: Dictionary = parsed.data as Dictionary
 	var header: Dictionary = replay_data.get("header", {}) as Dictionary
-	if int(header.get("format_version", 0)) != 7 \
+	if int(header.get("format_version", 0)) != 9 \
 			or not (header.get("match_player_control_binding", {}) is Dictionary) \
 			or not (replay_data.get("commands", []) is Array):
-		_fail("Network replay artifact is not persisted replay format 7: " + replay_path)
+		_fail("Network replay artifact is not persisted replay format 9: " + replay_path)
 		return false
 	var host_hash_path := shared.path_join("network-replay-host.jsonl.state_hash")
 	var client_hash_path := shared.path_join("network-replay-client.jsonl.state_hash")
@@ -137,9 +433,9 @@ func _assert_network_replay_compatibility(
 		_fail("Network replay host log is missing.")
 		return false
 	var log_text := FileAccess.get_file_as_string(host_log)
-	if log_text.find("protocol v4") == -1 or log_text.find("Handshake from peer") == -1 \
-			or log_text.find(" v4,") == -1:
-		_fail("Network replay did not negotiate protocol 4 over live ENet.")
+	if log_text.find("protocol v6") == -1 or log_text.find("Handshake from peer") == -1 \
+			or log_text.find(" v6,") == -1:
+		_fail("Network replay did not negotiate protocol 6 over live ENet.")
 		return false
 	if log_text.to_lower().find("fresh resume") != -1 \
 			or log_text.to_lower().find("explicit side assignment") != -1:

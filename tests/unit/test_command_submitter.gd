@@ -131,7 +131,7 @@ func test_host_debug_admission_is_command_type_specific_and_target_side_independ
 	var submitter := NetworkHostCommandSubmitter.new()
 	assert_true(submitter._is_host_debug_command(
 			GameCommand.new(1, "debug_reposition", {"owner_player": 0})))
-	assert_true(submitter._is_host_debug_command(
+	assert_false(submitter._is_host_debug_command(
 			GameCommand.new(0, "debug_deal_damage", {"owner_player": 1})))
 	assert_false(submitter._is_host_debug_command(
 			GameCommand.new(1, "assign_dials", {})))

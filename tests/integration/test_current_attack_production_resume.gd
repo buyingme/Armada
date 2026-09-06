@@ -115,7 +115,8 @@ class NetworkStreamExecutingSubmitter:
 		else:
 			accepted_stream.append({
 				"command": command.serialize(),
-				"result": result.duplicate(true),
+				"result": NetworkManager._build_result_envelope(
+						command, result, 1),
 			})
 		_submission_depth -= 1
 		if _submission_depth == 0:
@@ -388,6 +389,53 @@ func test_real_game_board_schedules_one_deterministic_continuation() -> void:
 			1, "Acknowledge Result must not repeat canonical attack completion.")
 
 
+func test_immediate_critical_resolves_before_complete_attack_without_hidden_result() -> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
+		"attack_id": "attack:390",
+		"dice_results": [{"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT_CRITICAL)}],
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	})
+	var defender: ShipInstance = state.get_ship(1, 0)
+	defender.current_shields["FRONT"] = 0
+	var replaced_top: DamageCard = state.damage_deck.draw_card()
+	assert_not_null(replaced_top)
+	var structural: DamageCard = DamageCard.create("Ship", "Structural Damage")
+	structural.timing = "immediate"
+	structural.effect_id = "structural_damage"
+	state.damage_deck._draw_pile.append(structural)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+
+	var damage_result: Dictionary = CommandProcessor.submit(
+			ResolveDamageCommand.new(0, {
+				"attack_id": state.current_attack_state.attack_id,
+			}))
+	assert_false(damage_result.is_empty())
+	assert_false(damage_result.has("damage_cards"),
+			"The continuation may not restore the removed identity-bearing result")
+	assert_eq(_history_types(), ["resolve_damage"],
+			"An immediate public critical must block terminal attack completion")
+	assert_true(state.current_attack_state.active)
+	assert_eq(state.current_attack_state.stage, CurrentAttackState.STAGE_RESOLVED)
+	assert_eq(defender.faceup_damage.size(), 1)
+	assert_eq(defender.faceup_damage[0].effect_id, "structural_damage")
+
+	var immediate_result: Dictionary = CommandProcessor.submit(
+			ResolveImmediateEffectCommand.new(0, {
+				"owner_player": 1,
+				"ship_index": 0,
+				"card_index": 0,
+				"choice": {},
+			}))
+	assert_false(immediate_result.is_empty())
+	assert_eq(_history_types(), [
+		"resolve_damage", "resolve_immediate_effect", "complete_attack",
+	], "The command-owned immediate effect must precede terminal completion")
+	assert_true(state.current_attack_state.is_inactive())
+	assert_not_null(state.completed_attack_inspection)
+
+
 func test_normal_acknowledgement_retains_only_a_legal_second_attack() -> void:
 	var state: GameState = _satisfied_inactive_normal_ship_state(false)
 	GameManager.current_game_state = state
@@ -582,7 +630,8 @@ func test_network_host_remaining_result_acknowledges_once_and_tears_down_project
 		"inspection_id": inspection.inspection_id(),
 	})
 	client_ack.sequence = 72
-	assert_false(CommandProcessor.submit_mirror(client_ack).is_empty())
+	assert_false(CommandProcessor.submit_mirror(
+			client_ack, _mirror_envelope(client_ack), 0).is_empty())
 	assert_false(state.completed_attack_inspection.is_satisfied())
 	assert_true(state.completed_attack_inspection.has_received(
 			state.principal_id_for_player(1)))
@@ -1326,7 +1375,8 @@ func test_mirror_and_replay_apply_recorded_voluntary_child_finish_only() -> void
 			})
 			child_finish.sequence = CommandProcessor.get_next_sequence()
 			var child_result: Dictionary = \
-					CommandProcessor.submit_mirror(child_finish) if mode == "mirror" \
+					CommandProcessor.submit_mirror(child_finish,
+							_mirror_envelope(child_finish), 0) if mode == "mirror" \
 					else CommandProcessor.submit_replay(child_finish)
 			assert_false(child_result.is_empty())
 			assert_eq(_command_count(CommandProcessor.get_history(), "skip_attack"), 1)
@@ -1346,7 +1396,8 @@ func test_mirror_and_replay_apply_recorded_voluntary_child_finish_only() -> void
 				})
 				recorded_maneuver.sequence = CommandProcessor.get_next_sequence()
 				var maneuver_result: Dictionary = \
-						CommandProcessor.submit_mirror(recorded_maneuver) \
+						CommandProcessor.submit_mirror(recorded_maneuver,
+								_mirror_envelope(recorded_maneuver), 0) \
 						if mode == "mirror" \
 						else CommandProcessor.submit_replay(recorded_maneuver)
 				assert_false(maneuver_result.is_empty())
@@ -1476,7 +1527,7 @@ func test_reconnect_resume_is_passive_and_uses_filtered_canonical_state() -> voi
 			0, Constants.Visibility.ALL, {"dice_results": []})
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			server_state.serialize(), 1)
-	var client_state: GameState = GameState.deserialize(filtered)
+	var client_state: GameState = GameState.deserialize_passive_network(filtered)
 	assert_not_null(client_state)
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.CLIENT
@@ -1507,7 +1558,7 @@ func test_reconnect_reconstructs_inactive_step_six_continuation() -> void:
 	var server_state: GameState = _inactive_ship_continuation_state(true)
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			server_state.serialize(), 1)
-	var client_state: GameState = GameState.deserialize(filtered)
+	var client_state: GameState = GameState.deserialize_passive_network(filtered)
 	assert_not_null(client_state)
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.CLIENT
@@ -1534,7 +1585,7 @@ func test_reconnect_reconstructs_inactive_second_normal_attack() -> void:
 	var server_state: GameState = _inactive_ship_continuation_state(false)
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			server_state.serialize(), 1)
-	var client_state: GameState = GameState.deserialize(filtered)
+	var client_state: GameState = GameState.deserialize_passive_network(filtered)
 	assert_not_null(client_state)
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.CLIENT
@@ -1562,7 +1613,7 @@ func test_filtered_reconnect_reconstructs_phase_pre_begin_projection() -> void:
 	var server_state: GameState = _phase_squadron_projection_state(false)
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			server_state.serialize(), 1)
-	var client_state: GameState = GameState.deserialize(filtered)
+	var client_state: GameState = GameState.deserialize_passive_network(filtered)
 	assert_not_null(client_state)
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.CLIENT
@@ -1588,7 +1639,7 @@ func test_filtered_reconnect_reconstructs_commanded_post_skip_projection() \
 	var server_state: GameState = _command_squadron_projection_state(true)
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			server_state.serialize(), 1)
-	var client_state: GameState = GameState.deserialize(filtered)
+	var client_state: GameState = GameState.deserialize_passive_network(filtered)
 	assert_not_null(client_state)
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.CLIENT
@@ -1719,7 +1770,8 @@ func test_network_owner_waits_then_projects_mirrored_skip_to_maneuver() -> void:
 	assert_false(board._ship_activation_controller.is_activation_modal_open())
 
 	mirrored.sequence = CommandProcessor.get_next_sequence()
-	assert_false(CommandProcessor.submit_mirror(mirrored).is_empty())
+	assert_false(CommandProcessor.submit_mirror(
+			mirrored, _mirror_envelope(mirrored, {}, 1), 1).is_empty())
 
 	assert_false(ship.attack_step_active)
 	assert_eq(ship.maneuver_opportunity_disposition,
@@ -1757,7 +1809,7 @@ func test_network_crew_panic_discard_reconstructs_usable_activation() -> void:
 	assert_eq(authority_state.get_ship(1, 0).squadron_command_opportunity_disposition,
 			ShipInstance.ACTIVATION_DISPOSITION_UNREACHED)
 
-	var client_state: GameState = GameState.deserialize(initial_client_view)
+	var client_state: GameState = GameState.deserialize_passive_network(initial_client_view)
 	assert_not_null(client_state)
 	var client_ship: ShipInstance = client_state.get_ship(1, 0)
 
@@ -1782,11 +1834,13 @@ func test_network_crew_panic_discard_reconstructs_usable_activation() -> void:
 	# The spend result still projects WAIT_FOR_SHIP_SELECT and clears the
 	# provisional context before the queued activation result is received.
 	NetworkManager.command_result_received.emit(
-			spend_dial.serialize(), spend_result)
+			spend_dial.serialize(),
+			_mirror_envelope(spend_dial, spend_result, 1))
 	assert_null(board._activation_ctx.ship_activation_state,
 			"The pre-activation context is correctly retired by the spent-dial result.")
 	NetworkManager.command_result_received.emit(
-			activate_ship.serialize(), activate_result)
+			activate_ship.serialize(),
+			_mirror_envelope(activate_ship, activate_result, 1))
 
 	assert_not_null(board._activation_ctx.ship_activation_state,
 			"The accepted activation result must recover shared presentation context.")
@@ -1830,7 +1884,7 @@ func test_network_reconstruction_syncs_ambiguous_repair_from_interaction_flow() 
 
 	var client_view: Dictionary = StateFilter.filter_for_player(
 			authority_state.serialize(), 1)
-	var client_state: GameState = GameState.deserialize(client_view)
+	var client_state: GameState = GameState.deserialize_passive_network(client_view)
 	assert_not_null(client_state)
 	var client_ship: ShipInstance = client_state.get_ship(1, 0)
 
@@ -2162,7 +2216,8 @@ func test_commanded_move_no_target_waits_for_skip_and_preserves_capacity() \
 			"Move alone must not make CompleteSquadronActivation legal.")
 	assert_true(bool(observed.get("dial_still_revealed", false)),
 			"The command dial must remain until canonical command completion.")
-	assert_true(first.move_action_committed)
+	assert_eq(first.move_action_disposition,
+			SquadronInstance.MOVE_ACTION_COMMITTED)
 	assert_true(TargetingListBuilder.authoritative_squadron_target_entries(
 			state, 0, 0).is_empty(),
 			"Post-movement target availability must be re-derived.")
@@ -2184,7 +2239,8 @@ func test_commanded_move_no_target_waits_for_skip_and_preserves_capacity() \
 	second_token.global_position += Vector2(450.0, -100.0)
 	controller._commit_squadron_placement(second_token)
 
-	assert_true(second.move_action_committed)
+	assert_eq(second.move_action_disposition,
+			SquadronInstance.MOVE_ACTION_COMMITTED)
 	assert_eq(second.attack_action_disposition,
 			SquadronInstance.ATTACK_ACTION_DECLINED)
 	assert_true(second.activated_this_round)
@@ -2240,8 +2296,8 @@ func test_commanded_squadron_completion_reopens_existing_opportunity() -> void:
 			"The remaining capacity must be projected as the same open command.")
 	second_token.global_position += Vector2(450.0, -100.0)
 	var second_instance: SquadronInstance = second_token.get_squadron_instance()
-	assert_false(GameManager.activate_commanded_squadron(second_instance, ship).is_empty(),
-			"The selected remaining squadron must establish its canonical activation.")
+	assert_true(second_instance.has_activation_action_state(),
+			"Accepted selection must establish its canonical activation exactly once.")
 	assert_true(second_instance.commit_move_action(second_instance.activation_id, false),
 			"Fixture completes the second commanded squadron's remaining move.")
 	assert_true(second_instance.commit_attack_action_declined(
@@ -2491,7 +2547,8 @@ func test_live_commanded_attack_lethal_last_non_heavy_engager_recovers_move() \
 	assert_true(state.current_attack_state.is_inactive())
 	assert_eq(attacker.attack_action_disposition,
 			SquadronInstance.ATTACK_ACTION_BEGUN)
-	assert_false(attacker.move_action_committed)
+	assert_eq(attacker.move_action_disposition,
+			SquadronInstance.MOVE_ACTION_AVAILABLE)
 	assert_true(state.has_legal_remaining_squadron_move_action(attacker),
 			"Move must be re-derived from post-destruction canonical state.")
 	assert_eq(_history_types().count(CompleteSquadronActivationCommand.TYPE), 0,
@@ -2582,7 +2639,8 @@ func test_mirror_and_replay_apply_recorded_commanded_terminal_return_only() \
 		})
 		completion.sequence = CommandProcessor.get_next_sequence()
 		var completion_result: Dictionary = \
-			CommandProcessor.submit_mirror(completion) if mode == "mirror" \
+			CommandProcessor.submit_mirror(completion,
+					_mirror_envelope(completion), 0) if mode == "mirror" \
 			else CommandProcessor.submit_replay(completion)
 		assert_false(completion_result.is_empty())
 		assert_eq(_history_types(), [CompleteSquadronActivationCommand.TYPE])
@@ -2598,7 +2656,8 @@ func test_mirror_and_replay_apply_recorded_commanded_terminal_return_only() \
 		})
 		recorded_return.sequence = CommandProcessor.get_next_sequence()
 		var return_result: Dictionary = \
-			CommandProcessor.submit_mirror(recorded_return) if mode == "mirror" \
+			CommandProcessor.submit_mirror(recorded_return,
+					_mirror_envelope(recorded_return), 0) if mode == "mirror" \
 			else CommandProcessor.submit_replay(recorded_return)
 		assert_false(return_result.is_empty())
 		assert_eq(_history_activation_step_count("repair_step"), 1)
@@ -2648,7 +2707,7 @@ func test_save_load_and_reconnect_reconstruct_commanded_terminal_return() -> voi
 			Constants.InteractionStep.REPAIR_STEP)
 
 	var filtered: Dictionary = StateFilter.filter_for_player(source.serialize(), 1)
-	var reconnect_state: GameState = GameState.deserialize(filtered)
+	var reconnect_state: GameState = GameState.deserialize_passive_network(filtered)
 	assert_not_null(reconnect_state)
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.CLIENT
@@ -2722,7 +2781,8 @@ func test_network_commanded_no_target_waits_for_mirrored_skip() -> void:
 	assert_false(ship.command_dial_stack.get_revealed_dial().is_empty())
 
 	mirrored_skip.sequence = CommandProcessor.get_next_sequence()
-	assert_false(CommandProcessor.submit_mirror(mirrored_skip).is_empty())
+	assert_false(CommandProcessor.submit_mirror(
+			mirrored_skip, _mirror_envelope(mirrored_skip), 0).is_empty())
 	assert_eq(squadron.attack_action_disposition,
 			SquadronInstance.ATTACK_ACTION_DECLINED)
 	assert_true(squadron.activated_this_round)
@@ -2737,7 +2797,8 @@ func test_network_commanded_no_target_waits_for_mirrored_skip() -> void:
 	for index: int in range(1, submitter.submitted_commands.size()):
 		var mirrored: GameCommand = submitter.submitted_commands[index]
 		mirrored.sequence = CommandProcessor.get_next_sequence()
-		assert_false(CommandProcessor.submit_mirror(mirrored).is_empty())
+		assert_false(CommandProcessor.submit_mirror(
+				mirrored, _mirror_envelope(mirrored), 0).is_empty())
 	assert_true(ship.command_dial_stack.get_revealed_dial().is_empty())
 	assert_eq(_history_types().count("skip_attack"), 1)
 	assert_eq(_history_types().count("spend_dial"), 1)
@@ -2898,7 +2959,8 @@ func test_zero_opportunity_network_roll_hands_defense_to_defender_client() \
 	assert_true(host_panel._roll_button.visible)
 	# A connected client starts from the same deterministic setup/RNG state;
 	# later command-result projection remains viewer-specific.
-	var client_initial_data: Dictionary = state.serialize()
+	var client_initial_data: Dictionary = StateFilter.filter_for_player(
+			state.serialize(), 1)
 
 	host_panel._roll_button.pressed.emit()
 
@@ -2927,7 +2989,7 @@ func test_zero_opportunity_network_roll_hands_defense_to_defender_client() \
 	await get_tree().process_frame
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()
-	var client_state: GameState = GameState.deserialize(client_initial_data)
+	var client_state: GameState = GameState.deserialize_passive_network(client_initial_data)
 	assert_not_null(client_state)
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
@@ -3087,7 +3149,10 @@ func test_live_authority_resume_drains_one_deterministic_terminal_chain() -> voi
 
 
 func _network_roll_context() -> Dictionary:
-	var state: GameState = _roll_state()
+	var authority_state: GameState = _roll_state()
+	var state: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(authority_state.serialize(), 0))
+	assert_not_null(state)
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 0
@@ -3109,8 +3174,11 @@ func _network_roll_context() -> Dictionary:
 
 	var roll := RollDiceCommand.new(0, {"attack_id": "attack:0"})
 	roll.sequence = 0
+	var authority_roll := RollDiceCommand.new(0, {"attack_id": "attack:0"})
+	var authority_result: Dictionary = authority_roll.execute(authority_state)
 	assert_true(GameManager._apply_network_command_result(
-			roll, {"attack_id": "attack:0"}))
+			roll, NetworkManager._build_result_envelope(
+					roll, authority_result, 0)))
 	assert_eq(_history_types(), ["roll_dice"])
 	return {
 		"state": state,
@@ -3179,6 +3247,12 @@ func _stream_has_type(stream: Array[Dictionary], command_type: String) -> bool:
 		if str(command_data.get("type", "")) == command_type:
 			return true
 	return false
+
+
+func _mirror_envelope(command: GameCommand,
+		authority_result: Dictionary = {}, viewer: int = 0) -> Dictionary:
+	return NetworkManager._build_result_envelope(
+			command, authority_result, viewer)
 
 
 func _roll_interaction_snapshot(context: Dictionary) -> Dictionary:
@@ -3261,6 +3335,7 @@ func _state_at(stage: String, options: Dictionary) -> GameState:
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(8108)
 	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
 	state.damage_deck.initialize()
 	var configured: Dictionary = options.duplicate(true)
 	configured["stage"] = stage
@@ -3329,6 +3404,7 @@ func _pending_two_human_result_state() -> GameState:
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(8172)
 	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
 	state.damage_deck.initialize()
 	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
 		"stage": CurrentAttackState.STAGE_RESOLVED,
@@ -3416,6 +3492,9 @@ func _ship_declaration_projection_state(post_skip: bool) -> GameState:
 func _phase_squadron_projection_state(post_skip: bool) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	assert_true(state.install_match_player_control_binding(
 			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
@@ -3455,6 +3534,9 @@ func _command_squadron_projection_state(post_skip: bool,
 		token_only: bool = false) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
 	assert_true(state.install_match_player_control_binding(
 			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1

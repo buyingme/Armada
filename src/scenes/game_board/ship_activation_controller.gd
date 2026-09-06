@@ -1752,30 +1752,14 @@ func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
 		toast_parts.append(
 				"⚠ Collision detected! Speed temporarily reduced to %d (was %d)."
 				% [result.final_speed, result.original_speed])
-	# Pre-draw cards from the damage deck.
-	if _damage_deck == null:
-		_log.error("No damage deck — cannot deal overlap damage.")
-		return
-	var m_card: DamageCard = _damage_deck.draw_card()
-	if m_card == null:
-		_log.error("Damage deck empty — cannot deal overlap damage.")
-		return
-	var o_card: DamageCard = _damage_deck.draw_card()
-	if o_card == null:
-		_log.error("Damage deck empty after first draw — cannot " +
-				"deal overlap damage to overlapped ship.")
-		return
 	_log.info(("Overlap damage: moving='%s' overlapped='%s'" +
 			" (other_index=%d).") % [
 			moving_inst.ship_data.ship_name,
 			other_inst.ship_data.ship_name,
 			result.overlapped_ship_index])
-	# Submit command with pre-drawn cards.
 	var cmd_result: Dictionary = GameManager.submit_overlap_damage(
 			moving_inst,
-			other_inst,
-			m_card.serialize(),
-			o_card.serialize())
+			other_inst)
 	if cmd_result.is_empty():
 		_log.error("OverlapDamageCommand rejected.")
 		return
@@ -1811,8 +1795,6 @@ func _emit_overlap_signals(inst: ShipInstance, token: ShipToken,
 	EventBus.ship_damaged.emit(token, 1, Constants.HullZone.FRONT)
 	if cmd_result.get(destroyed_key, false) as bool:
 		_log.info("Ship destroyed by overlap: %s" % inst.data_key)
-		EventBus.ship_destroyed.emit(token)
-		_fade_out_destroyed_token(token)
 
 
 ## Fades out a destroyed ship token (visual only).

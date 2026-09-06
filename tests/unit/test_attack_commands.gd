@@ -869,7 +869,8 @@ func test_select_evade_die_validate_ok() -> void:
 	SelectEvadeDieCommand.register()
 	var cmd := SelectEvadeDieCommand.new(1, {
 		"attack_id": _attack_id(),
-		"ship_index": idx,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+		"defender_index": idx,
 		"token_index": 2,
 		"die_index": 2,
 		"expected_color": int(Constants.DiceColor.RED),
@@ -922,15 +923,16 @@ func test_select_evade_die_execute_echoes_index() -> void:
 	SelectEvadeDieCommand.register()
 	var cmd := SelectEvadeDieCommand.new(1, {
 		"attack_id": _attack_id(),
-		"ship_index": idx,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+		"defender_index": idx,
 		"token_index": 2,
 		"die_index": 3,
 		"expected_color": int(Constants.DiceColor.RED),
 		"expected_face": int(Constants.DiceFace.HIT),
 	})
 	var result: Dictionary = cmd.execute(_state)
-	assert_eq(int(result.get("ship_index", -1)), idx,
-			"Result should echo ship_index.")
+	assert_eq(int(result.get("defender_index", -1)), idx,
+			"Result should echo defender_index.")
 	assert_eq(int(result.get("die_index", -1)), 3,
 			"Result should echo die_index.")
 	GameCommand._registry.erase("select_evade_die")

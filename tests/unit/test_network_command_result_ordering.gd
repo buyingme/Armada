@@ -51,7 +51,7 @@ func test_network_result_ordering_buffers_later_sequence_until_gap_filled() -> v
 	var advance: AdvancePhaseCommand = _advance_cmd(1)
 
 	GameManager._on_network_command_result(
-			advance.serialize(), _advance_result())
+			advance.serialize(), _envelope(_advance_result()))
 
 	assert_eq(state.current_phase, Constants.GamePhase.COMMAND,
 			"Client must not mirror later advance_phase before sequence 0.")
@@ -61,7 +61,7 @@ func test_network_result_ordering_buffers_later_sequence_until_gap_filled() -> v
 			"Out-of-order advance should be buffered.")
 
 	GameManager._on_network_command_result(
-			assign.serialize(), _assign_result(0))
+			assign.serialize(), _envelope(_assign_result(0)))
 
 	assert_eq(CommandProcessor.get_command_count(), 2,
 			"Missing earlier result should flush assign_dials then advance_phase.")
@@ -82,9 +82,9 @@ func test_network_result_ordering_does_not_enter_ship_before_missing_dial() -> v
 	var advance: AdvancePhaseCommand = _advance_cmd(2)
 
 	GameManager._on_network_command_result(
-			first.serialize(), _assign_result(0))
+			first.serialize(), _envelope(_assign_result(0)))
 	GameManager._on_network_command_result(
-			advance.serialize(), _advance_result())
+			advance.serialize(), _envelope(_advance_result()))
 
 	assert_eq(state.current_phase, Constants.GamePhase.COMMAND,
 			"Client must stay in Command Phase while sequence 1 is missing.")
@@ -92,7 +92,7 @@ func test_network_result_ordering_does_not_enter_ship_before_missing_dial() -> v
 			"Second Imperial ship should still be missing its dial.")
 
 	GameManager._on_network_command_result(
-			missing.serialize(), _assign_result(1))
+			missing.serialize(), _envelope(_assign_result(1)))
 
 	assert_eq(state.current_phase, Constants.GamePhase.SHIP,
 			"Client should enter Ship Phase after the missing dial applies.")
@@ -111,11 +111,11 @@ func test_network_tarkin_command_phase_mirrors_all_imperial_dials_expected() -> 
 	var advance: AdvancePhaseCommand = _advance_cmd(3)
 
 	GameManager._on_network_command_result(
-			rebel.serialize(), _assign_result(0))
+			rebel.serialize(), _envelope(_assign_result(0)))
 	GameManager._on_network_command_result(
-			imperial_first.serialize(), _assign_result(0))
+			imperial_first.serialize(), _envelope(_assign_result(0)))
 	GameManager._on_network_command_result(
-			advance.serialize(), _advance_result())
+			advance.serialize(), _envelope(_advance_result()))
 
 	assert_eq(state.current_phase, Constants.GamePhase.COMMAND,
 			"Tarkin prompt must not appear before all earlier dials mirror.")
@@ -123,7 +123,7 @@ func test_network_tarkin_command_phase_mirrors_all_imperial_dials_expected() -> 
 			"Second Imperial dial should still be pending before sequence 2.")
 
 	GameManager._on_network_command_result(
-			imperial_second.serialize(), _assign_result(1))
+			imperial_second.serialize(), _envelope(_assign_result(1)))
 
 	assert_eq(state.current_phase, Constants.GamePhase.SHIP,
 			"Client should enter Ship Phase after all dial results mirror.")
@@ -142,7 +142,7 @@ func test_negative_network_sequence_is_rejected_without_mutation() -> void:
 			0, 0, Constants.CommandType.NAVIGATE, -1)
 
 	GameManager._on_network_command_result(
-			command.serialize(), _assign_result(0))
+			command.serialize(), _envelope(_assign_result(0)))
 
 	assert_eq(CommandProcessor.get_next_sequence(), 0)
 	assert_eq(CommandProcessor.get_command_count(), 0)
@@ -158,10 +158,10 @@ func test_failed_mirror_keeps_both_cursors_and_buffer_position() -> void:
 	var later: AssignDialCommand = _assign_cmd(
 			1, 0, Constants.CommandType.REPAIR, 1)
 	GameManager._on_network_command_result(
-			later.serialize(), _assign_result(0))
+			later.serialize(), _envelope(_assign_result(0)))
 
 	GameManager._on_network_command_result(
-			invalid.serialize(), _assign_result(99))
+			invalid.serialize(), _envelope(_assign_result(99)))
 
 	assert_eq(CommandProcessor.get_next_sequence(), 0,
 			"Rejected mirror command must not advance CommandProcessor.")
@@ -180,12 +180,12 @@ func test_duplicate_buffered_result_cannot_replace_first_payload() -> void:
 	var duplicate_later: AssignDialCommand = _assign_cmd(
 			1, 1, Constants.CommandType.REPAIR, 1)
 	GameManager._on_network_command_result(
-			first_later.serialize(), _assign_result(0))
+			first_later.serialize(), _envelope(_assign_result(0)))
 	GameManager._on_network_command_result(
-			duplicate_later.serialize(), _assign_result(1))
+			duplicate_later.serialize(), _envelope(_assign_result(1)))
 	GameManager._on_network_command_result(
 			_assign_cmd(0, 0, Constants.CommandType.SQUADRON, 0).serialize(),
-			_assign_result(0))
+			_envelope(_assign_result(0)))
 
 	assert_eq(CommandProcessor.get_command_count(), 2)
 	assert_eq(CommandProcessor.get_history()[1].payload.get("ship_index"), 0,
@@ -202,7 +202,7 @@ func test_reconstructed_cursor_initializes_network_result_ordering() -> void:
 
 	GameManager._on_network_command_result(
 			_assign_cmd(0, 0, Constants.CommandType.NAVIGATE, 4).serialize(),
-			_assign_result(0))
+			_envelope(_assign_result(0)))
 
 	assert_eq(CommandProcessor.get_next_sequence(), 5)
 	assert_eq(GameManager._next_network_result_sequence, 5)
@@ -250,11 +250,11 @@ func test_bug_030_host_defender_projects_accepted_redirect_shields() -> void:
 	})
 	watch_signals(EventBus)
 
-	GameManager._on_network_command_result(command.serialize(), {
+	GameManager._on_network_command_result(command.serialize(), _envelope({
 		"zone_name": zone_name,
 		"new_shields": shields_before - 1,
 		"ship_index": 0,
-	})
+	}))
 
 	assert_signal_emitted_with_parameters(EventBus, "ship_shields_changed", [
 			defender, zone_name, shields_before - 1])
@@ -345,6 +345,17 @@ func _advance_result() -> Dictionary:
 	return {
 		"previous_phase": int(Constants.GamePhase.COMMAND),
 		"new_phase": int(Constants.GamePhase.SHIP),
+	}
+
+
+func _envelope(presentation: Dictionary) -> Dictionary:
+	return {
+		"protocol_version": NetworkManager.PROTOCOL_VERSION,
+		"application_contract": "none",
+		"application_contract_version": 0,
+		"viewer_player": NetworkManager.get_local_player_index(),
+		"application_result": {},
+		"presentation_result": presentation,
 	}
 
 

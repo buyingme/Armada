@@ -3528,25 +3528,13 @@ func _apply_ship_damage_result(result: Dictionary) -> void:
 		return
 	var def_zone_str: String = str(result.get("hull_zone", ""))
 	var shield_damage: int = int(result.get("shield_absorbed", 0))
-	var card_data: Array = result.get("damage_cards", []) as Array
+	var cards_added: int = int(result.get("cards_added", 0))
+	var faceup_count: int = 1 if cards_added > 0 \
+			and _determine_first_card_faceup() else 0
 	var destroyed: bool = bool(result.get("destroyed", false))
 	_emit_post_resolve_events(
 			def_inst, def_zone_str, shield_damage,
-			card_data, destroyed)
-
-## Pre-draws damage cards from the deck and returns serialized card data.
-## Cards are drawn but NOT added to the ship — the command does that.
-func _pre_draw_damage_cards(count: int,
-		first_card_faceup: bool) -> Array:
-	var card_data: Array = []
-	for i: int in range(count):
-		var card: DamageCard = _draw_next_damage_card(i, count)
-		if card == null:
-			break
-		if _damage_dealer.should_deal_faceup(i, first_card_faceup):
-			card.is_faceup = true
-		card_data.append(card.serialize())
-	return card_data
+			cards_added, faceup_count, destroyed)
 
 
 ## Emits all UI events after [ResolveDamageCommand] has executed.
@@ -3554,11 +3542,10 @@ func _pre_draw_damage_cards(count: int,
 ## and destruction signalling.
 func _emit_post_resolve_events(def_inst: ShipInstance,
 		def_zone_str: String, shield_absorbed: int,
-		card_data: Array, destroyed: bool) -> void:
+		cards_dealt: int, faceup_count: int, destroyed: bool) -> void:
 	_emit_shield_events(def_inst, def_zone_str, shield_absorbed)
-	var cards_dealt: int = card_data.size()
 	var faceup_card_name: String = _emit_card_events(
-			def_inst, card_data)
+			def_inst, cards_dealt, faceup_count)
 	_emit_ship_damage_events(def_inst, cards_dealt)
 	var summary: String = _build_damage_summary(
 			def_inst, def_zone_str, shield_absorbed,
@@ -3570,8 +3557,6 @@ func _emit_post_resolve_events(def_inst: ShipInstance,
 			shield_absorbed + cards_dealt)
 	if destroyed:
 		_log.info("Ship destroyed! %s" % def_inst.data_key)
-		EventBus.ship_destroyed.emit(_state.defender_ship)
-		_fade_out_token(_state.defender_ship)
 
 
 ## Emits shield change events if shields were absorbed.
@@ -3589,10 +3574,9 @@ func _emit_shield_events(def_inst: ShipInstance,
 ## Retrieves newly added cards from the ship's damage arrays.
 ## Returns the faceup card name (empty if none).
 func _emit_card_events(def_inst: ShipInstance,
-		card_data: Array) -> String:
+		cards_dealt: int, faceup_count: int) -> String:
 	var faceup_card_name: String = ""
-	var faceup_count: int = _flow_executor.count_faceup_cards(card_data)
-	var facedown_count: int = card_data.size() - faceup_count
+	var facedown_count: int = cards_dealt - faceup_count
 	var dealt_faceup_cards: Array = []
 	# Retrieve newly added faceup cards from the ship.
 	if faceup_count > 0:
@@ -3604,14 +3588,12 @@ func _emit_card_events(def_inst: ShipInstance,
 			dealt_faceup_cards.append(card)
 	# Retrieve newly added facedown cards from the ship.
 	if facedown_count > 0:
-		var start: int = def_inst.facedown_damage.size() - facedown_count
-		for i: int in range(start, def_inst.facedown_damage.size()):
-			var card: DamageCard = def_inst.facedown_damage[i] as DamageCard
-			EventBus.damage_card_dealt.emit(def_inst, card, false)
+		for _i: int in range(facedown_count):
+			EventBus.damage_card_dealt.emit(def_inst, null, false)
 			_log.info("Dealt facedown damage card to %s."
 					% def_inst.ship_data.ship_name)
-	_log.info("Card loop done: %d card(s) dealt." % card_data.size())
-	if card_data.size() > 0:
+	_log.info("Card loop done: %d card(s) dealt." % cards_dealt)
+	if cards_dealt > 0:
 		_state.awaiting_damage_summary = true
 		EventBus.damage_summary_requested.emit(
 				def_inst, dealt_faceup_cards, facedown_count,
@@ -3625,22 +3607,6 @@ func _determine_first_card_faceup() -> bool:
 	_log.info("Damage cards: first_faceup=%s, contain=%s." % [
 			faceup, _state.contain_used])
 	return faceup
-
-## Draws the next damage card from the deck, with logging.
-func _draw_next_damage_card(index: int,
-		total: int) -> DamageCard:
-	_log.info("Dealing card %d/%d …" % [index + 1, total])
-	if _damage_deck == null:
-		_log.error("No damage deck available!")
-		return null
-	var card: DamageCard = _damage_deck.draw_card()
-	if card == null:
-		_log.error("Damage deck is empty!")
-		return null
-	_log.info("Drew card: '%s' [%s] (timing=%s, effect_id=%s)."
-			% [card.title, card.trait_type, card.timing,
-			card.effect_id])
-	return card
 
 ## Post-processes a faceup damage card after the command has added it.
 ## Emits faceup-card events and defers immediate effects.
@@ -3762,13 +3728,9 @@ func _on_damage_summary_dismissed_continue() -> void:
 ## Called from [method _attack_exec_resolve_damage] when a pending choice
 ## exists. On completion, resolves the effect and finalises the attack.
 ##
-## Phase I6b-3 R5 — chooser-controlled critical-choice modal.  In
-## network mode the modal is opened by [AttackPanelMirror] on the
-## chooser's peer when the chooser is not the local (attacker) peer;
-## the published payload carries the full [code]choice_info[/code] +
-## the [code]pending_card_data[/code] / ship indices needed to
-## reconstruct the [DamageCard] / [ShipInstance] on the remote peer
-## and submit a [ResolveImmediateEffectCommand].
+## Phase I6b-3 R5 — chooser-controlled critical-choice modal. In Network
+## mode the modal is opened by [AttackPanelMirror] on the chooser's peer from
+## the public faceup card index and ship identity.
 func _start_immediate_choice_flow() -> void:
 	_ensure_choice_modal()
 	var chooser: String = _pending_immediate_choice.get("chooser", "opponent")
@@ -3803,7 +3765,6 @@ func _build_immediate_choice_payload(chooser: String,
 	var card_index: int = -1
 	var ship_owner: int = -1
 	var ship_index: int = -1
-	var card_data: Dictionary = {}
 	if _pending_immediate_card != null and _pending_immediate_ship != null:
 		card_index = _pending_immediate_ship.faceup_damage.find(
 				_pending_immediate_card)
@@ -3811,13 +3772,11 @@ func _build_immediate_choice_payload(chooser: String,
 		var gs: GameState = GameManager.current_game_state
 		if gs:
 			ship_index = gs.find_ship_index(_pending_immediate_ship)
-		card_data = _pending_immediate_card.serialize()
 	return {
 		"chooser": chooser,
 		"chooser_player": chooser_player,
 		"card_title": _pending_immediate_choice.get("card_title", ""),
 		"choice_info": _pending_immediate_choice.duplicate(true),
-		"pending_card_data": card_data,
 		"pending_card_index": card_index,
 		"pending_ship_owner_player": ship_owner,
 		"pending_ship_index": ship_index,

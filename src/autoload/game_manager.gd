@@ -311,7 +311,12 @@ func start_new_game(config: Dictionary = {}) -> void:
 	if not _complete_network_replay_rng_bootstrap(
 			candidate, replay_bootstrap):
 		return
-	if not candidate.validate_for_live_installation():
+	# The legacy local bootstrap installs its scenario/deck at the GameBoard
+	# boundary. Fresh Network starts bypass this path and stage a complete
+	# full-authority candidate in LobbyManager before publication.
+	if not candidate.has_valid_match_player_control_binding() \
+			or not candidate.validate_declaration_adjacent_state() \
+			or not candidate.validate_completed_attack_inspection():
 		_log.error("New game rejected: live-install validation failed.")
 		return
 	CommandProcessor.reset()
@@ -433,7 +438,8 @@ func _setup_bootstrap_error_text(result: Dictionary) -> String:
 func start_new_game_from_state(
 		state: GameState,
 		scenario_id: String,
-		next_command_sequence: int = 0) -> bool:
+		next_command_sequence: int = 0,
+		fresh_network_install: bool = false) -> bool:
 	if state == null:
 		_log.error("start_new_game_from_state called with null state.")
 		return false
@@ -468,7 +474,7 @@ func start_new_game_from_state(
 	_command_assigning_player = -1
 	# Loaded saves always have interaction_flow == NONE (Phase J Q5),
 	# so fixed_commands_applied is set true to suppress the round-1 toast.
-	fixed_commands_applied = true
+	fixed_commands_applied = not fresh_network_install
 	_scenario_id = scenario_id
 	is_state_preloaded = true
 	_log.info("Loaded game from save: scenario='%s' round=%d phase=%d." % [
@@ -478,6 +484,13 @@ func start_new_game_from_state(
 	EventBus.game_started.emit()
 	SaveGameManager.mark_clean()
 	return true
+
+
+func begin_installed_fresh_game() -> void:
+	if not is_game_active or current_game_state == null \
+			or current_game_state.current_round != 0:
+		return
+	_start_round()
 
 
 func _install_setup_package_state(
@@ -1251,6 +1264,30 @@ func submit_move_squadron(squadron: SquadronInstance,
 	return _submitter.submit(cmd)
 
 
+## Submits the explicit semantic decision not to take a legal remaining Move.
+func submit_decline_squadron_move(
+		squadron: SquadronInstance) -> Dictionary:
+	if current_game_state == null or squadron == null:
+		return {}
+	var payload: Dictionary = {
+		"squadron_index": current_game_state.find_squadron_index(squadron),
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+		"completed_attack_inspection_id": "",
+	}
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		var ship: ShipInstance = current_game_state.get_ship(
+				squadron.commanding_ship_player,
+				squadron.commanding_ship_index)
+		if ship == null:
+			return {}
+		payload["ship_activation_identity"] = ship.ship_activation_identity
+	_decorate_completed_attack_inspection_consumer(payload)
+	return _submitter.submit(DeclineSquadronMoveCommand.new(
+			squadron.owner_player, payload))
+
+
 ## Submits a [CompleteSquadronActivationCommand] when a Squadron Phase
 ## activation ends without a legal movement command.
 func submit_complete_squadron_activation(
@@ -1695,8 +1732,6 @@ func submit_select_evade_die(defender: RefCounted,
 			{"attack_id": attack.attack_id,
 			"defender_kind": attack.defender_kind,
 			"defender_index": attack.defender_index,
-			"ship_index": attack.defender_index \
-					if attack.defender_kind == CurrentAttackState.KIND_SHIP else -1,
 			"token_index": _next_unresolved_defense_token(
 					attack, defender, Constants.DefenseToken.EVADE),
 			"die_index": die_index,
@@ -2020,8 +2055,22 @@ func submit_repair_hull(ship: ShipInstance,
 		"action_type": "repair_hull",
 		"owner_player": ship.owner_player,
 		"ship_index": ship_index,
-		"card_is_faceup": is_faceup,
-		"card_index": card_idx,
+		"damage_face": "faceup" if is_faceup else "facedown",
+		("card_index" if is_faceup else "facedown_ordinal"): card_idx,
+	})
+	return _submitter.submit(cmd)
+
+
+func submit_repair_facedown_hull(ship: ShipInstance,
+		facedown_ordinal: int) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var cmd := RepairActionCommand.new(ship.owner_player, {
+		"action_type": "repair_hull",
+		"owner_player": ship.owner_player,
+		"ship_index": current_game_state.find_ship_index(ship),
+		"damage_face": "facedown",
+		"facedown_ordinal": facedown_ordinal,
 	})
 	return _submitter.submit(cmd)
 
@@ -2039,7 +2088,6 @@ func submit_resolve_immediate_effect(ship: ShipInstance,
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var card_idx: int = ship.faceup_damage.find(card)
 	var pl: Dictionary = {
-		"effect_id": card.effect_id,
 		"owner_player": ship.owner_player,
 		"ship_index": ship_index,
 		"card_index": card_idx,
@@ -2078,11 +2126,8 @@ func submit_set_speed(ship: ShipInstance,
 ## Submits an [OverlapDamageCommand] after a ship–ship overlap.
 ## [param moving] — the moving ship.
 ## [param other] — the overlapped ship.
-## [param moving_card_data] — serialized pre-drawn DamageCard.
-## [param other_card_data] — serialized pre-drawn DamageCard.
 func submit_overlap_damage(moving: ShipInstance,
-		other: ShipInstance, moving_card_data: Dictionary,
-		other_card_data: Dictionary) -> Dictionary:
+		other: ShipInstance) -> Dictionary:
 	if not current_game_state:
 		return {}
 	var m_idx: int = current_game_state.find_ship_index(moving)
@@ -2091,8 +2136,6 @@ func submit_overlap_damage(moving: ShipInstance,
 		"ship_index": m_idx,
 		"other_owner": other.owner_player,
 		"other_ship_index": o_idx,
-		"moving_card": moving_card_data,
-		"other_card": other_card_data,
 	})
 	return _submitter.submit(cmd)
 
@@ -2101,10 +2144,8 @@ func submit_overlap_damage(moving: ShipInstance,
 ## card effect deals facedown damage.
 ## [param ship] — the affected ship.
 ## [param effect_id] — which effect triggered (e.g. "ruptured_engine").
-## [param card_data] — serialized pre-drawn DamageCard.
 func submit_persistent_effect_damage(ship: ShipInstance,
-		effect_id: String,
-		card_data: Dictionary) -> Dictionary:
+		effect_id: String) -> Dictionary:
 	if not current_game_state:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
@@ -2112,7 +2153,6 @@ func submit_persistent_effect_damage(ship: ShipInstance,
 		"owner_player": ship.owner_player,
 		"ship_index": ship_index,
 		"effect_id": effect_id,
-		"card_data": card_data,
 	})
 	return _submitter.submit(cmd)
 
@@ -2129,6 +2169,8 @@ func submit_persistent_effect_damage(ship: ShipInstance,
 func submit_debug_deal_damage(ship: ShipInstance,
 		effect_id: String) -> Dictionary:
 	if not current_game_state:
+		return {}
+	if PlayMode.is_network():
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var submitter_player: int = ship.owner_player
@@ -2185,7 +2227,7 @@ func _on_activation_ended() -> void:
 					{"ship_index": ship_index,
 						"ship_activation_identity":
 								canonical_ship.ship_activation_identity})
-			var result: Dictionary = _submitter.submit_authoritative(cmd)
+			var result: Dictionary = _submitter.submit(cmd)
 			if result.is_empty() or _is_network_client():
 				return
 			EventBus.command_dials_changed.emit(canonical_ship)
@@ -2562,8 +2604,7 @@ func _token_gain_step() -> Constants.InteractionStep:
 
 ## Called when any ship is destroyed during an attack.
 ## Checks if the owning player has lost all ships → immediate game end.
-## Routes destruction cleanup (damage card return, effect unregistration)
-## through [DestroyUnitCommand] for replay determinism.
+## Cleanup has already been accepted before presentation emits this signal.
 ## Rules Reference: "Winning and Losing", RRG p.21; GF-004, WN-001.
 func _on_ship_destroyed(ship: Node) -> void:
 	if not is_game_active or not current_game_state:
@@ -2577,17 +2618,7 @@ func _on_ship_destroyed(ship: Node) -> void:
 			owner_player = si.owner_player
 	if owner_player < 0:
 		return
-	# Check elimination FIRST — before cleanup changes is_destroyed() result.
 	_check_elimination()
-	# Route cleanup through command for replay determinism.
-	var idx: int = current_game_state.find_ship_index(si)
-	if idx < 0:
-		return
-	var cmd := DestroyUnitCommand.new(owner_player, {
-		"owner_player": owner_player,
-		"ship_index": idx,
-	})
-	_submitter.submit_authoritative(cmd)
 
 
 ## Called when any squadron is destroyed.  Squadrons alone never trigger
@@ -2624,7 +2655,7 @@ func _check_elimination() -> void:
 ## progression).  The host ignores this — it already processed the command
 ## inline via [NetworkHostCommandSubmitter].
 func _on_network_command_result(
-		command_data: Dictionary, result: Dictionary) -> void:
+		command_data: Dictionary, result_envelope: Dictionary) -> void:
 	if not PlayMode.is_network():
 		return
 	var cmd: GameCommand = GameCommand.deserialize(command_data)
@@ -2637,7 +2668,8 @@ func _on_network_command_result(
 		# host-owned commands authored by the remote peer (e.g. attacker
 		# peer authored [code]resolve_damage[/code] / [code]spend_defense_token[/code]
 		# for the host-owned defender — see I6b-3 R2 follow-up).
-		var remote_authored: bool = bool(result.get("__remote_authored", false))
+		var remote_authored: bool = NetworkManager.consume_host_remote_authored(
+				cmd.sequence)
 		# Redirect mutates the defender's canonical shields.  When the host is
 		# that defender the accepted broadcast is also its presentation refresh
 		# boundary; the inline command path intentionally performs no UI work.
@@ -2646,9 +2678,10 @@ func _on_network_command_result(
 		if cmd.player_index != NetworkManager.get_local_player_index() \
 				or remote_authored \
 				or needs_host_projection:
-			_handle_remote_command_effects(cmd, result)
+			_handle_remote_command_effects(cmd,
+					_derive_network_presentation_result(cmd, result_envelope))
 		return
-	_queue_network_command_result(cmd, result)
+	_queue_network_command_result(cmd, result_envelope)
 
 
 ## Releases the client submission gate and forwards the rejection to the
@@ -2673,7 +2706,7 @@ func _reset_network_result_ordering() -> void:
 
 func _queue_network_command_result(
 		cmd: GameCommand,
-		result: Dictionary) -> void:
+		result_envelope: Dictionary) -> void:
 	var sequence: int = cmd.sequence
 	if sequence < 0:
 		_log.warn("Rejecting unsequenced network command result.")
@@ -2688,7 +2721,7 @@ func _queue_network_command_result(
 		return
 	_pending_network_results[sequence] = {
 		"command": cmd,
-		"result": result.duplicate(true),
+		"result_envelope": result_envelope.duplicate(true),
 	}
 	_flush_ordered_network_results()
 
@@ -2699,7 +2732,7 @@ func _flush_ordered_network_results() -> void:
 				_next_network_result_sequence] as Dictionary
 		if not _apply_network_command_result(
 				entry.get("command") as GameCommand,
-				entry.get("result") as Dictionary):
+				entry.get("result_envelope") as Dictionary):
 			return
 		_pending_network_results.erase(_next_network_result_sequence)
 		_next_network_result_sequence += 1
@@ -2707,20 +2740,57 @@ func _flush_ordered_network_results() -> void:
 
 func _apply_network_command_result(
 		cmd: GameCommand,
-		result: Dictionary) -> bool:
+		result_envelope: Dictionary) -> bool:
 	if cmd == null:
 		return false
 	var cursor_before: int = CommandProcessor.get_next_sequence()
-	CommandProcessor.submit_mirror(cmd)
+	var result: Dictionary
+	if ReplayDriver.enabled:
+		result = CommandProcessor.submit_replay(cmd)
+	else:
+		result = CommandProcessor.submit_mirror(cmd, result_envelope,
+				NetworkManager.get_local_player_index())
 	if CommandProcessor.get_next_sequence() != cursor_before + 1 \
 			or CommandProcessor.get_next_sequence() != cmd.sequence + 1:
 		_log.warn("Failed to apply authoritative network command seq=%d." %
 				cmd.sequence)
 		return false
-	_handle_remote_command_effects(cmd, result)
+	var presentation: Dictionary = result
+	var transported: Dictionary = result_envelope.get(
+			"presentation_result", {}) as Dictionary
+	if not transported.is_empty():
+		presentation = transported
+	_handle_remote_command_effects(cmd, presentation)
 	if _submitter is NetworkCommandSubmitter:
 		(_submitter as NetworkCommandSubmitter).clear_awaiting()
 	return true
+
+
+func _derive_network_presentation_result(cmd: GameCommand,
+		result_envelope: Dictionary) -> Dictionary:
+	var presentation: Dictionary = result_envelope.get(
+			"presentation_result", {}) as Dictionary
+	if not presentation.is_empty() or current_game_state == null:
+		return presentation
+	var application: Dictionary = result_envelope.get(
+			"application_result", {}) as Dictionary
+	match cmd.command_type:
+		"roll_dice":
+			return {"dice_results": current_game_state.current_attack_state.dice_results}
+		"reroll_attack_die", "use_concentrate_fire_token_reroll":
+			var die_index: int = int(cmd.payload.get("die_index", -1))
+			var dice: Array[Dictionary] = current_game_state.current_attack_state.dice_results
+			return {"die_index": die_index,
+				"new_result": dice[die_index] if die_index >= 0 and die_index < dice.size() else {},
+				"dice_results": dice,
+				"source_rule_id": str(cmd.payload.get("source_rule_id", ""))}
+		"resolve_damage":
+			var attack: CurrentAttackState = current_game_state.current_attack_state
+			return attack.resolved_outcome.duplicate(true)
+		"overlap_damage", "persistent_effect_damage", "repair_action", \
+				"resolve_immediate_effect", "destroy_unit", "select_evade_die":
+			return application.duplicate(true)
+	return application.duplicate(true)
 
 
 ## Emits the appropriate EventBus signals after a remotely-received command
@@ -3190,27 +3260,9 @@ func _handle_remote_resolve_damage(
 		# enough to trigger ShipCardPanel._refresh_damage_for_ship()
 		# which reads the full stacks off the ShipInstance.
 		EventBus.damage_card_dealt.emit(ship, null, false)
-		# Phase I6b-3 R2 follow-up: also surface the
-		# DamageSummaryOverlay close-up on the passive peer.  Walk the
-		# command's payload to figure out which dealt cards were
-		# faceup, deserialize them (so the overlay can pull
-		# effect_id / title), and emit
-		# [signal EventBus.damage_summary_requested] with the same
-		# shape the attacker peer's AttackExecutor uses.
-		var faceup_cards: Array[DamageCard] = []
-		var facedown_count: int = 0
-		var cards_payload: Array = result.get(
-				"damage_cards", []) as Array
-		for entry: Variant in cards_payload:
-			if not (entry is Dictionary):
-				continue
-			var card_dict: Dictionary = entry as Dictionary
-			if bool(card_dict.get("is_faceup", false)):
-				faceup_cards.append(DamageCard.deserialize(card_dict))
-			else:
-				facedown_count += 1
 		EventBus.damage_summary_requested.emit(
-				ship, faceup_cards, facedown_count,
+				ship, ship.faceup_damage.duplicate(),
+				ship.get_facedown_damage_count(),
 				ship.ship_data.ship_name)
 	if result.get("destroyed", false):
 		# The mirrored command already made ShipInstance destruction canonical.
@@ -3307,29 +3359,12 @@ func _handle_remote_immediate_effect(cmd: GameCommand,
 	var ship: ShipInstance = _find_ship_from_command(cmd)
 	if ship == null:
 		return
-	# After [ResolveImmediateEffectCommand.execute] the card has been
-	# flipped and moved into [code]ship.facedown_damage[/code].  Locate
-	# it (most-recently-added match) so [ImmediateEffectSignals] can
-	# fire the correct [code]damage_card_flipped[/code] visual on the
-	# passive peer — closing the gap that left auto-resolve cards
-	# (Structural Damage, Projector Misaligned, Comm Noise, …) without
-	# a card-column refresh on the non-originating peer.
-	var effect_id: String = cmd.payload.get("effect_id", "") as String
-	var card: DamageCard = null
-	for i: int in range(ship.facedown_damage.size() - 1, -1, -1):
-		var c: DamageCard = ship.facedown_damage[i]
-		if c != null and c.effect_id == effect_id:
-			card = c
-			break
-	# Use the **broadcast result** verbatim — it is the authoritative
-	# return value of [ResolveImmediateEffectCommand.execute] from the
-	# server, so [code]action[/code] / [code]new_speed[/code] /
-	# [code]shield_changes[/code] / [code]zone[/code] etc. are exactly
-	# the values the originator's [_emit_immediate_signals] uses.
-	if card != null:
-		ImmediateEffectSignals.emit(card, ship, result)
-	# Always refresh dial / token state — covers life_support_failure
-	# and any other side-channel mutations.
+	# The public pre-state identity may have become facedown during this
+	# transaction.  Presentation therefore refreshes only from committed public
+	# state and never searches or reconstructs a hidden card identity.
+	EventBus.damage_card_dealt.emit(ship, null, false)
+	EventBus.ship_hull_changed.emit(ship,
+			ship.ship_data.hull - ship.get_total_damage())
 	EventBus.command_dials_changed.emit(ship)
 	EventBus.ship_defense_token_changed.emit(ship)
 

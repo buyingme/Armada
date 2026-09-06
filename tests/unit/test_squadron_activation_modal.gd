@@ -569,6 +569,71 @@ func test_cancel_move_returns_to_action_choice() -> void:
 			"cancel_move should return to ACTION_CHOICE")
 
 
+func test_network_move_waits_for_move_and_completion_acceptance() -> void:
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
+	GameManager.current_game_state.current_phase = Constants.GamePhase.SHIP
+	var instance: SquadronInstance = _make_instance(0)
+	GameManager.current_game_state.get_player_state(0).squadrons.append(instance)
+	var resolver: SquadronCommandResolver = _make_resolver()
+	var ship: ShipInstance = resolver.get_ship()
+	assert_true(ship.commit_squadron_command_activation(
+			ship.ship_activation_identity))
+	assert_true(instance.initialize_activation_action_state(
+			"squadron-activation:network-move",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, GameManager.current_game_state.find_ship_index(ship)))
+	assert_true(instance.commit_attack_action_begun(
+			instance.activation_id, false))
+	_modal.open_for_command(resolver, null, true)
+	var token: SquadronToken = _make_token(instance)
+	assert_true(_modal.restore_canonical_activation(token, instance, false))
+	_modal._transition_to(SquadronActivationModal.State.MOVING)
+	watch_signals(_modal)
+
+	_modal.notify_move_submission_pending()
+	assert_true(_modal.is_move_submission_pending())
+	assert_same(_modal.get_selected_token(), token)
+	assert_signal_not_emitted(_modal, "activation_done")
+	assert_eq(_modal._activation_number, 1,
+			"Recovery must retain the committed activation number.")
+
+	_modal.notify_move_completed(true)
+	assert_false(_modal.is_move_submission_pending())
+	assert_true(_modal.is_activation_completion_pending())
+	assert_same(_modal.get_selected_token(), token,
+			"Selection must remain until completion is authoritative.")
+	assert_signal_emit_count(_modal, "activation_done", 1)
+
+	instance.activated_this_round = true
+	assert_true(_modal.apply_authoritative_activation_completion(instance))
+	assert_false(_modal.is_activation_completion_pending())
+	assert_null(_modal.get_selected_token())
+	assert_eq(_modal.get_state(),
+			SquadronActivationModal.State.WAITING_FOR_SELECTION)
+	assert_signal_emit_count(_modal, "activation_done", 1,
+			"Accepted completion must not request a duplicate completion.")
+
+
+func test_network_move_rejection_recovers_same_selected_interaction() -> void:
+	_start_squadron_phase_game()
+	var instance: SquadronInstance = _make_instance(0)
+	GameManager.current_game_state.get_player_state(0).squadrons.append(instance)
+	_modal.open_for_turn(1, 2)
+	var token: SquadronToken = _make_token(instance)
+	assert_true(_modal.handle_squadron_click(token))
+	_modal._transition_to(SquadronActivationModal.State.MOVING)
+	_modal.notify_move_submission_pending()
+
+	_modal.apply_move_submission_rejection("rejected")
+
+	assert_false(_modal.is_move_submission_pending())
+	assert_same(_modal.get_selected_token(), token)
+	assert_eq(_modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_true(_modal._move_button.visible)
+	assert_engine_error(1,
+			"The authoritative rejection should be shown once.")
+
+
 # ===========================================================================
 # Squadron command preview selection
 # ===========================================================================
@@ -662,7 +727,7 @@ func test_click_different_squadron_after_action_finishes_activation() -> void:
 			"Selected token should now be the second squadron.")
 
 
-func test_attack_pressed_command_mode_spends_one_activation() -> void:
+func test_attack_pressed_command_mode_uses_accepted_activation_slot() -> void:
 	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SHIP
@@ -670,6 +735,16 @@ func test_attack_pressed_command_mode_spends_one_activation() -> void:
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.current_game_state.get_player_state(0).squadrons.append(inst)
 	var resolver: SquadronCommandResolver = _make_resolver()
+	var command_ship: ShipInstance = resolver.get_ship()
+	command_ship.ship_activation_identity = "ship-activation:modal-attack"
+	command_ship.squadron_command_opportunity_disposition = \
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN
+	assert_true(inst.initialize_activation_action_state(
+			"squadron-activation:modal-attack",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, 0))
+	assert_true(command_ship.commit_squadron_command_activation(
+			"ship-activation:modal-attack"))
 	_modal.visible = true
 	_modal._is_interactable = true
 	_modal._is_command_mode = true
@@ -677,11 +752,12 @@ func test_attack_pressed_command_mode_spends_one_activation() -> void:
 	_modal._command_resolver = resolver
 	_modal._selected_token = _make_token(inst)
 	_modal._selected_instance = inst
+	_modal._activation_slot_committed = true
 	_modal._state = SquadronActivationModal.State.ACTION_CHOICE
 	watch_signals(_modal)
 	_modal._on_attack_pressed()
 	assert_eq(resolver.get_activations_used(), 1,
-			"Attack should spend exactly one command activation slot.")
+			"Attack must use the one authoritatively accepted activation slot.")
 	assert_signal_emitted(_modal, "attack_requested",
 			"Attack should still start after the slot is committed.")
 

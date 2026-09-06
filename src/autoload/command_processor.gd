@@ -113,6 +113,7 @@ func _ready() -> void:
 	AcknowledgeAttackResultCommand.register()
 	# Tier 3 — movement commands.
 	MoveSquadronCommand.register()
+	DeclineSquadronMoveCommand.register()
 	ExecuteManeuverCommand.register()
 	# Tier 4 — game flow commands.
 	AdvancePhaseCommand.register()
@@ -193,9 +194,11 @@ func submit_deferred_followups(command: GameCommand) -> Dictionary:
 ## The command still emits [signal command_executed] for UI projection, but
 ## observer follow-ups are suppressed so passive peers do not synthesize
 ## duplicate commands.
-func submit_mirror(command: GameCommand) -> Dictionary:
+func submit_mirror(command: GameCommand, result_envelope: Dictionary = {},
+		expected_viewer: int = -1) -> Dictionary:
 	return _submit(command, true, false,
-			TIMING_WINDOW_ORCHESTRATOR.MODE_NETWORK_MIRROR)
+			TIMING_WINDOW_ORCHESTRATOR.MODE_NETWORK_MIRROR,
+			result_envelope, expected_viewer)
 
 
 ## Applies one recorded replay command while preserving its sequence.
@@ -239,6 +242,7 @@ func _check_completed_attack_inspection(command: GameCommand,
 		return "Completed attack result acknowledgement is outstanding."
 	if command.command_type not in [
 		"begin_attack", "skip_attack", "move_squadron",
+		DeclineSquadronMoveCommand.TYPE,
 		"complete_squadron_activation", "advance_activation_step",
 	]:
 		return "Completed attack inspection blocks unrelated progression."
@@ -268,7 +272,9 @@ func get_pending_observer_followup_count() -> int:
 func _submit(command: GameCommand,
 		drain_followups: bool,
 		collect_observers: bool,
-		execution_mode: String) -> Dictionary:
+		execution_mode: String,
+		result_envelope: Dictionary = {},
+		expected_viewer: int = -1) -> Dictionary:
 	if _is_collecting_observer_followups:
 		return _reject_command(command,
 				"Observer hooks must return follow-up commands instead of "
@@ -278,7 +284,26 @@ func _submit(command: GameCommand,
 			command, execution_mode)
 	if sequence_reason != "":
 		return _reject_command(command, sequence_reason, game_state, execution_mode)
+	# Only BUG-042 result-aware command classes participate in the strict live
+	# semantic schema. Test/local commands may intentionally reuse a registered
+	# type name without opting into that wire contract.
+	if not command.application_contract_id().is_empty():
+		var schema_reason: String = command.validate_exact_semantic_payload()
+		if not schema_reason.is_empty():
+			return _reject_command(command, schema_reason, game_state, execution_mode)
+	var application_result: Dictionary = {}
+	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_NETWORK_MIRROR:
+		var envelope_validation: Dictionary = _validate_result_envelope(
+				command, result_envelope, expected_viewer)
+		if not bool(envelope_validation.get("ok", false)):
+			return _reject_command(command, str(envelope_validation.get(
+					"reason", "Invalid result envelope.")), game_state,
+					execution_mode)
+		application_result = envelope_validation.get(
+				"application_result", {}) as Dictionary
 	var flow_snapshot: InteractionFlow = _snapshot_flow(game_state)
+	var destruction_candidates: Array[Dictionary] = \
+			_capture_destruction_candidates(command, game_state)
 	var preflight_reason: String = preflight(command, game_state)
 	if preflight_reason != "":
 		return _reject_command(command, preflight_reason, game_state, execution_mode)
@@ -286,7 +311,7 @@ func _submit(command: GameCommand,
 	if reason != "":
 		return _reject_command(command, reason, game_state, execution_mode)
 	var result: Dictionary = _execute_and_record(
-			command, game_state, execution_mode)
+			command, game_state, execution_mode, application_result)
 	var execution_failure: String = _execution_failure_reason(result)
 	if not execution_failure.is_empty():
 		return _reject_command(
@@ -296,6 +321,8 @@ func _submit(command: GameCommand,
 			and not is_replaying:
 			_collect_observer_followups(
 					command, result, game_state, flow_snapshot)
+	_enqueue_authority_destruction_cleanup(
+			game_state, command, destruction_candidates, execution_mode)
 	_enqueue_post_success_continuation(
 			game_state, command, result, execution_mode)
 	if not is_replaying:
@@ -305,6 +332,66 @@ func _submit(command: GameCommand,
 						== TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY:
 			drain_observer_followups()
 	return result
+
+
+func _capture_destruction_candidates(command: GameCommand,
+		game_state: GameState) -> Array[Dictionary]:
+	var targets: Array[Dictionary] = []
+	if command == null or game_state == null:
+		return targets
+	match command.command_type:
+		"resolve_damage":
+			var attack: CurrentAttackState = game_state.current_attack_state
+			if attack != null and attack.defender_kind == CurrentAttackState.KIND_SHIP:
+				targets.append({"owner": attack.defender_player,
+					"index": attack.defender_index})
+		"overlap_damage":
+			targets.append({"owner": command.player_index,
+				"index": int(command.payload.get("ship_index", -1))})
+			targets.append({"owner": int(command.payload.get("other_owner", -1)),
+				"index": int(command.payload.get("other_ship_index", -1))})
+		"persistent_effect_damage", "resolve_immediate_effect":
+			targets.append({"owner": int(command.payload.get("owner_player", -1)),
+				"index": int(command.payload.get("ship_index", -1))})
+	for target: Dictionary in targets:
+		var owner: int = int(target.get("owner", -1))
+		var index: int = int(target.get("index", -1))
+		var ship: ShipInstance = null
+		if owner >= 0 and owner < game_state.player_states.size() \
+				and index >= 0:
+			ship = game_state.get_ship(owner, index)
+		target["was_destroyed"] = ship != null and ship.is_destroyed()
+	return targets
+
+
+func _enqueue_authority_destruction_cleanup(game_state: GameState,
+		command: GameCommand, candidates: Array[Dictionary],
+		execution_mode: String) -> void:
+	if execution_mode != TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
+			or is_replaying or command == null:
+		return
+	var unique: Dictionary = {}
+	for candidate: Dictionary in candidates:
+		var owner: int = int(candidate.get("owner", -1))
+		var index: int = int(candidate.get("index", -1))
+		if owner < 0 or owner >= game_state.player_states.size() or index < 0:
+			continue
+		var key: String = "%d:%d" % [owner, index]
+		var ship: ShipInstance = game_state.get_ship(owner, index)
+		if not bool(candidate.get("was_destroyed", false)) and ship != null \
+				and ship.is_destroyed() and ship.get_total_damage() > 0:
+			unique[key] = {"owner": owner, "index": index}
+	var ordered: Array = unique.values()
+	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a["owner"]) != int(b["owner"]):
+			return int(a["owner"]) < int(b["owner"])
+		return int(a["index"]) < int(b["index"])
+	)
+	for target: Dictionary in ordered:
+		_observer_followups.append(DestroyUnitCommand.new(command.player_index, {
+			"owner_player": int(target["owner"]),
+			"ship_index": int(target["index"]),
+		}))
 
 
 func _enqueue_post_success_continuation(game_state: GameState,
@@ -318,11 +405,16 @@ func _enqueue_post_success_continuation(game_state: GameState,
 	var commanded_squadron: GameCommand = \
 		_commanded_squadron_completion_continuation(
 				game_state, command, execution_mode)
+	var declined_move_completion: GameCommand = \
+		_declined_move_completion_continuation(
+				game_state, command, execution_mode)
 	var ship_phase_termination: GameCommand = \
 		_ship_phase_termination_continuation(
 				game_state, command, result, execution_mode)
 	var continuation_count: int = int(timing != null) + int(attack != null) \
-			+ int(commanded_squadron != null) + int(ship_phase_termination != null)
+			+ int(commanded_squadron != null) \
+			+ int(declined_move_completion != null) \
+			+ int(ship_phase_termination != null)
 	if continuation_count > 1:
 		_log.warn("Conflicting post-success continuations after [%s]." %
 			command.command_type)
@@ -332,6 +424,8 @@ func _enqueue_post_success_continuation(game_state: GameState,
 		_observer_followups.append(attack)
 	elif commanded_squadron != null:
 		_observer_followups.append(commanded_squadron)
+	elif declined_move_completion != null:
+		_observer_followups.append(declined_move_completion)
 	elif ship_phase_termination != null:
 		_observer_followups.append(ship_phase_termination)
 
@@ -382,6 +476,39 @@ func _commanded_squadron_completion_continuation(game_state: GameState,
 		return null
 	return GameManager.derive_commanded_squadron_terminal_transition(
 			game_state, command)
+
+
+## Re-evaluates the same canonical activation after an accepted explicit Move
+## decline. Only live authority records the existing terminal command.
+func _declined_move_completion_continuation(game_state: GameState,
+		command: GameCommand,
+		execution_mode: String) -> GameCommand:
+	if execution_mode != TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
+			or command == null \
+			or command.command_type != DeclineSquadronMoveCommand.TYPE \
+			or game_state == null:
+		return null
+	var squadron: SquadronInstance = game_state.get_squadron(
+			command.player_index,
+			int(command.payload.get("squadron_index", -1)))
+	if squadron == null \
+			or squadron.move_action_disposition \
+					!= SquadronInstance.MOVE_ACTION_DECLINED \
+			or not game_state.is_squadron_activation_action_complete(squadron):
+		return null
+	var payload: Dictionary = {
+		"squadron_index": int(command.payload.get("squadron_index", -1)),
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+		"completed_attack_inspection_id": "",
+	}
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		payload["commanding_ship_player"] = squadron.commanding_ship_player
+		payload["commanding_ship_index"] = squadron.commanding_ship_index
+		payload["ship_activation_identity"] = str(command.payload.get(
+				"ship_activation_identity", ""))
+	return CompleteSquadronActivationCommand.new(command.player_index, payload)
 
 
 func _timing_continuation(game_state: GameState,
@@ -556,12 +683,19 @@ func _snapshot_flow(game_state: GameState) -> InteractionFlow:
 
 func _execute_and_record(command: GameCommand,
 		game_state: GameState,
-		execution_mode: String) -> Dictionary:
+		execution_mode: String,
+		application_result: Dictionary = {}) -> Dictionary:
 	var allocated_live_sequence: bool = execution_mode \
 			== TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY
 	if allocated_live_sequence:
 		command.sequence = _next_sequence
-	var result: Dictionary = command.execute(game_state)
+	var result: Dictionary
+	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_NETWORK_MIRROR \
+			and not command.application_contract_id().is_empty():
+		result = command.execute_with_application_result(
+				game_state, application_result)
+	else:
+		result = command.execute(game_state)
 	if not _execution_failure_reason(result).is_empty():
 		if allocated_live_sequence:
 			command.sequence = -1
@@ -572,6 +706,47 @@ func _execute_and_record(command: GameCommand,
 	_history.append(command)
 	_next_sequence += 1
 	return result
+
+
+func _validate_result_envelope(command: GameCommand, envelope: Dictionary,
+		expected_viewer: int) -> Dictionary:
+	var fields: Array[String] = [
+		"protocol_version", "application_contract",
+		"application_contract_version", "viewer_player",
+		"application_result", "presentation_result",
+	]
+	if envelope.size() != fields.size():
+		return {"ok": false, "reason": "Malformed result envelope."}
+	for field: String in fields:
+		if not envelope.has(field):
+			return {"ok": false, "reason": "Malformed result envelope."}
+	if typeof(envelope.get("protocol_version")) != TYPE_INT \
+			or int(envelope.get("protocol_version")) != NetworkManager.PROTOCOL_VERSION:
+		return {"ok": false, "reason": "Result protocol version mismatch."}
+	if typeof(envelope.get("viewer_player")) != TYPE_INT \
+			or expected_viewer < 0 \
+			or int(envelope.get("viewer_player")) != expected_viewer:
+		return {"ok": false, "reason": "Result viewer mismatch."}
+	if not envelope.get("application_result") is Dictionary \
+			or not envelope.get("presentation_result") is Dictionary:
+		return {"ok": false, "reason": "Malformed result payload."}
+	var expected_contract: String = command.application_contract_id()
+	var received_contract: String = str(envelope.get("application_contract", ""))
+	if expected_contract.is_empty():
+		if received_contract != "none" \
+				or int(envelope.get("application_contract_version", -1)) != 0 \
+				or not (envelope.get("application_result") as Dictionary).is_empty():
+			return {"ok": false, "reason": "Unexpected application result."}
+	else:
+		if received_contract != expected_contract \
+				or typeof(envelope.get("application_contract_version")) != TYPE_INT \
+				or int(envelope.get("application_contract_version")) \
+						!= command.application_contract_version():
+			return {"ok": false, "reason": "Application contract mismatch."}
+	return {
+		"ok": true,
+		"application_result": (envelope.get("application_result") as Dictionary),
+	}
 
 
 func _execution_failure_reason(result: Dictionary) -> String:

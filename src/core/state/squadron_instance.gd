@@ -20,6 +20,11 @@ const ATTACK_ACTION_AVAILABLE: String = "available"
 const ATTACK_ACTION_BEGUN: String = "begun"
 const ATTACK_ACTION_DECLINED: String = "declined"
 
+const MOVE_ACTION_INACTIVE: String = ""
+const MOVE_ACTION_AVAILABLE: String = "available"
+const MOVE_ACTION_COMMITTED: String = "committed"
+const MOVE_ACTION_DECLINED: String = "declined"
+
 
 ## The data-key used to look up the squadron's static data and token PNG.
 var data_key: String = ""
@@ -46,7 +51,7 @@ var activation_id: String = ""
 var activation_context: String = ACTIVATION_CONTEXT_INACTIVE
 var commanding_ship_player: int = -1
 var commanding_ship_index: int = -1
-var move_action_committed: bool = false
+var move_action_disposition: String = MOVE_ACTION_INACTIVE
 var attack_action_disposition: String = ATTACK_ACTION_INACTIVE
 
 ## Whether this squadron is currently engaged (adjacent to enemy squadron).
@@ -160,13 +165,13 @@ func initialize_activation_action_state(identity: String, context: String,
 		return false
 	if not _activation_action_values_are_valid(
 			identity, context, ship_player, ship_index,
-			false, ATTACK_ACTION_AVAILABLE):
+			MOVE_ACTION_AVAILABLE, ATTACK_ACTION_AVAILABLE):
 		return false
 	activation_id = identity
 	activation_context = context
 	commanding_ship_player = ship_player
 	commanding_ship_index = ship_index
-	move_action_committed = false
+	move_action_disposition = MOVE_ACTION_AVAILABLE
 	attack_action_disposition = ATTACK_ACTION_AVAILABLE
 	return true
 
@@ -176,7 +181,7 @@ func is_activation_action_state_valid() -> bool:
 	return _activation_action_values_are_valid(
 			activation_id, activation_context,
 			commanding_ship_player, commanding_ship_index,
-			move_action_committed, attack_action_disposition)
+			move_action_disposition, attack_action_disposition)
 
 
 ## Commits movement once for the matching retained activation identity.
@@ -185,7 +190,17 @@ func commit_move_action(
 	if not _matches_activation_action(expected_activation_id) \
 			or not has_remaining_move_action(is_rogue):
 		return false
-	move_action_committed = true
+	move_action_disposition = MOVE_ACTION_COMMITTED
+	return true
+
+
+## Records an explicit decline of a currently legal remaining Move.
+func decline_move_action(
+		expected_activation_id: String, is_rogue: bool) -> bool:
+	if not _matches_activation_action(expected_activation_id) \
+			or not has_remaining_move_action(is_rogue):
+		return false
+	move_action_disposition = MOVE_ACTION_DECLINED
 	return true
 
 
@@ -209,7 +224,7 @@ func has_remaining_move_action(is_rogue: bool) -> bool:
 	if not is_activation_action_state_valid() \
 			or not has_activation_action_state() \
 			or activated_this_round \
-			or move_action_committed:
+			or move_action_disposition != MOVE_ACTION_AVAILABLE:
 		return false
 	if activation_context == ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
 		return true
@@ -226,7 +241,7 @@ func has_remaining_attack_action(is_rogue: bool) -> bool:
 		return false
 	if activation_context == ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
 		return true
-	return is_rogue or not move_action_committed
+	return is_rogue or move_action_disposition == MOVE_ACTION_AVAILABLE
 
 
 ## Returns whether the retained action sequence has no action remaining.
@@ -244,7 +259,7 @@ func activation_action_state_snapshot() -> Dictionary:
 		"activation_context": activation_context,
 		"commanding_ship_player": commanding_ship_player,
 		"commanding_ship_index": commanding_ship_index,
-		"move_action_committed": move_action_committed,
+		"move_action_disposition": move_action_disposition,
 		"attack_action_disposition": attack_action_disposition,
 	}
 
@@ -254,24 +269,24 @@ func restore_activation_action_state(snapshot: Dictionary) -> bool:
 	for key: String in [
 			"activation_id", "activation_context",
 			"commanding_ship_player", "commanding_ship_index",
-			"move_action_committed", "attack_action_disposition"]:
+			"move_action_disposition", "attack_action_disposition"]:
 		if not snapshot.has(key):
 			return false
 	var identity: String = str(snapshot["activation_id"])
 	var context: String = str(snapshot["activation_context"])
 	var ship_player: int = int(snapshot["commanding_ship_player"])
 	var ship_index: int = int(snapshot["commanding_ship_index"])
-	var move_committed: bool = bool(snapshot["move_action_committed"])
+	var move_disposition: String = str(snapshot["move_action_disposition"])
 	var attack_disposition: String = str(snapshot["attack_action_disposition"])
 	if not _activation_action_values_are_valid(
 			identity, context, ship_player, ship_index,
-			move_committed, attack_disposition):
+			move_disposition, attack_disposition):
 		return false
 	activation_id = identity
 	activation_context = context
 	commanding_ship_player = ship_player
 	commanding_ship_index = ship_index
-	move_action_committed = move_committed
+	move_action_disposition = move_disposition
 	attack_action_disposition = attack_disposition
 	return true
 
@@ -282,7 +297,7 @@ func reset_activation_action_state() -> void:
 	activation_context = ACTIVATION_CONTEXT_INACTIVE
 	commanding_ship_player = -1
 	commanding_ship_index = -1
-	move_action_committed = false
+	move_action_disposition = MOVE_ACTION_INACTIVE
 	attack_action_disposition = ATTACK_ACTION_INACTIVE
 
 
@@ -339,12 +354,12 @@ func _matches_activation_action(expected_activation_id: String) -> bool:
 
 static func _activation_action_values_are_valid(identity: String,
 		context: String, ship_player: int, ship_index: int,
-		move_committed: bool, attack_disposition: String) -> bool:
+		move_disposition: String, attack_disposition: String) -> bool:
 	if identity.is_empty():
 		return context == ACTIVATION_CONTEXT_INACTIVE \
 				and ship_player == -1 \
 				and ship_index == -1 \
-				and not move_committed \
+				and move_disposition == MOVE_ACTION_INACTIVE \
 				and attack_disposition == ATTACK_ACTION_INACTIVE
 	if context != ACTIVATION_CONTEXT_SQUADRON_PHASE \
 			and context != ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
@@ -352,6 +367,10 @@ static func _activation_action_values_are_valid(identity: String,
 	if attack_disposition != ATTACK_ACTION_AVAILABLE \
 			and attack_disposition != ATTACK_ACTION_BEGUN \
 			and attack_disposition != ATTACK_ACTION_DECLINED:
+		return false
+	if move_disposition != MOVE_ACTION_AVAILABLE \
+			and move_disposition != MOVE_ACTION_COMMITTED \
+			and move_disposition != MOVE_ACTION_DECLINED:
 		return false
 	if context == ACTIVATION_CONTEXT_SQUADRON_PHASE:
 		return ship_player == -1 and ship_index == -1
@@ -421,7 +440,7 @@ func serialize() -> Dictionary:
 		"activation_context": activation_context,
 		"commanding_ship_player": commanding_ship_player,
 		"commanding_ship_index": commanding_ship_index,
-		"move_action_committed": move_action_committed,
+		"move_action_disposition": move_action_disposition,
 		"attack_action_disposition": attack_action_disposition,
 		"is_engaged": is_engaged,
 		"owner_player": owner_player,
@@ -440,6 +459,8 @@ func serialize() -> Dictionary:
 static func deserialize(
 		data: Dictionary,
 		squad_data_ref: SquadronData) -> SquadronInstance:
+	if not data.has("move_action_disposition"):
+		return null
 	var inst: SquadronInstance = SquadronInstance.new()
 	inst.data_key = data.get("data_key", "") as String
 	inst.roster_entry_id = data.get("roster_entry_id", "") as String
@@ -453,7 +474,8 @@ static func deserialize(
 			"activation_context", ACTIVATION_CONTEXT_INACTIVE))
 	inst.commanding_ship_player = int(data.get("commanding_ship_player", -1))
 	inst.commanding_ship_index = int(data.get("commanding_ship_index", -1))
-	inst.move_action_committed = bool(data.get("move_action_committed", false))
+	inst.move_action_disposition = str(data.get(
+			"move_action_disposition", MOVE_ACTION_INACTIVE))
 	inst.attack_action_disposition = str(data.get(
 			"attack_action_disposition", ATTACK_ACTION_INACTIVE))
 	inst.is_engaged = data.get("is_engaged", false) as bool

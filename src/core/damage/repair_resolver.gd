@@ -261,6 +261,21 @@ func repair_hull(card: DamageCard) -> bool:
 	return true
 
 
+func repair_facedown_hull(facedown_ordinal: int) -> bool:
+	if _remaining_points < Constants.REPAIR_HULL_COST \
+			or facedown_ordinal < 0 \
+			or facedown_ordinal >= _ship.get_facedown_damage_count():
+		return false
+	var result: Dictionary = GameManager.submit_repair_facedown_hull(
+			_ship, facedown_ordinal)
+	if result.is_empty():
+		return false
+	_remaining_points -= Constants.REPAIR_HULL_COST
+	EventBus.ship_hull_changed.emit(_ship, int(result.get("new_hull", 0)))
+	EventBus.repair_card_discarded.emit(_ship, null)
+	return true
+
+
 # ---------------------------------------------------------------------------
 # Finalize — commit resource spending
 # ---------------------------------------------------------------------------

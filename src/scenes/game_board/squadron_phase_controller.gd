@@ -76,6 +76,14 @@ var _log: GameLogger = GameLogger.new("SquadronPhaseController")
 ## Whether local controls are enabled for the squadron modal.
 var _modal_interactable: bool = true
 
+## Purpose-specific client Move awaiting its authoritative result.
+var _pending_network_move_instance: SquadronInstance = null
+var _pending_network_move_token: SquadronToken = null
+var _pending_network_move_original_pos: Vector2 = Vector2.ZERO
+
+## The same activation after accepted Move, awaiting canonical completion.
+var _pending_network_completion_instance: SquadronInstance = null
+
 const _SQ_DIAG_TAG: String = "SQ_DIAG"
 
 
@@ -119,6 +127,8 @@ func create_ui(layer: CanvasLayer, register_resizable: Callable) -> void:
 			_on_squadron_attack_requested)
 	_squadron_modal.declaration_skip_requested.connect(
 			_on_squadron_declaration_skip_requested)
+	_squadron_modal.move_decline_requested.connect(
+			_on_squadron_move_decline_requested)
 	_squadron_modal.activation_done.connect(
 			_on_squadron_activation_done)
 	_squadron_modal.command_done.connect(_on_squadron_command_done)
@@ -157,6 +167,22 @@ func create_ui(layer: CanvasLayer, register_resizable: Callable) -> void:
 			_on_network_declaration_skip_rejected):
 		GameManager.network_command_rejected.connect(
 				_on_network_declaration_skip_rejected)
+	if not CommandProcessor.command_executed.is_connected(
+			_on_command_executed_network_move_boundary):
+		CommandProcessor.command_executed.connect(
+				_on_command_executed_network_move_boundary)
+	if not GameManager.network_command_rejected.is_connected(
+			_on_network_move_rejected):
+		GameManager.network_command_rejected.connect(
+				_on_network_move_rejected)
+	if not GameManager.network_command_rejected.is_connected(
+			_on_network_activate_squadron_rejected):
+		GameManager.network_command_rejected.connect(
+				_on_network_activate_squadron_rejected)
+	if not GameManager.network_command_rejected.is_connected(
+			_on_network_move_decline_rejected):
+		GameManager.network_command_rejected.connect(
+				_on_network_move_decline_rejected)
 
 
 ## Returns the [SquadronActivationModal] instance (for external signal
@@ -188,7 +214,27 @@ func is_in_attacking_state() -> bool:
 func try_handle_squadron_click(token: SquadronToken) -> bool:
 	if _squadron_modal == null or not _squadron_modal.visible:
 		return false
+	if _squadron_modal.is_activation_acceptance_pending():
+		return true
 	if _squadron_modal.handle_squadron_click(token):
+		var instance: SquadronInstance = token.get_squadron_instance()
+		if _squadron_modal.is_command_mode() and instance != null \
+				and not instance.has_activation_action_state():
+			if not _squadron_modal.begin_activation_acceptance_pending():
+				return true
+			var resolver: SquadronCommandResolver = \
+					_squadron_modal.get_command_resolver()
+			var result: Dictionary = GameManager.activate_commanded_squadron(
+					instance, resolver.get_ship() if resolver != null else null)
+			if result.is_empty():
+				_squadron_modal.apply_activation_acceptance_rejection(
+						"Squadron activation was rejected.")
+			elif not bool(result.get("awaiting_remote", false)) \
+					and _squadron_modal.is_activation_acceptance_pending():
+				if _squadron_modal.apply_authoritative_activation_acceptance(
+						instance):
+					_on_squadron_selected_in_modal(token)
+			return true
 		_on_squadron_selected_in_modal(token)
 		return true
 	return false
@@ -290,7 +336,10 @@ func restore_command_activation(resolver: SquadronCommandResolver,
 					!= SquadronInstance \
 							.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
 		return false
-	open_for_command(resolver, ship_token)
+	_show_squad_cmd_range_overlay(ship_token)
+	if _squadron_modal:
+		_squadron_modal.open_for_command(resolver, ship_token, true)
+		_squadron_modal.set_interactable(_modal_interactable)
 	return _restore_selected_activation(instance, attack_in_flight)
 
 
@@ -303,6 +352,8 @@ func set_modal_interactable(is_enabled: bool) -> void:
 
 ## Hides all Squadron Phase UI (modal, reopen button, overlay).
 func hide_ui() -> void:
+	_clear_pending_network_move()
+	_pending_network_completion_instance = null
 	if _squadron_modal:
 		_squadron_modal.close_modal()
 	if _show_squadron_modal_button:
@@ -340,6 +391,8 @@ func handle_move_input(event: InputEvent) -> bool:
 			_squadron_modal.get_state()
 	if modal_state != SquadronActivationModal.State.MOVING:
 		return false
+	if _pending_network_move_instance != null:
+		return true
 	var token: SquadronToken = _squadron_modal.get_selected_token()
 	if token == null:
 		return false
@@ -368,6 +421,8 @@ func process_squadron_movement() -> void:
 	if _squadron_modal == null or not _squadron_modal.visible:
 		return
 	if _squadron_modal.get_state() != SquadronActivationModal.State.MOVING:
+		return
+	if _pending_network_move_instance != null:
 		return
 	var token: SquadronToken = _squadron_modal.get_selected_token()
 	if token == null:
@@ -445,6 +500,14 @@ func _on_command_executed_select_squadron(command: GameCommand,
 	# Already selected by the local-click path — nothing to do.
 	var current: SquadronToken = _squadron_modal.get_selected_token()
 	if current and current.get_squadron_instance() == instance:
+		if activation_context \
+				== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
+				and _squadron_modal.apply_authoritative_activation_acceptance(
+						instance):
+			_on_squadron_selected_in_modal(current)
+			_log_diag("accepted pending activate_squadron for %s" %
+					instance.data_key)
+			return
 		_log_diag("skip activate_squadron: already selected %s" % instance.data_key)
 		return
 	var token: SquadronToken = _find_squadron_token_for_instance(instance)
@@ -489,6 +552,7 @@ func _on_command_executed_advance_after_activation_progress(command: GameCommand
 			_squadron_activation_count,
 			str(command.payload)])
 	_apply_local_declaration_skip_result(command, result)
+	_apply_local_move_decline_result(command, result)
 	if not _should_advance_passive_squadron_modal(command):
 		return
 	_advance_passive_squadron_modal()
@@ -508,6 +572,21 @@ func _apply_local_declaration_skip_result(command: GameCommand,
 	var instance: SquadronInstance = _squadron_from_declaration_command(command)
 	if instance != null and _squadron_modal != null:
 		_squadron_modal.apply_declaration_skip_result(instance, result)
+
+
+func _apply_local_move_decline_result(command: GameCommand,
+		result: Dictionary) -> void:
+	if command.command_type != DeclineSquadronMoveCommand.TYPE:
+		return
+	var local: int = NetworkManager.get_local_player_index()
+	if local >= 0 and command.player_index != local:
+		return
+	var instance: SquadronInstance = _squadron_from_declaration_command(command)
+	if instance == null or _squadron_modal == null:
+		return
+	_pending_network_completion_instance = instance
+	if not _squadron_modal.apply_move_decline_result(instance, result):
+		_pending_network_completion_instance = null
 
 
 func _squadron_from_declaration_command(
@@ -532,6 +611,36 @@ func _on_network_declaration_skip_rejected(
 	var instance: SquadronInstance = _squadron_from_declaration_command(command)
 	if instance != null and _squadron_modal != null:
 		_squadron_modal.apply_declaration_skip_result(instance, {}, reason)
+
+
+func _on_network_move_decline_rejected(
+		command: GameCommand, reason: String) -> void:
+	if command == null \
+			or command.command_type != DeclineSquadronMoveCommand.TYPE:
+		return
+	var instance: SquadronInstance = _squadron_from_declaration_command(command)
+	if instance != null and _squadron_modal != null:
+		_pending_network_completion_instance = null
+		_squadron_modal.apply_move_decline_result(instance, {}, reason)
+
+
+func _on_network_activate_squadron_rejected(
+		command: GameCommand, reason: String) -> void:
+	if command == null or command.command_type != "activate_squadron" \
+			or _squadron_modal == null \
+			or not _squadron_modal.is_activation_acceptance_pending():
+		return
+	var selected: SquadronToken = _squadron_modal.get_selected_token()
+	var instance: SquadronInstance = selected.get_squadron_instance() \
+			if selected != null else null
+	var state: GameState = GameManager.current_game_state
+	if instance == null or state == null \
+			or command.player_index != instance.owner_player \
+			or int(command.payload.get("squadron_index", -1)) \
+					!= state.find_squadron_index(instance):
+		return
+	_squadron_modal.apply_activation_acceptance_rejection(reason)
+	_remove_squadron_overlay()
 
 
 func _should_advance_passive_squadron_modal(command: GameCommand) -> bool:
@@ -650,26 +759,32 @@ func _on_squadron_move_commit(token: SquadronToken) -> bool:
 		_log.info("Squadron move commit blocked — no command activation slot.")
 		return false
 	_remove_squadron_overlay()
-	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
-	var obstruction_bodies: Array = _build_obstruction_bodies()
-	EngagementResolver.update_engagement_flags(all_squads, obstruction_bodies)
-
-	# Record the move via command for replay determinism.
 	var instance: SquadronInstance = token.get_squadron_instance()
 	var pa: Vector2 = GameScale.play_area_size_px
 	if instance and pa.x > 0.0 and pa.y > 0.0:
 		var norm_x: float = token.global_position.x / pa.x
 		var norm_y: float = token.global_position.y / pa.y
-		GameManager.submit_move_squadron(instance, norm_x, norm_y)
+		var result: Dictionary = GameManager.submit_move_squadron(
+				instance, norm_x, norm_y)
 		_log_diag("submit move_squadron key=%s norm=(%.4f, %.4f) count=%d" % [
 				instance.data_key,
 				norm_x,
 				norm_y,
 				_squadron_activation_count])
-
-	EventBus.squadron_moved.emit(token)
-	_log.info("Squadron move committed — engagement updated.")
-	return true
+		if result.is_empty():
+			token.global_position = _squadron_move_original_pos
+			_squadron_modal.notify_move_preview_failed(
+					"Move was rejected by authoritative validation.")
+			return false
+		if bool(result.get("awaiting_remote", false)):
+			_pending_network_move_instance = instance
+			_pending_network_move_token = token
+			_pending_network_move_original_pos = _squadron_move_original_pos
+			_squadron_modal.notify_move_submission_pending()
+			return true
+		_complete_accepted_move(instance, token, false)
+		return true
+	return false
 
 
 ## Called when the modal emits attack_requested.
@@ -701,6 +816,22 @@ func _on_squadron_declaration_skip_requested(
 	# Local command execution normally applied presentation synchronously via
 	# command_executed. This idempotent fallback covers alternate submitters.
 	_squadron_modal.apply_declaration_skip_result(instance, result)
+
+
+func _on_squadron_move_decline_requested(
+		instance: SquadronInstance) -> void:
+	if instance == null:
+		return
+	var result: Dictionary = GameManager.submit_decline_squadron_move(instance)
+	if result.is_empty():
+		_squadron_modal.apply_move_decline_result(
+				instance, {}, "Move decline was rejected by authoritative validation.")
+		return
+	if bool(result.get("awaiting_remote", false)):
+		return
+	if _squadron_modal != null \
+			and _squadron_modal.apply_move_decline_result(instance, result):
+		_pending_network_completion_instance = instance
 
 
 ## Called when a single squadron activation is done.
@@ -825,13 +956,6 @@ func _commit_squadron_placement(token: SquadronToken) -> void:
 	if error.is_empty():
 		if not _on_squadron_move_commit(token):
 			return
-		var updated_squads: Array[Dictionary] = \
-				_build_all_squadron_positions()
-		var obstruction_bodies: Array = _build_obstruction_bodies()
-		var new_has_targets: bool = _squadron_has_valid_targets(
-				instance, token, updated_squads, obstruction_bodies)
-		_squadron_modal.set_action_availability(false, new_has_targets)
-		_squadron_modal.notify_move_completed()
 		_log.info("Squadron placed at %s." % str(token.global_position))
 	else:
 		_squadron_modal.notify_move_preview_failed(error)
@@ -843,6 +967,93 @@ func _remove_squadron_overlay() -> void:
 	if _squadron_move_overlay:
 		_squadron_move_overlay.queue_free()
 		_squadron_move_overlay = null
+
+
+func _on_command_executed_network_move_boundary(
+		command: GameCommand, result: Dictionary) -> void:
+	if command == null:
+		return
+	if command.command_type == DeclineSquadronMoveCommand.TYPE:
+		_apply_local_move_decline_result(command, result)
+		return
+	if command.command_type == "move_squadron" \
+			and _matches_pending_network_move(command):
+		var instance: SquadronInstance = _pending_network_move_instance
+		var token: SquadronToken = _pending_network_move_token
+		_clear_pending_network_move()
+		_pending_network_completion_instance = instance
+		_complete_accepted_move(instance, token, true)
+		if _squadron_modal == null \
+				or not _squadron_modal.is_activation_completion_pending():
+			_pending_network_completion_instance = null
+		return
+	if command.command_type == CompleteSquadronActivationCommand.TYPE \
+			and _matches_pending_network_completion(command):
+		var completed: SquadronInstance = \
+				_pending_network_completion_instance
+		_pending_network_completion_instance = null
+		if _squadron_modal != null:
+			_squadron_modal.apply_authoritative_activation_completion(completed)
+
+
+func _on_network_move_rejected(command: GameCommand, reason: String) -> void:
+	if command == null or command.command_type != "move_squadron" \
+			or not _matches_pending_network_move(command):
+		return
+	var token: SquadronToken = _pending_network_move_token
+	var original_pos: Vector2 = _pending_network_move_original_pos
+	_clear_pending_network_move()
+	if token != null:
+		token.global_position = original_pos
+	if _squadron_modal != null:
+		_squadron_modal.apply_move_submission_rejection(reason)
+
+
+func _complete_accepted_move(instance: SquadronInstance,
+		token: SquadronToken, await_authoritative_completion: bool) -> void:
+	if instance == null or token == null or _squadron_modal == null:
+		return
+	var updated_squads: Array[Dictionary] = _build_all_squadron_positions()
+	var obstruction_bodies: Array = _build_obstruction_bodies()
+	EngagementResolver.update_engagement_flags(
+			updated_squads, obstruction_bodies)
+	var new_has_targets: bool = _squadron_has_valid_targets(
+			instance, token, updated_squads, obstruction_bodies)
+	_squadron_modal.set_action_availability(false, new_has_targets)
+	EventBus.squadron_moved.emit(token)
+	_squadron_modal.notify_move_completed(await_authoritative_completion)
+	_log.info("Squadron move accepted — engagement updated.")
+
+
+func _matches_pending_network_move(command: GameCommand) -> bool:
+	if _pending_network_move_instance == null \
+			or GameManager.current_game_state == null:
+		return false
+	return command.player_index == _pending_network_move_instance.owner_player \
+			and str(command.payload.get("activation_id", "")) \
+					== _pending_network_move_instance.activation_id \
+			and int(command.payload.get("squadron_index", -1)) \
+					== GameManager.current_game_state.find_squadron_index(
+							_pending_network_move_instance)
+
+
+func _matches_pending_network_completion(command: GameCommand) -> bool:
+	if _pending_network_completion_instance == null \
+			or GameManager.current_game_state == null:
+		return false
+	return command.player_index \
+				== _pending_network_completion_instance.owner_player \
+			and str(command.payload.get("activation_id", "")) \
+					== _pending_network_completion_instance.activation_id \
+			and int(command.payload.get("squadron_index", -1)) \
+					== GameManager.current_game_state.find_squadron_index(
+							_pending_network_completion_instance)
+
+
+func _clear_pending_network_move() -> void:
+	_pending_network_move_instance = null
+	_pending_network_move_token = null
+	_pending_network_move_original_pos = Vector2.ZERO
 
 
 ## Finds the [SquadronToken] on the board bound to the given instance.

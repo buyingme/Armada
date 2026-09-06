@@ -35,6 +35,9 @@ signal attack_requested(squadron_token: SquadronToken)
 signal declaration_skip_requested(
 		squadron_instance: SquadronInstance, reason: String)
 
+## Player explicitly declined a currently legal remaining Move.
+signal move_decline_requested(squadron_instance: SquadronInstance)
+
 ## A single squadron activation is done (move, attack, or skip completed).
 ## The game board should emit [code]EventBus.squadron_activation_ended[/code].
 signal activation_done(squadron_instance: SquadronInstance)
@@ -143,6 +146,19 @@ var _is_interactable: bool = true
 ## This is presentation state only and never represents action progress.
 var _declaration_skip_pending: bool = false
 
+## Presentation-only gate while a client-authored Move awaits authority.
+var _move_submission_pending: bool = false
+
+## Presentation-only gate after accepted Move has requested the existing
+## authoritative squadron-completion transaction.
+var _activation_completion_pending: bool = false
+
+## Presentation-only gate while a Move decline awaits authority.
+var _move_decline_pending: bool = false
+
+## Command-mode candidate awaiting ActivateSquadronCommand acceptance.
+var _activation_acceptance_pending: bool = false
+
 
 # ---------------------------------------------------------------------------
 # UI elements
@@ -200,6 +216,10 @@ func open_for_turn(activation_num: int, max_act: int) -> void:
 	_has_attacked = false
 	_activation_slot_committed = false
 	_declaration_skip_pending = false
+	_move_submission_pending = false
+	_activation_completion_pending = false
+	_move_decline_pending = false
+	_activation_acceptance_pending = false
 	_is_command_mode = false
 	_command_resolver = null
 	_command_ship_token = null
@@ -214,11 +234,14 @@ func open_for_turn(activation_num: int, max_act: int) -> void:
 ## [param ship_token] — the ship token issuing the command.
 ## Rules Reference: CM-020, CM-021, CM-022.
 func open_for_command(resolver: SquadronCommandResolver,
-		ship_token: Variant) -> void:
+		ship_token: Variant,
+		resuming_committed_activation: bool = false) -> void:
 	_is_command_mode = true
 	_command_resolver = resolver
 	_command_ship_token = ship_token
-	_activation_number = resolver.get_activations_used() + 1
+	_activation_number = maxi(1, resolver.get_activations_used()) \
+			if resuming_committed_activation \
+			else resolver.get_activations_used() + 1
 	_max_activations = resolver.get_max_activations()
 	_selected_token = null
 	_selected_instance = null
@@ -226,6 +249,10 @@ func open_for_command(resolver: SquadronCommandResolver,
 	_has_attacked = false
 	_activation_slot_committed = false
 	_declaration_skip_pending = false
+	_move_submission_pending = false
+	_activation_completion_pending = false
+	_move_decline_pending = false
+	_activation_acceptance_pending = false
 	_transition_to(State.WAITING_FOR_SELECTION)
 	visible = true
 	_log.info("Opened for squadron command: activation %d of %d." % [
@@ -239,6 +266,8 @@ func handle_squadron_click(token: SquadronToken) -> bool:
 		return false
 	if not _is_interactable:
 		return false
+	if _activation_acceptance_pending:
+		return true
 	match _state:
 		State.WAITING_FOR_SELECTION:
 			return _try_select_squadron(token)
@@ -279,13 +308,17 @@ func notify_move_preview_success() -> void:
 	_transition_to(State.MOVE_PREVIEW)
 
 
-## Called by game_board when the move is placed by clicking during MOVING.
-## Directly finishes the activation (no Commit Move step needed).
-func notify_move_completed() -> void:
+## Called only after the submitted move has been accepted. Network clients
+## retain the interaction while the existing activation-completion command is
+## still awaiting authority.
+func notify_move_completed(
+		await_authoritative_completion: bool = false) -> void:
+	_move_submission_pending = false
 	if _allow_move_and_attack and not _has_moved:
 		_has_moved = true
 		if _has_attacked:
-			_finish_activation()
+			_finish_or_request_authoritative_completion(
+					await_authoritative_completion)
 		elif not _has_targets:
 			# Moving does not consume an available attack action. Resolve the
 			# remaining opportunity through the same authoritative declaration
@@ -296,7 +329,117 @@ func notify_move_completed() -> void:
 			# Can still attack.
 			_transition_to(State.ACTION_CHOICE)
 	else:
-		_finish_activation()
+		_finish_or_request_authoritative_completion(
+				await_authoritative_completion)
+
+
+## Keeps the selected Move interaction intact until the submitted Network
+## command is accepted or rejected. No action-progress fact is inferred here.
+func notify_move_submission_pending() -> void:
+	if _selected_instance == null or _state not in [State.MOVING,
+			State.MOVE_PREVIEW]:
+		return
+	_move_submission_pending = true
+	_transition_to(_state)
+
+
+## Restores the same selected action surface after authority rejects Move.
+func apply_move_submission_rejection(reason: String) -> void:
+	if not _move_submission_pending or _selected_instance == null:
+		return
+	_move_submission_pending = false
+	_show_error(reason if not reason.is_empty() else "Move was rejected.")
+	_transition_to(State.ACTION_CHOICE)
+
+
+## Releases presentation only after the matching canonical completion applied.
+## The accepted command already owns activation and inspection mutation.
+func apply_authoritative_activation_completion(
+		instance: SquadronInstance) -> bool:
+	if not _activation_completion_pending or instance == null \
+			or instance != _selected_instance \
+			or not instance.activated_this_round:
+		return false
+	_activation_completion_pending = false
+	_finish_activation(false)
+	return true
+
+
+func is_move_submission_pending() -> bool:
+	return _move_submission_pending
+
+
+func is_activation_completion_pending() -> bool:
+	return _activation_completion_pending
+
+
+func is_activation_acceptance_pending() -> bool:
+	return _activation_acceptance_pending
+
+
+## Gates a selected command-mode candidate until its semantic activation is
+## authoritatively accepted.
+func begin_activation_acceptance_pending() -> bool:
+	if _activation_acceptance_pending or not _is_command_mode \
+			or _selected_instance == null \
+			or _selected_instance.has_activation_action_state():
+		return false
+	_activation_acceptance_pending = true
+	_activation_slot_committed = false
+	_transition_to(State.WAITING_FOR_SELECTION)
+	return true
+
+
+func apply_authoritative_activation_acceptance(
+		instance: SquadronInstance) -> bool:
+	if not _activation_acceptance_pending or instance == null \
+			or instance != _selected_instance \
+			or not instance.has_activation_action_state() \
+			or instance.activated_this_round:
+		return false
+	_activation_acceptance_pending = false
+	_apply_squadron_selection(_selected_token, instance)
+	return true
+
+
+func apply_activation_acceptance_rejection(reason: String) -> bool:
+	if not _activation_acceptance_pending:
+		return false
+	_activation_acceptance_pending = false
+	_selected_token = null
+	_selected_instance = null
+	_activation_slot_committed = false
+	_transition_to(State.WAITING_FOR_SELECTION)
+	_show_error(reason if not reason.is_empty() \
+			else "Squadron activation was rejected.")
+	return true
+
+
+## Applies an accepted or rejected semantic Move decline without locally
+## completing or advancing the retained activation.
+func apply_move_decline_result(instance: SquadronInstance,
+		result: Dictionary, rejection_reason: String = "") -> bool:
+	if not _move_decline_pending or instance == null \
+			or instance != _selected_instance:
+		return false
+	_move_decline_pending = false
+	if result.is_empty() \
+			or str(result.get("move_disposition", "")) \
+					!= SquadronInstance.MOVE_ACTION_DECLINED:
+		_show_error(rejection_reason if not rejection_reason.is_empty() \
+				else "Move decline was rejected.")
+		_transition_to(State.ACTION_CHOICE)
+		return false
+	_has_moved = false
+	_has_attacked = instance.attack_action_disposition \
+			!= SquadronInstance.ATTACK_ACTION_AVAILABLE
+	var state: GameState = GameManager.current_game_state
+	if state != null and state.is_squadron_activation_action_complete(instance):
+		_activation_completion_pending = true
+		_transition_to(State.DONE)
+	else:
+		_transition_to(State.ACTION_CHOICE)
+	return true
 
 
 ## Called by game_board when the player presses Escape during MOVING.
@@ -339,6 +482,10 @@ func close_modal() -> void:
 	_command_ship_token = null
 	_activation_slot_committed = false
 	_declaration_skip_pending = false
+	_move_submission_pending = false
+	_activation_completion_pending = false
+	_move_decline_pending = false
+	_activation_acceptance_pending = false
 	_state = State.WAITING_FOR_SELECTION
 	visible = false
 
@@ -422,12 +569,15 @@ func apply_declaration_skip_result(instance: SquadronInstance,
 	if instance == null or instance != _selected_instance:
 		return false
 	_declaration_skip_pending = false
+	_move_decline_pending = false
+	_activation_acceptance_pending = false
 	if result.is_empty() or not bool(result.get("declaration_skip", false)):
 		_show_error(rejection_reason if not rejection_reason.is_empty() \
 				else "Skip was rejected.")
 		_apply_interactable_state()
 		return false
-	_has_moved = instance.move_action_committed
+	_has_moved = instance.move_action_disposition \
+			== SquadronInstance.MOVE_ACTION_COMMITTED
 	_has_attacked = instance.attack_action_disposition \
 			!= SquadronInstance.ATTACK_ACTION_AVAILABLE
 	if bool(result.get("activation_complete", false)):
@@ -446,6 +596,10 @@ func get_state() -> State:
 ## (i.e. opened via [method open_for_command]).
 func is_command_mode() -> bool:
 	return _is_command_mode
+
+
+func get_command_resolver() -> SquadronCommandResolver:
+	return _command_resolver
 
 
 ## Commits command-mode activation budget before submitting a real action.
@@ -535,7 +689,8 @@ func _apply_squadron_selection(token: SquadronToken,
 	# In command mode, ALL squadrons can move and attack (CM-021).
 	# In phase mode, only Rogue squadrons can do both.
 	_allow_move_and_attack = _is_command_mode or _has_rogue
-	_has_moved = instance.move_action_committed
+	_has_moved = instance.move_action_disposition \
+			== SquadronInstance.MOVE_ACTION_COMMITTED
 	_has_attacked = instance.attack_action_disposition \
 			in [SquadronInstance.ATTACK_ACTION_BEGUN,
 					SquadronInstance.ATTACK_ACTION_DECLINED]
@@ -565,25 +720,27 @@ func _commit_command_activation_if_needed() -> bool:
 			and not _selected_instance.activated_this_round:
 		_activation_slot_committed = true
 		return true
-	var result: Dictionary = GameManager.activate_commanded_squadron(
-			_selected_instance, _command_resolver.get_ship())
-	if result.is_empty():
-		_show_error("No Squadron command activations remaining.")
-		return false
-	if bool(result.get("awaiting_remote", false)):
-		_show_error("Waiting for authoritative activation confirmation.")
-		return false
-	_activation_slot_committed = true
-	return true
+	return false
 
 
 func _has_committed_current_activation() -> bool:
 	return _activation_slot_committed or _has_moved or _has_attacked
 
 
-func _finish_activation() -> void:
+func _finish_or_request_authoritative_completion(
+		await_authoritative_completion: bool) -> void:
+	if not await_authoritative_completion:
+		_finish_activation()
+		return
+	_activation_completion_pending = true
 	_transition_to(State.DONE)
 	if _should_emit_activation_done():
+		activation_done.emit(_selected_instance)
+
+
+func _finish_activation(emit_activation_completion: bool = true) -> void:
+	_transition_to(State.DONE)
+	if emit_activation_completion and _should_emit_activation_done():
 		activation_done.emit(_selected_instance)
 	_selected_token = null
 	_selected_instance = null
@@ -591,6 +748,10 @@ func _finish_activation() -> void:
 	_has_attacked = false
 	_activation_slot_committed = false
 	_declaration_skip_pending = false
+	_move_submission_pending = false
+	_activation_completion_pending = false
+	_move_decline_pending = false
+	_activation_acceptance_pending = false
 	# In command mode, check if more activations remain.
 	if _is_command_mode and _command_resolver != null:
 		if _command_resolver.is_done():
@@ -626,6 +787,10 @@ func _clear_command_preview_selection() -> void:
 	_has_attacked = false
 	_activation_slot_committed = false
 	_declaration_skip_pending = false
+	_move_submission_pending = false
+	_activation_completion_pending = false
+	_move_decline_pending = false
+	_activation_acceptance_pending = false
 	selection_cleared.emit()
 	_transition_to(State.WAITING_FOR_SELECTION)
 
@@ -828,7 +993,9 @@ func _update_ui() -> void:
 func _update_ui_waiting() -> void:
 	_subtitle_label.text = "Activate squadron %d of %d" % [
 			_activation_number, _max_activations]
-	if _is_command_mode:
+	if _activation_acceptance_pending:
+		_prompt_label.text = "Waiting for authoritative activation…"
+	elif _is_command_mode:
 		_prompt_label.text = "Click a friendly squadron at close–medium range"
 	else:
 		_prompt_label.text = "Click a squadron to activate"
@@ -836,7 +1003,7 @@ func _update_ui_waiting() -> void:
 	_move_button.visible = false
 	_attack_button.visible = false
 	_skip_button.visible = false
-	_done_button.visible = _is_command_mode
+	_done_button.visible = _is_command_mode and not _activation_acceptance_pending
 	_done_button.disabled = not _is_interactable
 	_commit_move_button.visible = false
 
@@ -854,7 +1021,9 @@ func _update_ui_action_choice() -> void:
 ## Updates UI for the MOVING state.
 func _update_ui_moving() -> void:
 	_subtitle_label.text = _get_squadron_name()
-	_prompt_label.text = "Move the squadron, then click to place"
+	_prompt_label.text = "Waiting for authoritative Move…" \
+			if _move_submission_pending \
+			else "Move the squadron, then click to place"
 	_button_container.visible = false
 	_commit_move_button.visible = false
 
@@ -886,7 +1055,10 @@ func _update_ui_done() -> void:
 func _update_action_buttons() -> void:
 	# Move button — hidden if squadron cannot move (engaged or speed 0).
 	# Also hidden if already moved during a move-and-attack activation.
-	var can_move: bool = _can_move
+	var can_move: bool = _can_move \
+			and _selected_instance != null \
+			and _selected_instance.move_action_disposition \
+					== SquadronInstance.MOVE_ACTION_AVAILABLE
 	if _allow_move_and_attack and _has_moved:
 		can_move = false
 	_move_button.visible = can_move
@@ -940,14 +1112,18 @@ func _apply_interactable_state() -> void:
 	_apply_button_interactable(_commit_move_button)
 	if _close_button:
 		_close_button.disabled = not _is_interactable \
-				or _declaration_skip_pending
+			or _declaration_skip_pending or _move_submission_pending \
+			or _move_decline_pending or _activation_acceptance_pending \
+				or _activation_completion_pending
 
 
 ## Applies button disabled state if the button exists and is visible.
 func _apply_button_interactable(btn: Button) -> void:
 	if btn == null or not btn.visible:
 		return
-	btn.disabled = not _is_interactable or _declaration_skip_pending
+	btn.disabled = not _is_interactable or _declaration_skip_pending \
+			or _move_submission_pending or _activation_completion_pending \
+			or _move_decline_pending or _activation_acceptance_pending
 
 
 func _get_skip_button_text() -> String:
@@ -958,11 +1134,21 @@ func _get_skip_button_text() -> String:
 
 ## Returns true when action handlers should early-return for passive peers.
 func _is_action_blocked(action_name: String) -> bool:
-	if _is_interactable and not _declaration_skip_pending:
+	if _is_interactable and not _declaration_skip_pending \
+			and not _move_submission_pending \
+			and not _activation_completion_pending \
+			and not _move_decline_pending \
+			and not _activation_acceptance_pending:
 		return false
-	var reason: String = "declaration Skip is pending" \
-			if _declaration_skip_pending \
-			else "modal not interactable for local peer"
+	var reason: String = "modal not interactable for local peer"
+	if _activation_acceptance_pending:
+		reason = "authoritative activation is pending"
+	elif _move_decline_pending:
+		reason = "Move decline is pending"
+	elif _move_submission_pending or _activation_completion_pending:
+		reason = "authoritative Move is pending"
+	elif _declaration_skip_pending:
+		reason = "declaration Skip is pending"
 	_log.info("%s ignored: %s." % [action_name, reason])
 	return true
 
@@ -1070,6 +1256,12 @@ func _on_skip_pressed() -> void:
 					== SquadronInstance.ATTACK_ACTION_AVAILABLE:
 		_request_declaration_skip("voluntary")
 		return
+	var state: GameState = GameManager.current_game_state
+	if state != null \
+			and state.has_legal_remaining_squadron_move_action(
+					_selected_instance):
+		_request_move_decline()
+		return
 	_finish_activation()
 
 
@@ -1081,6 +1273,14 @@ func _request_declaration_skip(reason: String) -> void:
 	declaration_skip_requested.emit(_selected_instance, reason)
 
 
+func _request_move_decline() -> void:
+	if _selected_instance == null or _move_decline_pending:
+		return
+	_move_decline_pending = true
+	_apply_interactable_state()
+	move_decline_requested.emit(_selected_instance)
+
+
 func _on_commit_move_pressed() -> void:
 	if _is_action_blocked("Commit Move"):
 		return
@@ -1089,15 +1289,6 @@ func _on_commit_move_pressed() -> void:
 	SfxManager.play_sfx("droid_sound")
 	_log.info("Commit Move pressed for %s" % _get_squadron_name())
 	move_commit_requested.emit(_selected_token)
-	if _allow_move_and_attack and not _has_moved:
-		_has_moved = true
-		if _has_attacked:
-			_finish_activation()
-		else:
-			# Can still attack.
-			_transition_to(State.ACTION_CHOICE)
-	else:
-		_finish_activation()
 
 
 func _on_done_pressed() -> void:

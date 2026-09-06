@@ -26,7 +26,7 @@ extends Node
 # ---------------------------------------------------------------------------
 
 ## Current protocol version.  Incremented whenever the message format changes.
-const PROTOCOL_VERSION: int = 4
+const PROTOCOL_VERSION: int = 6
 
 ## Interval (seconds) between keepalive pings.
 const HEARTBEAT_INTERVAL_SEC: float = 5.0
@@ -118,6 +118,9 @@ signal fresh_resume_assignment_ready(attempt_id: String,
 signal fresh_resume_ready_to_commit(attempt_id: String)
 signal fresh_resume_published(attempt_id: String)
 signal fresh_resume_failed(reason: String)
+signal fresh_start_ready_to_commit(attempt_id: String)
+signal fresh_start_published(attempt_id: String)
+signal fresh_start_failed(reason: String)
 signal resume_commit_received(state: GameState, meta: SaveGameMetadata,
 		principal_id: String, player_index: int, attempt_id: String)
 signal reconnect_assignment_ready(endpoint_id: int, available_players: Array)
@@ -199,6 +202,7 @@ var _post_publication_fresh_attempt_id: String = ""
 ## Player-originated admission gate. Normal new games and same-live loads keep
 ## this open; fresh resume/reconnect opens it only after installation ACK.
 var _principal_command_admission_enabled: bool = true
+var _host_remote_authored_sequences: Dictionary = {}
 
 
 # ---------------------------------------------------------------------------
@@ -487,6 +491,93 @@ func begin_fresh_session_resume(state: GameState, meta: SaveGameMetadata) -> boo
 	return true
 
 
+func begin_fresh_network_start(state: GameState, scenario_id: String) -> bool:
+	if role != Role.SERVER or connection_state != ConnectionState.LOBBY \
+			or state == null or not state.validate_for_full_authority_installation() \
+			or not _resume_attempt.is_empty():
+		return false
+	var remote_ids: Array[int] = current_authenticated_lobby_peer_ids()
+	if remote_ids.size() != 1:
+		return false
+	var binding: MatchPlayerControlBinding = _binding_for_state(state)
+	if binding == null:
+		return false
+	var remote_id: int = remote_ids[0]
+	var remote_player: int = int(peers[remote_id].get("player_index", -1))
+	if remote_player < 0 or remote_player >= Constants.PLAYER_COUNT \
+			or _local_player_index < 0:
+		return false
+	var attempt_id: String = _new_random_hex()
+	var meta: SaveGameMetadata = SaveGameManager.build_metadata_for(
+			state, "fresh_network_start")
+	meta.scenario_id = scenario_id
+	meta.set_next_command_sequence(0)
+	_resume_attempt = {
+		"attempt_id": attempt_id, "operation": "fresh_network_start",
+		"phase": "STAGING_SNAPSHOT",
+		"binding_data": binding.serialize(),
+		"candidate_fingerprint": CanonicalJson.hash(state.serialize()),
+		"cursor": 0, "expected_endpoints": [1, remote_id],
+		"proposals": {1: _local_player_index, remote_id: remote_player},
+		"associations": {1: _host_match_principal_id,
+			remote_id: str(peers[remote_id].get("match_principal_id", ""))},
+		"ready": {1: true}, "installed": {},
+		"metadata": meta.to_dict(), "scenario_id": scenario_id,
+		"phase_started_msec": Time.get_ticks_msec(),
+	}
+	_principal_command_admission_enabled = false
+	peers[remote_id]["command_admission_enabled"] = false
+	var filter_result: Dictionary = StateFilter.filter_for_player_checked(
+			state.serialize(), remote_player)
+	if not bool(filter_result.get(StateFilter.KEY_OK, false)):
+		var reason: String = "Fresh Network staging rejected locally: %s" % str(
+				filter_result.get(StateFilter.KEY_REASON, "filtering failed"))
+		_log.error(reason)
+		_abort_resume(reason)
+		return false
+	var filtered: Dictionary = filter_result.get(
+			StateFilter.KEY_STATE, {}) as Dictionary
+	_receive_resume_snapshot.rpc_id(remote_id, "fresh_network_start",
+			attempt_id, filtered, meta.to_dict(),
+			str(peers[remote_id].get("match_principal_id", "")), remote_player, 0)
+	return true
+
+
+func commit_fresh_network_start(state: GameState, attempt_id: String) -> bool:
+	if role != Role.SERVER or _resume_attempt.get("operation", "") != \
+			"fresh_network_start" or _resume_attempt.get("phase", "") != \
+			"READY_TO_COMMIT" or _resume_attempt.get("attempt_id", "") != attempt_id \
+			or CanonicalJson.hash(state.serialize()) != str(
+					_resume_attempt.get("candidate_fingerprint", "")):
+		return false
+	_resume_attempt["phase"] = "COMMITTING"
+	return true
+
+
+func publish_fresh_network_start(attempt_id: String) -> bool:
+	if role != Role.SERVER or _resume_attempt.get("operation", "") != \
+			"fresh_network_start" or _resume_attempt.get("phase", "") != \
+			"COMMITTING" or _resume_attempt.get("attempt_id", "") != attempt_id:
+		return false
+	if connection_state != ConnectionState.IN_GAME:
+		_set_state(ConnectionState.IN_GAME)
+	_resume_attempt["phase"] = "AWAITING_INSTALL_ACKS"
+	_resume_attempt["installed"] = {1: true}
+	_resume_attempt["phase_started_msec"] = Time.get_ticks_msec()
+	for endpoint_value: Variant in _resume_attempt["expected_endpoints"] as Array:
+		var endpoint_id: int = int(endpoint_value)
+		if endpoint_id != 1:
+			_commit_resume_snapshot.rpc_id(endpoint_id, attempt_id)
+	return true
+
+
+func abort_fresh_network_start(reason: String) -> void:
+	if role == Role.SERVER and _resume_attempt.get("operation", "") == \
+			"fresh_network_start" and _resume_attempt.get("phase", "") \
+			not in ["AWAITING_INSTALL_ACKS", "PUBLISHED"]:
+		_abort_resume(reason)
+
+
 ## Host-only, non-RPC proposal commit.  The UI supplies player indices only;
 ## principal identities are derived exclusively from the immutable binding.
 func submit_fresh_resume_assignment(proposals: Dictionary) -> bool:
@@ -547,8 +638,14 @@ func stage_fresh_resume_snapshots(state: GameState, meta: SaveGameMetadata) -> b
 			return false
 		var player_index: int = int(proposals[endpoint_id])
 		var principal_id: String = binding.principal_id_for_player(player_index)
-		var filtered: Dictionary = StateFilter.filter_for_player(
+		var filter_result: Dictionary = StateFilter.filter_for_player_checked(
 				state.serialize(), player_index)
+		if not bool(filter_result.get(StateFilter.KEY_OK, false)):
+			_abort_resume("Fresh resume filtering rejected locally: %s" % str(
+					filter_result.get(StateFilter.KEY_REASON, "filtering failed")))
+			return false
+		var filtered: Dictionary = filter_result.get(
+				StateFilter.KEY_STATE, {}) as Dictionary
 		_receive_resume_snapshot.rpc_id(endpoint_id, "fresh_session_resume",
 				_resume_attempt["attempt_id"], filtered, meta.to_dict(), principal_id,
 				player_index, int(_resume_attempt["cursor"]))
@@ -640,6 +737,12 @@ func install_client_principal_assignment(attempt_id: String,
 	return true
 
 
+func client_staged_operation(attempt_id: String) -> String:
+	if _client_staged_resume.get("attempt_id", "") != attempt_id:
+		return ""
+	return str(_client_staged_resume.get("operation", ""))
+
+
 func cancel_fresh_resume() -> void:
 	if role == Role.SERVER and _resume_attempt.get("operation", "") == \
 			"fresh_session_resume":
@@ -710,7 +813,14 @@ func begin_reconnect_assignment(endpoint_id: int, player_index: int) -> bool:
 	peers[endpoint_id]["match_principal_id"] = principal_id
 	peers[endpoint_id]["player_index"] = player_index
 	peers[endpoint_id]["command_admission_enabled"] = false
-	var filtered: Dictionary = StateFilter.filter_for_player(state.serialize(), player_index)
+	var filter_result: Dictionary = StateFilter.filter_for_player_checked(
+			state.serialize(), player_index)
+	if not bool(filter_result.get(StateFilter.KEY_OK, false)):
+		_abort_resume("Reconnect filtering rejected locally: %s" % str(
+				filter_result.get(StateFilter.KEY_REASON, "filtering failed")))
+		return false
+	var filtered: Dictionary = filter_result.get(
+			StateFilter.KEY_STATE, {}) as Dictionary
 	_receive_resume_snapshot.rpc_id(endpoint_id, "reconnect", _resume_attempt["attempt_id"],
 			filtered, meta.to_dict(), principal_id, player_index, meta.next_command_sequence)
 	return true
@@ -720,11 +830,12 @@ func begin_reconnect_assignment(endpoint_id: int, player_index: int) -> bool:
 func _receive_resume_snapshot(operation: String, attempt_id: String,
 		state_dict: Dictionary, meta_dict: Dictionary, principal_id: String,
 		player_index: int, cursor: int) -> void:
-	if role != Role.CLIENT or operation not in ["fresh_session_resume", "reconnect"] \
+	if role != Role.CLIENT or operation not in [
+			"fresh_session_resume", "reconnect", "fresh_network_start"] \
 			or not _is_attempt_id(attempt_id) or player_index < 0 \
 			or player_index >= Constants.PLAYER_COUNT:
 		return
-	var state: GameState = GameState.deserialize(state_dict)
+	var state: GameState = GameState.deserialize_passive_network(state_dict)
 	var meta: SaveGameMetadata = SaveGameMetadata.from_dict(meta_dict)
 	var binding: MatchPlayerControlBinding = _binding_for_state(state)
 	var reconstruction: Dictionary = SaveGameManager.reconstruction_cursor_for(meta, state)
@@ -760,6 +871,9 @@ func _acknowledge_resume_snapshot(attempt_id: String, accepted: bool, cursor: in
 	if _resume_attempt["operation"] == "fresh_session_resume":
 		_resume_attempt["phase"] = "READY_TO_COMMIT"
 		fresh_resume_ready_to_commit.emit(attempt_id)
+	elif _resume_attempt["operation"] == "fresh_network_start":
+		_resume_attempt["phase"] = "READY_TO_COMMIT"
+		fresh_start_ready_to_commit.emit(attempt_id)
 	else:
 		_resume_attempt["phase"] = "AWAITING_INSTALL_ACKS"
 		_resume_attempt["installed"] = {}
@@ -802,6 +916,9 @@ func _enable_resume_admission(operation: String, attempt_id: String) -> void:
 	resume_status_changed.emit("Resume ready")
 	if operation == "fresh_session_resume":
 		fresh_resume_published.emit(attempt_id)
+	elif operation == "fresh_network_start":
+		_client_staged_resume = {}
+		fresh_start_published.emit(attempt_id)
 	else:
 		_client_staged_resume = {}
 		reconnect_client_released.emit(attempt_id)
@@ -817,6 +934,8 @@ func _abort_resume_attempt(attempt_id: String, reason: String) -> void:
 	resume_status_changed.emit("Resume aborted")
 	if operation == "fresh_session_resume":
 		fresh_resume_failed.emit(reason)
+	elif operation == "fresh_network_start":
+		fresh_start_failed.emit(reason)
 
 
 @rpc("any_peer", "reliable")
@@ -843,6 +962,7 @@ func _reject_resume_installation(attempt_id: String, reason: String) -> void:
 			peers[sender_id].erase("match_principal_id")
 			peers[sender_id]["command_admission_enabled"] = false
 		_resume_attempt = {}
+		_principal_command_admission_enabled = true
 		resume_status_changed.emit("Reconnect installation rejected: " + reason)
 		_notify_unassigned_reconnect_endpoints()
 
@@ -865,6 +985,8 @@ func _maybe_publish_resume() -> void:
 	resume_status_changed.emit("Resume ready")
 	if operation == "fresh_session_resume":
 		fresh_resume_published.emit(attempt_id)
+	elif operation == "fresh_network_start":
+		fresh_start_published.emit(attempt_id)
 
 
 func _validate_explicit_assignment(proposals: Dictionary,
@@ -977,7 +1099,8 @@ func _abort_resume(reason: String) -> void:
 		return
 	var operation: String = str(_resume_attempt.get("operation", ""))
 	var is_prepublication_fresh: bool = _resume_attempt.get("operation", "") \
-			== "fresh_session_resume" and _resume_attempt.get("phase", "") \
+			in ["fresh_session_resume", "fresh_network_start"] \
+			and _resume_attempt.get("phase", "") \
 			not in ["AWAITING_INSTALL_ACKS", "PUBLISHED"]
 	var attempt_id: String = str(_resume_attempt.get("attempt_id", ""))
 	for endpoint_value: Variant in (_resume_attempt.get("expected_endpoints", []) as Array):
@@ -985,7 +1108,14 @@ func _abort_resume(reason: String) -> void:
 		if endpoint_id != 1 and peers.has(endpoint_id) and _peer != null:
 			_abort_resume_attempt.rpc_id(endpoint_id, attempt_id, reason)
 	if is_prepublication_fresh:
-		_restore_prepublication_attempt_state()
+		if operation == "fresh_session_resume":
+			_restore_prepublication_attempt_state()
+		else:
+			for endpoint_value: Variant in (_resume_attempt.get(
+					"expected_endpoints", []) as Array):
+				var endpoint_id: int = int(endpoint_value)
+				if endpoint_id != 1 and peers.has(endpoint_id):
+					peers[endpoint_id]["command_admission_enabled"] = true
 	elif operation == "reconnect":
 		# A reconnect association exists only for this purpose-specific attempt.
 		# Failed staging must return that endpoint to the unassigned state so a
@@ -996,6 +1126,8 @@ func _abort_resume(reason: String) -> void:
 	resume_status_changed.emit("Resume aborted")
 	if operation == "fresh_session_resume":
 		fresh_resume_failed.emit(reason)
+	elif operation == "fresh_network_start":
+		fresh_start_failed.emit(reason)
 	if operation == "reconnect":
 		_notify_unassigned_reconnect_endpoints()
 
@@ -1485,11 +1617,10 @@ func _submit_command_to_server(data: Dictionary) -> void:
 	# host-owned defender).  Without this flag the host's existing
 	# [code]player_index != local[/code] gate silently drops the
 	# damage-summary / damage-card-dealt re-emits.
-	result["__remote_authored"] = true
 	var cmd_data: Dictionary = cmd.serialize()
 	# --- Sync gate: hold dial assignments until both players are done ---
 	if _sync_gate.is_active() and cmd.command_type == "assign_dials":
-		_sync_gate.hold(cmd_data, result)
+		_sync_gate.hold(cmd_data, result, true)
 		if _all_dials_assigned(cmd.player_index):
 			_sync_gate.mark_ready(cmd.player_index)
 			_log.info("Player %d dials complete — held in sync gate." %
@@ -1498,12 +1629,12 @@ func _submit_command_to_server(data: Dictionary) -> void:
 			_log.info("Sync gate open — broadcasting %d held dial commands." %
 					_sync_gate.get_held_count())
 			for entry: Dictionary in _sync_gate.release():
-				_broadcast_command_result.rpc(
-						entry["command_data"], entry["result"])
+				_distribute_command_result_data(entry["command_data"],
+						entry["result"], bool(entry.get("remote_authored", false)))
 			_drain_server_observer_followups()
 		return
 	# --- Normal path: broadcast immediately ---
-	_broadcast_command_result.rpc(cmd_data, result)
+	_distribute_command_result(cmd, result, true)
 	_drain_server_observer_followups()
 
 
@@ -1530,19 +1661,18 @@ func _submit_replay_command_to_server(data: Dictionary) -> void:
 				cmd.command_type, sender_id])
 		_send_command_rejection(sender_id, data, rejection_reason)
 		return
-	result["__remote_authored"] = true
 	var cmd_data: Dictionary = cmd.serialize()
 	if _sync_gate.is_active() and cmd.command_type == "assign_dials":
-		_sync_gate.hold(cmd_data, result)
+		_sync_gate.hold(cmd_data, result, true)
 		if _all_dials_assigned(cmd.player_index):
 			_sync_gate.mark_ready(cmd.player_index)
 		if _sync_gate.is_open():
 			for entry: Dictionary in _sync_gate.release():
-				_broadcast_command_result.rpc(
-						entry["command_data"], entry["result"])
+				_distribute_command_result_data(entry["command_data"],
+						entry["result"], true)
 			_drain_server_observer_followups()
 		return
-	_broadcast_command_result.rpc(cmd_data, result)
+	_distribute_command_result(cmd, result, true)
 	_drain_server_observer_followups()
 
 
@@ -1551,10 +1681,61 @@ func _submit_replay_command_to_server(data: Dictionary) -> void:
 ## [code]call_local[/code] ensures the server also receives the signal so
 ## [GameManager._on_network_command_result] can process side effects for
 ## commands submitted by the remote player.  G4.6.5 BF-2.
-@rpc("authority", "call_local", "reliable")
-func _broadcast_command_result(command_data: Dictionary,
-		result: Dictionary) -> void:
-	command_result_received.emit(command_data, result)
+@rpc("authority", "reliable")
+func _receive_command_result(command_data: Dictionary,
+		result_envelope: Dictionary) -> void:
+	command_result_received.emit(command_data, result_envelope)
+
+
+func _distribute_command_result(command: GameCommand, result: Dictionary,
+		remote_authored: bool = false) -> void:
+	_distribute_command_result_data(command.serialize(), result, remote_authored,
+			command)
+
+
+func _distribute_command_result_data(command_data: Dictionary,
+		result: Dictionary, remote_authored: bool = false,
+		command: GameCommand = null) -> void:
+	var cmd: GameCommand = command
+	if cmd == null:
+		cmd = GameCommand.deserialize(command_data)
+	if cmd == null:
+		return
+	if remote_authored:
+		_host_remote_authored_sequences[cmd.sequence] = true
+	command_result_received.emit(command_data,
+			_build_result_envelope(cmd, result, _local_player_index))
+	_host_remote_authored_sequences.erase(cmd.sequence)
+	for peer_value: Variant in peers.keys():
+		var peer_id: int = int(peer_value)
+		var peer_info: Dictionary = peers[peer_id] as Dictionary
+		if not bool(peer_info.get("authenticated", false)):
+			continue
+		var viewer: int = int(peer_info.get("player_index", -1))
+		if viewer < 0 or viewer >= Constants.PLAYER_COUNT:
+			continue
+		_receive_command_result.rpc_id(peer_id, command_data,
+				_build_result_envelope(cmd, result, viewer))
+
+
+func _build_result_envelope(command: GameCommand, authority_result: Dictionary,
+		viewer_player: int) -> Dictionary:
+	var contract: String = command.application_contract_id()
+	return {
+		"protocol_version": PROTOCOL_VERSION,
+		"application_contract": contract if not contract.is_empty() else "none",
+		"application_contract_version": command.application_contract_version() \
+				if not contract.is_empty() else 0,
+		"viewer_player": viewer_player,
+		"application_result": command.project_application_result(
+				authority_result, viewer_player) if not contract.is_empty() else {},
+		"presentation_result": {} if not contract.is_empty() \
+				else authority_result.duplicate(true),
+	}
+
+
+func consume_host_remote_authored(sequence: int) -> bool:
+	return bool(_host_remote_authored_sequences.get(sequence, false))
 
 
 func _begin_rejection_capture(command: GameCommand) -> void:
@@ -1611,7 +1792,7 @@ func _submit_observer_followup_from_server(command: GameCommand) -> void:
 		_log.info("Observer follow-up [%s] rejected by validation." %
 				command.command_type)
 		return
-	_broadcast_command_result.rpc(command.serialize(), result)
+	_distribute_command_result(command, result)
 
 
 func _drain_server_observer_followups() -> void:
@@ -1748,12 +1929,11 @@ func handle_host_command(command: GameCommand, result: Dictionary) -> void:
 			_log.info("Sync gate open — broadcasting %d held dial commands." %
 					_sync_gate.get_held_count())
 			for entry: Dictionary in _sync_gate.release():
-				_broadcast_command_result.rpc(
-						entry["command_data"], entry["result"])
+				_distribute_command_result_data(entry["command_data"], entry["result"])
 			_drain_server_observer_followups()
 		return
 	# --- Normal path: broadcast immediately ---
-	_broadcast_command_result.rpc(cmd_data, result)
+	_distribute_command_result(command, result)
 	_drain_server_observer_followups()
 
 

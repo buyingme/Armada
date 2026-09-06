@@ -508,7 +508,7 @@ func _on_damage_overview_requested(
 				"texture": tex,
 				"title": card.title if card else "",
 			})
-	var facedown_count: int = inst.facedown_damage.size()
+	var facedown_count: int = inst.get_facedown_damage_count()
 	var back_tex: Texture2D = AssetLoader.load_texture(
 			"damage_deck/", "damage_back.png")
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size

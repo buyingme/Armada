@@ -168,7 +168,7 @@ func test_live_and_mirror_sequence_paths_are_deterministic() -> void:
 
 	var mirror := FixtureCommand.new(0, TEST_COMMAND_TYPE, {})
 	mirror.sequence = 1
-	_processor.submit_mirror(mirror)
+	_processor.submit_mirror(mirror, _empty_result_envelope(), 0)
 	assert_eq(mirror.sequence, 1,
 			"Mirror application should preserve authoritative sequence.")
 	assert_eq(_processor.get_next_sequence(), 2,
@@ -185,7 +185,7 @@ func test_rejected_live_and_mirror_commands_leave_cursor_and_history_unchanged()
 
 	var gap := FixtureCommand.new(0, TEST_COMMAND_TYPE, {})
 	gap.sequence = 2
-	assert_eq(_processor.submit_mirror(gap), {},
+	assert_eq(_processor.submit_mirror(gap, _empty_result_envelope(), 0), {},
 			"Gapped mirror sequence should reject.")
 	assert_eq(_processor.get_next_sequence(), 0,
 			"Rejected mirror command should not advance cursor.")
@@ -208,6 +208,17 @@ func _context() -> Dictionary:
 				_state.current_attack_state.attack_id,
 		TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE: "current_attack",
 		TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER: 0,
+	}
+
+
+func _empty_result_envelope() -> Dictionary:
+	return {
+		"protocol_version": NetworkManager.PROTOCOL_VERSION,
+		"application_contract": "none",
+		"application_contract_version": 0,
+		"viewer_player": 0,
+		"application_result": {},
+		"presentation_result": {},
 	}
 
 

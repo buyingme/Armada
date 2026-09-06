@@ -543,7 +543,7 @@
 						"owner_player": 0,
 						"pos_x": 0.688999995478877,
 						"pos_y": 0.588351101345486,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-01",
 						"rotation_deg": 0.0,
 						"runtime_upgrades": [],
 						"used_attack_hull_zones": []
@@ -604,7 +604,7 @@
 						"owner_player": 0,
 						"pos_x": 0.331081136067708,
 						"pos_y": 0.443050751862703,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-02",
 						"rotation_deg": 45.0000012522391,
 						"runtime_upgrades": [],
 						"used_attack_hull_zones": []
@@ -619,10 +619,11 @@
 						"destroyed": false,
 						"fleet_points": 13,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 0,
 						"pos_x": 0.448748835810909,
 						"pos_y": 0.592882848668981,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-03",
 						"rotation_deg": 0.0
 					},
 					{
@@ -633,10 +634,11 @@
 						"destroyed": false,
 						"fleet_points": 13,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 0,
 						"pos_x": 0.504144908763744,
 						"pos_y": 0.587845074688947,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-04",
 						"rotation_deg": 2.9
 					},
 					{
@@ -647,10 +649,11 @@
 						"destroyed": true,
 						"fleet_points": 13,
 						"is_engaged": true,
+						"move_action_disposition": "",
 						"owner_player": 0,
 						"pos_x": 0.569245062934028,
 						"pos_y": 0.496221641257957,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-05",
 						"rotation_deg": 0.0
 					},
 					{
@@ -661,10 +664,11 @@
 						"destroyed": true,
 						"fleet_points": 13,
 						"is_engaged": true,
+						"move_action_disposition": "",
 						"owner_player": 0,
 						"pos_x": 0.531552406593605,
 						"pos_y": 0.499557721173322,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-06",
 						"rotation_deg": 0.0
 					}
 				]
@@ -739,7 +743,7 @@
 						"owner_player": 1,
 						"pos_x": 0.488999995478877,
 						"pos_y": 0.388648873788339,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-07",
 						"rotation_deg": -179.999991348578,
 						"runtime_upgrades": [],
 						"used_attack_hull_zones": []
@@ -754,10 +758,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.452194637722439,
 						"pos_y": 0.463389700430411,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-08",
 						"rotation_deg": 180.0
 					},
 					{
@@ -768,10 +773,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.498737193919994,
 						"pos_y": 0.463538049768519,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-09",
 						"rotation_deg": 180.0
 					},
 					{
@@ -782,10 +788,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.407893286810981,
 						"pos_y": 0.357942793104384,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-10",
 						"rotation_deg": 180.0
 					},
 					{
@@ -796,10 +803,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.584945000542535,
 						"pos_y": 0.395933532714844,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-11",
 						"rotation_deg": 180.0
 					},
 					{
@@ -810,10 +818,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.541496389883536,
 						"pos_y": 0.450730726453993,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-12",
 						"rotation_deg": 180.0
 					},
 					{
@@ -824,10 +833,11 @@
 						"destroyed": false,
 						"fleet_points": 8,
 						"is_engaged": false,
+						"move_action_disposition": "",
 						"owner_player": 1,
 						"pos_x": 0.564804246690538,
 						"pos_y": 0.327710554334852,
-						"roster_entry_id": "",
+						"roster_entry_id": "bug006-hotseat-entry-13",
 						"rotation_deg": 180.0
 					}
 				]

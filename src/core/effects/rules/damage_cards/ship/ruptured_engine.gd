@@ -54,7 +54,6 @@ func _damage_command(game_state: GameState, ship: ShipInstance) -> GameCommand:
 		"owner_player": ship.owner_player,
 		"ship_index": game_state.find_ship_index(ship),
 		"effect_id": EFFECT_ID,
-		"draw_from_deck": true,
 	})
 
 

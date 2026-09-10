@@ -9,7 +9,7 @@
 
 Accepted by: Project Owner
 Accepted date: 2026-08-21
-Accepted update date: 2026-08-23
+Accepted update date: 2026-09-09
 
 ## 1. Purpose and authority
 
@@ -222,9 +222,11 @@ deferred to a child requirements specification.
 - **Controller / decision:** The active ship's controller determines and
   commits one legal Maneuver, including a legal speed-zero/no-movement result.
   Maneuver is not normally declinable.
-- **Completion / result:** Commitment and all mandatory Execute Maneuver
-  consequences complete through accepted semantic transitions; only then is
-  the Maneuver opportunity `CONSUMED`.
+- **Completion / result:** For a surviving normal activation, commitment and
+  all still-applicable mandatory Maneuver consequences complete through
+  accepted semantic transitions; only then is the Maneuver opportunity
+  `CONSUMED`. ADR-006 exceptional destruction clears the activation boundary
+  without fabricating Maneuver consumption.
 - **Recovery:** SAI-001 SHALL recover the mandatory opportunity, controller,
   legal course/source derivation, commitment, and unresolved mandatory
   consequences.
@@ -236,14 +238,23 @@ deferred to a child requirements specification.
   courses. It derives current movement state/chart, command sources, and
   applicable special-rule modifications; it is not a general movement
   sandbox.
-- **Source priority / preview:** An applicable command dial is preferred. A
-  command token is used only when additionally required for the selected legal
-  course or as the applicable sole source, such as for a required speed change.
-  The controller can see required source consumption before commitment.
+- **Owner-approved digital Navigate deviation:** The controller selects the
+  desired legal speed/yaw result, not whether to spend a dial, token, or both.
+  At commitment, authority derives the minimum required Navigate sources:
+  prefer an available usable transient Navigate dial; use a token as the sole
+  source only when no usable dial is available and the token is sufficient;
+  and automatically use dial plus token when the result requires both, such as
+  a speed change of two. The controller can see the derived consumption before
+  commitment. Armada does not expose an explicit "resolve Navigate with no
+  effect" interaction; a course requiring no Navigate modification consumes no
+  Navigate source and does not resolve Navigate. This intentionally adopts
+  digital commitment timing and narrows source and no-effect choices
+  technically allowed by the tabletop RRG; it is not an RRG requirement.
 - **Completion / result:** The course remains reversible until explicit
-  commitment. Commitment consumes required dial/token/rule resources, makes
-  the course authoritative, and requires execution; it cannot later be
-  cancelled merely because its outcome is undesirable.
+  commitment and consumes no resources. Commitment atomically derives and
+  consumes required dial/token/rule resources, makes the course authoritative,
+  and requires execution; it cannot later be cancelled merely because its
+  outcome is undesirable.
 - **Recovery / transient presentation:** SAI-001 recovers legal courses and
   source/commit semantics. Uncommitted tool geometry and ghost positioning may
   be discarded. Hypothetical exploration belongs to the deferred, separate
@@ -251,8 +262,14 @@ deferred to a child requirements specification.
 
 #### SAI-062 — Execute Maneuver and overlap resolution
 
-Execute Maneuver applies the committed course. A Maneuver is incomplete until
-all applicable mandatory overlap consequences resolve.
+Execute Maneuver applies the committed course. Ship-overlap placement/reduction
+and damage precede the RRG event at which the ship has executed its maneuver;
+applicable post-execution consequences follow that rules event. Armada's
+Maneuver opportunity can remain `OPEN` after the RRG event and is incomplete
+until all still-applicable mandatory consequences resolve. If a consequence
+destroys the ship, ADR-006 exceptional termination applies and no later
+ship-dependent consequence or return to a removed Maneuver boundary is
+fabricated.
 
 ##### SAI-063 — Ship overlap
 
@@ -264,6 +281,10 @@ consequences resolve, while the ship's actual speed setting is unchanged by
 the temporary reduction. This automatic resolution and its authoritative
 consequences are recoverable under SAI-001.
 
+Play-area destruction is determined from the ship's actual final position
+after applicable ship-overlap placement/reduction, not from a superseded
+plotted position. The RRG play-area base geometry governs that determination.
+
 ##### SAI-064 — Squadron overlap / displacement
 
 If an executed Maneuver overlaps squadron(s), mandatory displacement is nested
@@ -273,11 +294,19 @@ Maneuver completes. SAI-001 SHALL recover the obligation, controller,
 affected squadrons, applicable placement-legality source, and completion
 semantics; drag, measurements, and placement ghosts remain transient.
 
+Where neither the RRG nor an Integrated Rule Capability Package determines the
+relative order, mandatory squadron displacement resolves before post-execution
+obstacle effects.
+
 ##### SAI-065 — Obstacle overlap
 
 An obstacle overlap invokes the applicable authoritative obstacle rule. This
 document does not specify individual effects. Where one creates a live player
-decision, that nested decision SHALL satisfy SAI-001.
+decision, that nested decision SHALL satisfy SAI-001. If multiple applicable
+obstacle effects may resolve in any order and no RRG rule or Integrated Rule
+Capability Package assigns the choice to another player, the moving ship's
+controller chooses their order. This controller assignment is an Armada Owner
+interpretation of an RRG ambiguity, not an explicit RRG rule.
 
 ### SAI-080 — End Activation and handoff
 

@@ -7,7 +7,8 @@
 Accepted by: Project Owner
 Accepted date: 2026-08-21
 Amended: 2026-08-23 following Owner clarification during BUG-035 manual QA
-Accepted update date: 2026-08-23
+Amended: 2026-09-09 following independent Ship Maneuver rules/architecture audit
+Accepted update date: 2026-09-09
 
 ## 1. Purpose and authority
 
@@ -781,36 +782,58 @@ The Maneuver Helper is not specified further here.
 
 ---
 
-## D-SA-063 — Maneuver command-source priority and preview
+## D-SA-063 — Digital Navigate result selection and source derivation
 
 ### Decision
 
-An available applicable command dial is the preferred command source while determining the course.
+Armada intentionally uses a simplified digital Navigate interaction. The
+player selects the desired legal speed/yaw result and does not explicitly
+select whether to spend a Navigate dial, token, or both.
 
-A command token is used only where:
+Before commitment, all candidate speed/yaw changes, maneuver-tool geometry,
+and destination exploration are transient. They change no canonical speed and
+consume no command resource. The player must be able to see the resources the
+current result would consume.
 
-- it is additionally required to execute the desired legal course; or
-- it is the applicable sole command source for the required modification, such as an applicable speed change.
+At commitment, authoritative rules derive and atomically consume the minimum
+Navigate resources required by the selected result:
 
-Special rules may also increase or reduce capabilities during Determine Course.
+- prefer an available, usable transient Navigate dial over a stored Navigate
+  token;
+- use a token when no usable dial is available and the token alone is
+  sufficient;
+- automatically use dial plus token when the selected result requires both,
+  including a speed change of two; and
+- do not expose an explicit interaction to resolve Navigate with no effect.
 
-Before commitment, the player must be able to see whether the currently determined course will consume a command token or other applicable resource.
+A course requiring no Navigate modification consumes no Navigate source and
+does not resolve Navigate.
+
+Special rules may increase or reduce capabilities during Determine Course only
+through their applicable accepted rule authority.
+
+The RRG permits the tabletop player to choose dial, token, or both before
+resolving the command and permits resolving a command without producing its
+effect. This result-first, pre-commit-transient, commit-time derivation adopts
+digital commitment timing and intentionally narrows the technically legal
+tabletop source and no-effect choices. It is an Owner-approved rules deviation,
+not an interpretation of or requirement from the RRG.
 
 ### Important distinction
 
 ```text
 Determine Course
       │
-      ├─ derive legal maneuver
-      ├─ derive required sources
+      ├─ player selects legal speed/yaw result
+      ├─ authority derives minimum required sources
       └─ show expected consumption
               │
               │ no resources consumed
               ▼
          COMMIT MANEUVER
               │
-              ├─ consume required dial/token/rule resources
-              └─ movement becomes authoritative
+              ├─ atomically consume derived resources
+              └─ speed/course/execution become authoritative
 ```
 
 ---

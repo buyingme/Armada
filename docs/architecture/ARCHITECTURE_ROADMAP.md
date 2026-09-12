@@ -67,6 +67,19 @@ Rules:
   not an unresolved ownership decision. Broader non-attack concerns grouped
   under `BC-001` and `BC-003` remain open.
 
+## Accepted Immediate Faceup Damage-Card Resolution Milestone
+
+- [`ADR-014`](adr/ADR-014-canonical-immediate-faceup-damage-card-resolution.md)
+  is the normative authority for stable physical damage-card identity,
+  `ShipInstance`-owned unresolved immediate-resolution state, exact-once
+  validation, purpose-specific enclosing identities and passive concealment.
+- ADR-014 specializes without redesigning ADR-006, ADR-010, ADR-012, ADR-013,
+  or CON-003. Broader live-state, interaction, rule, Network, save, and replay
+  boundary work remains open.
+- CAP-DMG-004 through CAP-DMG-009 remain distinct CON-003 Draft packages. An
+  RCP may be Owner-accepted as a normative Draft; `Integrated` remains a later
+  evidence state requiring separate explicit Owner approval.
+
 ## Incremental C# Migration Direction
 
 The Armada project intends to adopt C# incrementally where stronger typing, clearer domain boundaries, improved static reasoning, and better AI-assisted implementation quality provide sufficient value.

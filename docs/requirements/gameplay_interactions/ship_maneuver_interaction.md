@@ -11,6 +11,8 @@
 
 Accepted by: Project Owner
 Accepted date: 2026-09-10
+Refined from committed Owner decisions: 2026-09-11
+Audit corrections and additional Owner decisions: 2026-09-12
 
 ## 1. Purpose and authority
 
@@ -38,9 +40,16 @@ Authority is divided by question type:
 - [ADR-010](../../architecture/adr/ADR-010-gameplay-interaction-decision-equivalent-recovery.md)
   governs decision-equivalent recovery and the transient presentation
   boundary.
-- Accepted command, Network, replay, save/load, and rule-capability authority
-  retains its existing ownership. This document cross-references those
-  boundaries and does not replace them.
+- Accepted command, Network, replay, save/load, and responsibility-specific
+  gameplay-rule authorities retain their existing ownership. CON-003 Rule
+  Capability Packages record integration traceability and completeness; they
+  do not replace those gameplay authorities.
+- [Ship Maneuver Owner Decision Record](ship_maneuver_owner_decisions.md)
+  supplies the committed Owner interpretations and intentional digital
+  deviations incorporated by the 2026-09-11 refinement.
+- [Ship Maneuver Prerequisite Impact Analysis](../../architecture/discovery/ship-maneuver-prerequisite-impact-analysis.md)
+  and [Ship Maneuver Consequence-Timing Discovery](../../architecture/discovery/ship-maneuver-consequence-timing-discovery.md)
+  remain supporting evidence, not normative authority.
 
 The current implementation and tests are evidence for established behavior,
 not independent normative authority. Known implementation drift is recorded
@@ -58,7 +67,7 @@ Ship Activation
    │  ├─ select a legal Navigate-modified speed/yaw result
    │  │  └─ preview automatically derived minimum source consumption
    │  ├─ adjust legal yaw
-   │  └─ choose legal tool side/alignment
+   │  └─ derive deterministic legal tool side/alignment
    ├─ Commit Maneuver [binding]
    ├─ Execute Maneuver
    │  ├─ determine final ship position
@@ -80,8 +89,12 @@ projection, and reconstruction of a live Maneuver decision.
 
 Out of scope are Squadron movement, Attack, the hypothetical Maneuver Helper,
 generic movement or Network architecture, generic UI framework design,
-BUG-046, and the detailed behavior of individual cards or other special
-rules.
+BUG-046, and purpose-specific ownership of obstacle or card rules. This
+specification defines only the Maneuver interaction and return boundaries
+required to invoke applicable obstacle and Maneuver-triggered damage-card Rule
+Capabilities. Their detailed behavior remains with the accepted
+responsibility-specific owners identified and evidenced by their CON-003
+packages.
 
 ## 3. Cross-cutting state and authority requirements
 
@@ -204,8 +217,9 @@ At positive speed, each active joint may then be adjusted left or right only
 within the yaw value shown for that joint at the current candidate speed,
 including an applicable Navigate dial bonus.
 
-The tool and preview SHALL update immediately as legal candidate speed, yaw,
-or side choices change. An uncommitted course may be adjusted or abandoned in
+The tool and preview SHALL update immediately as legal candidate speed or yaw
+changes. The legal tool side is re-derived automatically under SMI-021. An
+uncommitted course may be adjusted or abandoned in
 favor of another legal course. These actions do not change
 `ShipInstance.current_speed`, consume Navigate resources, move the canonical
 ship, create an active Maneuver execution, or commit its final transform.
@@ -226,14 +240,22 @@ separate deferred Maneuver Helper.
 - The preview places the ship on the same side of the tool at the start and
   finish.
 - The ship may not overlap the maneuver tool at its ordinary final position.
-  If one side would cause that overlap, the other side SHALL be used. If
-  neither side would cause it, the controller may choose either side.
+  Armada SHALL preserve the established deterministic automatic tool-side
+  derivation. If the initially derived side would cause that overlap, the
+  other legal side SHALL be used. If both sides are legal, the deterministic
+  production-compatible derivation selects the side; the controller receives
+  no additional left/right choice.
 - If physical board congestion would prevent placement of the tool, the
   interaction SHALL still permit determination of the rules-equivalent final
   position; obstruction by intermediate ships, squadrons, or obstacles does
   not itself block the Maneuver.
 - At speed zero, the top/end segment is aligned relative to the ship exactly as
   it would be for a completely straight maneuver tool.
+
+Automatic tool-side derivation is an intentional Owner-approved digital
+deviation from the RRG choice available when either tabletop placement is
+legal. Speed-zero support extends that deterministic behavior and does not
+introduce player side selection.
 
 ### SMI-022 — Preview meaning
 
@@ -362,8 +384,8 @@ remain reversible and non-authoritative.
 Commitment SHALL validate the matching ship and Ship Activation identity, the
 `OPEN` Maneuver opportunity, absence of an active Maneuver execution, canonical
 starting speed, candidate resulting speed, legal yaw, Navigate source
-availability and budget, legal tool side, and any applicable integrated rule
-modifiers.
+availability and budget, the deterministically derived legal tool side, and any
+applicable integrated rule modifiers.
 
 Acceptance atomically derives and consumes the minimum required Navigate
 source or sources under SMI-030, applies the resulting canonical speed,
@@ -430,11 +452,25 @@ The RRG event at which a ship has executed or finished its maneuver is distinct
 from Armada's later canonical transition of the Maneuver opportunity to
 `CONSUMED`.
 
-Ship-overlap placement/reduction, overlap damage, and their immediate results
-resolve before the RRG executed-maneuver event. Applicable consequences whose
-timing is after executing or finishing a maneuver resolve after that event.
-This includes baseline post-execution overlap work and permits future
-**Integrated** Rule Capability Packages to recognize the RRG event without
+The collision-resolution search first establishes the authoritative final ship
+position and the overlap facts produced by the committed Maneuver. Intermediate
+plotted positions, reduced-speed attempts, and other search positions are not
+independent gameplay events and SHALL NOT trigger consequences.
+
+The RRG expressly provides only part of the needed ordering: ship-overlap
+effects, including collision damage, complete before the ship has executed its
+Maneuver; obstacle consequences apply after executing; the FAQ places Damaged
+Controls during Move Ship; and displaced squadrons are placed after the ship
+finishes its Maneuver. Those statements do not directly dictate Armada's full
+cross-category consequence hierarchy.
+
+SMI-064 therefore applies the committed Owner hierarchy as an intentional
+Armada interpretation and, where necessary, digital deviation. In particular,
+required Squadron displacement occurs first, and obstacle-only Damaged Controls
+then resolves before the obstacle's own consequence. Neither that relative
+allocation nor the complete SMI-064 sequence SHALL be presented as directly
+dictated by the RRG. Purpose-specific implementations may recognize their RRG
+timing conditions at the Owner-assigned interaction boundary without
 prematurely completing the Armada opportunity.
 
 The matching Maneuver may remain `OPEN` with its active execution record after
@@ -445,11 +481,26 @@ resolve. Only SMI-070 defines the later normal `CONSUMED` boundary.
 
 ### SMI-060 — Authoritative overlap determination
 
-Overlap is determined from the committed Maneuver and the ship's resulting
-final-position attempt, not from the transient ghost. A component crossed only
-during movement is not overlapped. Applicable base geometry defined by the RRG
-governs detection, including the ship's shield dials and their plastic frames;
-squadron activation sliders are ignored.
+Overlap is determined from the committed Maneuver and the authoritative final
+ship position produced by collision resolution, not from the transient ghost or
+an intermediate collision-search attempt. A component crossed only during
+movement is not overlapped.
+
+Armada intentionally uses the existing simplified rectangular `ShipBase` as
+the authoritative footprint for ship-overlap/collision and for the moved ship
+in Squadron-displacement validation. This is an Owner-approved digital
+approximation: shield-dial assemblies and plastic framing that count under the
+tabletop overlap rule are not added to this digital footprint. A purpose-
+specific rule such as play-area destruction may use its separately applicable
+footprint.
+
+Obstacle overlap SHALL use explicit canonical gameplay contours that accurately
+represent each of the six physical core obstacle tokens. Those contours are
+derived and verified once from sufficiently faithful official assets or another
+approved authoritative source. Runtime sprite bounds, bounding rectangles,
+`SPRITE_BOUNDS_FACTOR`, alpha masks, and presentation scaling SHALL NOT provide
+authoritative obstacle geometry. Squadron bases use the one fixed project
+diameter; heterogeneous Squadron base geometry is out of scope.
 
 Touching without one base lying on top of another is not overlap. The
 authoritative execution path SHALL determine and record the final result and
@@ -479,16 +530,21 @@ speed by ship overlap may overlap the maneuver tool at its final position.
 Its canonical current speed returns/remains at the speed shown by its speed
 dial after execution.
 
-After the legal final position is determined, deal one facedown damage card to
-the moving ship and one facedown damage card to the closest ship it overlapped,
+After final geometry and required Squadron displacement are established, the
+ordinary ship-collision consequence deals one facedown damage card to the
+moving ship and one facedown damage card to the closest ship it overlapped,
 subject to applicable integrated rule modifications. If more than one ship was
-overlapped, the RRG closest-ship determination governs. Ship-overlap execution
-is not complete until this damage and any immediate mandatory consequences,
-including destruction, resolve authoritatively.
+overlapped, the RRG closest-ship determination governs. Only after that ordinary
+consequence completes may applicable effects triggered by the ship collision
+resolve. Ship-overlap execution is not complete until this damage and any
+immediate mandatory consequences, including destruction, resolve
+authoritatively.
 
-Only after the ship-overlap placement/reduction, damage, and immediate results
-complete has the ship reached the RRG executed-maneuver event described by
-SMI-052.
+The RRG requirement that ship-overlap effects, including collision damage,
+complete before the ship is considered to have executed its Maneuver remains
+applicable. SMI-064 additionally places Squadron displacement before those
+collision consequences and collision-triggered effects after them as an Owner
+interpretation; those added relative placements are not attributed to the RRG.
 
 An active ship destroyed by an overlap consequence follows the accepted
 exceptional terminal Ship Activation path. The system SHALL NOT fabricate
@@ -502,9 +558,9 @@ placement. Mandatory displacement is then a nested authoritative interaction.
 Each affected `SquadronInstance` remains the owner of its canonical squadron
 position.
 
-The player who did not move the ship controls placement of every displaced
-squadron, regardless of squadron ownership. That player may place them in any
-order and SHALL:
+The player who did not move the ship controls the submitted identity selection
+and placement, regardless of squadron ownership. That player may explore
+placement order transiently and SHALL:
 
 - place as many as possible touching the ship that moved;
 - place a squadron that cannot touch the ship touching another squadron that
@@ -512,21 +568,61 @@ order and SHALL:
 - keep every squadron inside the play area; and
 - avoid overlap with any ship or squadron.
 
+All Armada Squadron bases have the same fixed size. Authority SHALL validate
+the proposed final displacement as one complete batch containing the identity
+and position of every placed affected squadron and the identity of every
+excluded affected squadron.
+
+Authority SHALL first determine the maximum number of affected squadrons for
+which any complete legal placement exists. The displacement-controlling player
+chooses which squadron identities form that maximum-cardinality placeable
+subset when more than one equally maximal identity subset is legal, and chooses
+their positions. The accepted batch SHALL place exactly that maximum number.
+
+Within a maximum-cardinality placeable subset, authority SHALL also determine
+the maximum number that can legally be placed directly touching the moved ship
+while every remaining placed squadron satisfies the secondary placement rule.
+A submitted batch is invalid if it places fewer total squadrons, or fewer
+direct-touching squadrons, than those authoritative maxima. Tentative identity
+selection, order, or placement cannot establish inability to touch or place a
+squadron.
+
+Every affected Squadron identity excluded from the chosen maximum legally
+placeable subset is destroyed when the complete batch is accepted. Authority
+validates and applies that consequence; the displacement-controlling player
+selects only among equally maximal legal identity subsets. This is an explicit
+Armada Owner interpretation resolving a gap in the repository-held RRG/FAQ. It
+is not an RRG-stated fallback, an optional reduction in the number placed, or
+permission to manufacture additional destruction through inefficient identity
+selection, order, or placement.
+
 A squadron placed on an obstacle because of this displacement does not resolve
 that obstacle's overlap effect.
 
-Each tentative drag or placement ghost is transient. Mandatory displacement
-and its confirmed squadron positions SHALL resolve through an authoritative
-semantic transition. Invalid placement is rejected without completing that
-squadron's placement or ending the nested interaction.
+Each tentative drag, placement order, or placement ghost is transient.
+Mandatory displacement and its confirmed complete batch SHALL resolve through
+one authoritative semantic boundary. Invalid or suboptimal placement is
+rejected without ending the nested interaction. At minimum, the interaction
+SHALL report the authoritative deficiency, including the required and submitted
+placed and direct-touch counts where applicable. It MAY provide deterministic
+guidance or a legal proposal, but SHALL NOT use an arbitrary retry counter or
+random fallback. Player-controlled identity selection and placement remain the
+normal interaction.
 
-All affected squadrons must be legally placed and the authoritative
-displacement result accepted before authority-side control returns to the
-still-`OPEN`, matching active Maneuver execution for re-evaluation.
+Every identity in the maximum legally placeable subset must be legally placed,
+every excluded identity must be validated for the required destruction, and
+the complete authoritative displacement result must be accepted before
+authority-side control returns to the still-`OPEN`, matching active Maneuver
+execution for re-evaluation.
 `InteractionFlow`, modal state, controllers, and callbacks may present or
 route the interaction but are not gameplay or completion authority. This
 specification introduces no concrete command design or generic continuation
 mechanism.
+
+Required displacement completes before later ship-collision damage. If a later
+collision consequence destroys the moving ship, accepted Squadron positions
+and any authority-determined destruction of genuinely unplaceable squadrons are
+not undone.
 
 ### SMI-063 — Obstacle overlap
 
@@ -534,16 +630,20 @@ A ship overlaps an obstacle when part of its base is on top of the obstacle at
 its final position. Moving through an obstacle has no effect by itself. If the
 ship overlaps more than one obstacle, every applicable obstacle rule is
 invoked and its effects may resolve in any order as provided by the RRG. Where
-no RRG rule or **Integrated** Rule Capability Package assigns that ordering
+no RRG rule or other accepted gameplay-rule authority assigns that ordering
 choice to another player, Armada's Owner interpretation is that the controller
 of the moving ship chooses the resolution order. This controller assignment is
 an explicit Armada interpretation of an RRG ambiguity, not an explicit RRG
-rule.
+rule. An Integrated Rule Capability Package may evidence such an accepted rule
+and its responsibility-specific owner, but the package does not itself own or
+create the gameplay ordering.
 
 Obstacle detection and invocation are part of baseline Maneuver execution,
 including at speed zero. The detailed effect of each obstacle, any choice it
 creates, and any modification by an objective, card, or special rule remain
-with the corresponding accepted rule authority or Rule Capability Package.
+with the applicable responsibility-specific gameplay authorities. The Rule
+Capability Package records those owners and the evidence that the behavior is
+complete across its applicable surfaces.
 Every live nested choice, including the moving ship controller's multiple-
 obstacle order choice, must resolve authoritatively and satisfy SAI-001 and
 ADR-010. While the activation boundary survives, it returns through its
@@ -553,32 +653,65 @@ creates no generic continuation owner, queue, stack, or FSM.
 Invoking every applicable obstacle rule is mandatory and cannot be omitted
 merely because its detailed rule logic is owned elsewhere. An invoked rule may
 itself provide an optional result; that option remains governed by the rule and
-its Rule Capability Package.
+its responsibility-specific implementation authority and is traced by its Rule
+Capability Package.
+
+Before BUG-043's semantic Maneuver cutover depends on their effects, the core
+Maneuver-overlap slices for asteroid fields, debris fields, and the station must
+each have a CON-003 Rule Capability Package at `Integrated` status, including
+the explicit Owner approval required by CON-003. `Integrated` records complete
+traceability, evidence, tests, metadata alignment, and applicable-surface
+coverage; it does not make the package a gameplay authority owner. Maneuver
+owns only detection of the committed overlap, invocation of the
+responsibility-specific implementation identified by that package, and return
+to the still-live Maneuver boundary. It does not own the obstacle effect, its
+choices, damage/discard semantics, recovery, or a generic obstacle-resolution
+command. Unrelated obstacle capabilities such as attack obstruction are not
+prerequisites unless required by one of those slices.
 
 ### SMI-064 — Multiple overlap categories
 
-Ship, squadron, and obstacle overlap consequences that apply to the same
-executed Maneuver SHALL resolve while they remain applicable. Resolution
-ordering SHALL follow the RRG and applicable integrated Rule Capability
-Package authority. Ship-overlap resolution and its damage complete before the
-RRG executed-maneuver event.
-Where those sources do not uniquely determine the relative order of mandatory
-squadron displacement and post-execution obstacle effects, Armada resolves
-squadron displacement first and obstacle effects second. Multiple applicable
-obstacle effects may resolve in any order as provided by the RRG, with the
-controller assignment in SMI-063 where no rule assigns another player. An
-explicit RRG or Integrated Rule Capability Package order takes precedence over
-the fallback.
+After authoritative final geometry is established, baseline Maneuver
+consequences resolve through their purpose-specific owners in this hierarchy:
+
+1. required Squadron displacement;
+2. ordinary ship-collision consequences;
+3. applicable effects triggered by ship collision;
+4. any applicable obstacle-only Damaged Controls boundary not already resolved
+   for the same faceup card instance during this Maneuver;
+5. applicable obstacle-overlap consequences; and
+6. remaining applicable post-execution Maneuver effects.
+
+This complete hierarchy is an Owner interpretation and, where necessary, an
+intentional Armada digital deviation; it is not directly dictated by the RRG.
+It does not move detailed obstacle or damage-card rule ownership into Maneuver.
+Effects within a category continue to obey their individual RRG-derived
+behavior, accepted responsibility-specific gameplay authorities, and
+applicable player-ordering rules except for the explicit cross-category Owner
+allocations stated here.
+
+The obstacle-only Damaged Controls allocation in item 4 is a settled Owner
+decision. The FAQ supplies the card's during-Move-Ship timing but does not
+directly order it against Squadron displacement and the obstacle's own
+post-execution consequence. Armada intentionally resolves required Squadron
+displacement first, then resolves each applicable faceup Damaged Controls
+instance once, and only then resolves the obstacle consequence. This allocation
+SHALL be identified as an Armada interpretation/deviation rather than an
+RRG-derived order. A Maneuver that overlaps both a ship and an obstacle resolves
+each faceup Damaged Controls instance only once, in item 3, and does not repeat
+it in item 4.
+
+Multiple applicable obstacle effects may resolve in any order as provided by
+the RRG. Where no RRG rule or other accepted gameplay-rule authority assigns
+that choice elsewhere, the moving ship's controller chooses their order under
+the Owner interpretation in SMI-063. Applicable obstacle consequences converge
+before remaining post-execution effects such as Ruptured Engine.
 
 For a surviving normal activation, the Maneuver opportunity remains `OPEN`
 throughout the complete mandatory consequence sequence.
 
-The RRG explicitly establishes the rules-event ordering of ship-overlap
-placement/reduction and damage before the executed-maneuver event, and obstacle
-effects after execution. Where neither the RRG nor an Integrated Rule
-Capability Package determines the relative order between mandatory squadron
-displacement and post-execution obstacle effects, displacement-first is an
-Armada Owner interpretation.
+The final geometry and completed Squadron displacement are not rolled back if a
+later consequence destroys the moving ship.
 
 ### SMI-065 — Play-area destruction after ship-overlap resolution
 
@@ -591,8 +724,9 @@ entirely inside the play area.
 At the actual final position, the ship is destroyed if any portion of its base
 is outside the play area. For this RRG determination, ignore the ship's shield
 dials and the plastic portions of the base that frame those dials. This
-geometry is deliberately different from ship-overlap geometry under SMI-060,
-which includes those parts.
+purpose-specific play-area footprint SHALL encode those RRG exclusions and
+SHALL NOT expand the simplified rectangular `ShipBase` with excluded tabletop
+protrusions.
 
 Destruction resolves through ADR-006's accepted exceptional terminal semantics:
 the authority clears the activation and active Maneuver boundary without
@@ -600,16 +734,53 @@ fabricating normal completion, return, or End Activation.
 
 ### SMI-066 — Continuing applicability and survival
 
-After the RRG executed-maneuver event, each consequence resolves only while
-its trigger, subject, and required owning boundary remain applicable. After
-each authoritative consequence, the authority SHALL re-evaluate survival and
-the remaining applicable obligations.
+After every authoritative Maneuver consequence, authority SHALL re-evaluate
+survival and the remaining applicable obligations. Each later consequence
+resolves only while its trigger, subject, and required owning boundary remain
+applicable.
 
 If an earlier consequence destroys the moving ship, Armada SHALL NOT fabricate
 later ship-dependent consequences, a purpose-specific return to a nonexistent
 Maneuver boundary, normal Maneuver `CONSUMED`, or End Activation. Independent
 consequences that remain applicable despite destruction are governed by their
-own accepted rule authority or Integrated Rule Capability Package.
+own accepted gameplay-rule and responsibility-specific implementation
+authorities, as traced by an Integrated Rule Capability Package where required.
+
+Completed final geometry and Squadron displacement survive later destruction.
+An independently applicable consequence belonging to another surviving game
+object retains its own purpose-specific authority.
+
+### SMI-067 — Maneuver-triggered damage-card capability boundaries
+
+Before BUG-043's semantic Maneuver cutover depends on them, the Thruster
+Fissure, Damaged Controls, and Ruptured Engine prerequisite slices must each
+have a CON-003 Rule Capability Package at `Integrated` status, including the
+explicit Owner approval required by CON-003. Together with the three obstacle
+slices in SMI-063, all six prerequisite slices SHALL satisfy that gate.
+`Integrated` is a traceability/completeness status and does not transfer
+gameplay authority to the package. Maneuver SHALL expose only the authoritative
+interaction and return boundaries needed by the responsibility-specific
+implementations traced in those packages:
+
+- a committed Navigate speed change exposes Thruster Fissure at its RRG
+  `when`-speed-changes timing during Determine Course and before Move Ship;
+- authoritative final overlap facts expose each applicable faceup Damaged
+  Controls instance once for that Maneuver at item 3 or item 4 of SMI-064,
+  using the Owner-assigned cross-category allocation; and
+- Ruptured Engine retains its RRG `after you execute a maneuver` eligibility,
+  but Armada invokes it only after obstacle consequences converge under the
+  Owner-established cross-category hierarchy.
+
+Each individual faceup damage-card instance is independently applicable and
+must not be collapsed by shared name, rule ID, or `effect_id`. Facedown copies
+do not provide an active effect. Same-player effects sharing a timing retain the
+RRG player-order choice; different-player same-timing effects retain the RRG
+first-player ordering. Detailed eligibility, damage semantics, choices,
+serialization, replay, Network, recovery, and verification remain with each
+accepted responsibility-specific owner and must be evidenced by the card's
+Rule Capability Package. This requirement neither integrates unrelated damage
+cards nor makes Maneuver or a Rule Capability Package a generic rule-effect
+owner.
 
 ## 10. Completion and return to Ship Activation
 
@@ -619,11 +790,15 @@ For a surviving normal activation, the Maneuver completes only when:
 
 1. one legal course, including a legal speed-zero course, has been committed;
 2. the authoritative final ship transform or no-movement result is accepted;
-3. all applicable ship-overlap damage and immediate mandatory results are
-   complete;
-4. all required squadron displacement is complete;
-5. all applicable obstacle consequences and nested choices are complete; and
-6. no other integrated mandatory Execute Maneuver consequence remains live.
+3. all required Squadron displacement, including any genuine-unplaceability
+   consequence, is complete;
+4. all applicable ordinary ship-collision consequences and collision-triggered
+   effects are complete;
+5. all applicable damage-card interaction boundaries assigned before obstacle
+   resolution by SMI-064 and SMI-067 are complete;
+6. all applicable obstacle consequences and nested choices are complete;
+7. all remaining applicable post-execution effects are complete; and
+8. no other integrated mandatory Execute Maneuver consequence remains live.
 
 Only then may the accepted normal completion transition atomically change the
 matching ADR-006 Maneuver opportunity from `OPEN` to `CONSUMED` and retire the
@@ -693,29 +868,39 @@ The baseline defined here includes:
 - Owner-approved automatic minimum-source derivation for Navigate dial, token,
   and combined resolution;
 - canonical speed bounds and live speed-zero representation;
-- ordinary course preview, alignment, commitment, and execution;
-- RRG ship, squadron, and obstacle overlap integration; and
+- ordinary course preview, deterministic automatic tool-side alignment,
+  commitment, and execution;
+- authoritative final geometry, ship overlap, complete-batch Squadron
+  displacement, obstacle detection/invocation, and the consequence hierarchy in
+  SMI-064; and
 - authoritative completion and decision-equivalent recovery.
 
-### SMI-091 — Deferred integrated rule behavior
+### SMI-091 — Rule Capability-traced behavior
 
-Cards, objectives, obstacle-specific effects, or other special rules may
-modify the baseline only through their accepted Rule Capability Package and
-applicable rule authority. This document does not invent speculative upgrade
-behavior.
+Cards, objectives, obstacle-specific effects, or other special rules may modify
+the baseline only through their accepted responsibility-specific gameplay and
+implementation authorities, with integration evidenced through the applicable
+Rule Capability Package. The prerequisite Maneuver-overlap slices for asteroid
+fields, debris fields, and station, plus Thruster Fissure, Damaged Controls,
+and Ruptured Engine, retain those purpose-specific owners even though the
+Maneuver boundary must invoke and await them. Each of those six slices must
+reach CON-003 `Integrated` status with explicit Owner approval before BUG-043's
+semantic cutover depends on it. This document does not integrate those packages
+or invent speculative behavior.
 
 In particular, baseline speed zero exposes no ordinary yaw controls. A
 speed-zero yaw interaction exists only when an **Integrated** rule or card
 effect explicitly permits clicks of yaw at speed zero. Its legal clicks,
 declaration, presentation, execution, collision result, persistence, Network
-behavior, and tests belong to that effect's Rule Capability Package while
-preserving the canonical and completion boundaries in this document. Codex
-may not mark such a package `Integrated`.
+behavior, and tests remain with the applicable responsibility-specific owners
+and are traced by that effect's Rule Capability Package while preserving the
+canonical and completion boundaries in this document. Codex may not mark such
+a package `Integrated`.
 
-An Integrated package may extend speed-zero execution behavior, but it SHALL
-NOT weaken ADR-006 commitment atomicity, active-execution ownership,
-decision-equivalent recovery, nested-consequence return, or exact-once
-completion invariants.
+Rule behavior evidenced by an Integrated package may extend speed-zero
+execution, but it SHALL NOT weaken ADR-006 commitment atomicity,
+active-execution ownership, decision-equivalent recovery, nested-consequence
+return, or exact-once completion invariants.
 
 ## 13. Acceptance requirements
 
@@ -729,21 +914,25 @@ completion invariants.
 | SMI-AC-006 | Candidate speed changes are transient, leave canonical speed/resources unchanged, and re-derive the tool; accepted commitment atomically applies the resulting canonical speed. |
 | SMI-AC-007 | A rejected, unrelated, duplicate, or stale-identity commitment changes none of canonical speed, resources, committed result, active execution, or opportunity state. |
 | SMI-AC-008 | Before commitment, candidate speed/yaw, course geometry, and preview are reversible and non-authoritative; accepted commitment atomically derives and consumes sources, applies speed/result, and creates the matching active execution while leaving Maneuver `OPEN`. |
-| SMI-AC-009 | Positive-speed execution uses the committed course and canonical speed; speed-zero execution preserves transform but still executes a Maneuver. |
-| SMI-AC-010 | Ship overlap retries at successively lower temporary speeds without changing canonical speed, then applies required overlap damage. |
+| SMI-AC-009 | Positive-speed execution uses the committed course and canonical speed; speed-zero execution preserves transform but still executes a Maneuver; authoritative final geometry is established before dependent consequences and intermediate collision-search attempts do not trigger them. |
+| SMI-AC-010 | Ship overlap searches successively lower temporary speeds without changing canonical speed; after final geometry and Squadron displacement, ordinary collision damage precedes collision-triggered effects. |
 | SMI-AC-011 | Speed-zero execution evaluates applicable ship, squadron, and obstacle overlaps. |
-| SMI-AC-012 | The non-moving player completes every required squadron displacement under RRG placement constraints; accepted positions remain on their `SquadronInstance`s and authority-side control returns to the active Maneuver boundary. |
-| SMI-AC-013 | Every applicable obstacle rule is invoked; rule-provided optional results remain optional, and the moving ship's controller chooses among multiple RRG-permitted orders unless an RRG rule or Integrated Rule Capability Package assigns another player or order. |
+| SMI-AC-012 | The non-moving player proposes one complete Squadron-displacement batch containing placed and excluded identities and all placed positions. Authority validates the maximum legally placeable subset, permits identity choice only among equally maximal legal subsets, validates the maximum direct-touch count and secondary placement, and destroys exactly the identities genuinely excluded from the chosen maximal subset. Suboptimal selection, order, or placement cannot cause additional destruction and receives deficiency guidance. |
+| SMI-AC-013 | The asteroid, debris, and station Maneuver slices each reach CON-003 `Integrated` status with explicit Owner approval before BUG-043 cutover depends on them. Maneuver invokes the responsibility-specific implementation without transferring obstacle-rule ownership to Maneuver or the package; rule-provided options remain optional, and the moving ship's controller chooses among multiple RRG-permitted orders unless another accepted gameplay-rule authority assigns the choice. |
 | SMI-AC-014 | For a surviving normal activation, Maneuver remains `OPEN` through all mandatory consequences; after purpose-specific authority-side return and re-evaluation, completion consumes it and retires the active execution exactly once. |
 | SMI-AC-015 | Passive peers project ordered viewer-authorized canonical state and originate neither player decisions nor automatic authoritative follow-up commands; identical authority-private representation is not required. |
 | SMI-AC-016 | Save/load/reconnect rebuild transient pre-commit geometry from canonical state or resume committed mandatory consequences without duplication. |
 | SMI-AC-017 | A rejected Maneuver preserves authoritative state and re-exposes the same legal decision unless an exceptional terminal transition ended it. |
 | SMI-AC-018 | An active ship destroyed by a Maneuver consequence uses the accepted exceptional terminal path and receives no fabricated normal completion. |
-| SMI-AC-019 | Ship-overlap placement/reduction and damage precede the RRG executed-maneuver event; post-execution consequences may keep Armada Maneuver `OPEN` after that event until normal completion. |
+| SMI-AC-019 | The RRG-derived timing statements and the Owner-assigned cross-category hierarchy remain explicitly distinguished: ship-collision effects satisfy the RRG pre-execution requirement, while displacement-first and obstacle-only Damaged Controls after displacement but before obstacle consequences are Armada interpretations/deviations. Mandatory consequences may keep Armada Maneuver `OPEN` beyond any RRG executed-maneuver timing event. |
 | SMI-AC-020 | Play-area destruction is evaluated from the actual final position after ship-overlap resolution, using RRG out-of-bounds geometry; a plotted but superseded out-of-bounds position is insufficient. |
-| SMI-AC-021 | After each consequence, authority re-evaluates survival and applicability; destruction does not fabricate later ship-dependent consequences or a return to a removed Maneuver boundary. |
-| SMI-AC-022 | Where neither RRG nor an Integrated Rule Capability Package fixes squadron-displacement versus obstacle order, mandatory displacement resolves first. |
+| SMI-AC-021 | After each consequence, authority re-evaluates survival and applicability; destruction does not fabricate later ship-dependent consequences or a return to a removed Maneuver boundary, but completed final geometry and Squadron displacement remain accepted. |
+| SMI-AC-022 | Under the Owner-assigned SMI-064 hierarchy, consequences resolve as Squadron displacement; ordinary collision; collision-triggered effects; applicable obstacle-only Damaged Controls not already resolved for that card instance; obstacles; remaining post-execution effects. This complete order is an Armada interpretation/deviation rather than an RRG-derived sequence, and purpose-specific rules retain responsibility-specific ownership within each boundary. |
 | SMI-AC-023 | Dial effect permits speed ±1 and optional +1 yaw on one joint; token effect permits speed ±1 with no yaw; combined effects permit total speed ±2 and optional dial yaw. Armada exposes no explicit source choice or no-effect resolution. |
+| SMI-AC-024 | Tool-side alignment is derived automatically and deterministically; if both sides are legal, the player receives no side-selection decision. |
+| SMI-AC-025 | The ship-overlap footprint is the simplified rectangular `ShipBase`; core obstacle overlap uses verified explicit canonical contours and never runtime sprite-derived geometry. |
+| SMI-AC-026 | Thruster Fissure is exposed at the committed Determine Course speed-change boundary, each Damaged Controls faceup instance once at its Owner-assigned SMI-064 boundary, and Ruptured Engine only after obstacle convergence. All three slices reach CON-003 `Integrated` status with explicit Owner approval before BUG-043 depends on them; detailed rule ownership remains with the responsibility-specific authorities recorded by those packages. |
+| SMI-AC-027 | Multiple applicable faceup instances are not collapsed by shared card identity; a player chooses the order of that player's same-timing effects, and when both players have effects at the same timing the first player resolves all of theirs first. Facedown copies provide no active effect. |
 
 ## Appendix A — Evidence classification and traceability
 
@@ -755,11 +944,12 @@ completion invariants.
 | Combined Navigate | Commands (combined-command bullet and example) | MVP CM-003 and maneuver-tool NAV-004 | Production sums budgets; tests verify two accepted increments | Preserve combined total speed change 2 and auto-consume both when required |
 | Speed bounds | Speed; Speed Chart | MVP MV-020–MV-022 | `ShipInstance`, `SetSpeedCommand`, activation state, and tests enforce 0..max | `−` stays visible and inert at 0 |
 | Candidate and committed speed | Speed | ADR-006 Sections 3.3 and 4; ADR-010 | Current separate speed mutation and BUG-043 convergence tests are implementation evidence that predate the accepted atomic commitment boundary | Collapse and expand transient tool across candidate 0↔positive |
-| Tool/yaw/preview | Maneuver Tool; Ship Movement; Yaw | SAI-061; ADR-010 | Tool state derives segments, chart limits, alignment, and ghost | Top/end segment only at baseline speed 0; straight alignment; digital source derivation |
-| Commitment/execution | Ship Movement; Overlapping | SAI-060–SAI-062; amended ADR-006 | `ExecuteManeuverCommand` persists transform, but current early consumption is drift | Distinguish the RRG executed event from later Armada consumption; speed-zero uses authoritative progression |
-| Ship overlap | Overlapping | SAI-063 | Resolver/tests implement temporary reduction and damage path | Applies at speed zero |
-| Squadron displacement | Overlapping | SAI-064; SAI-001; amended ADR-006 | Current Start/Commit Displacement commands, controller flow, and placement tests are verified production behavior, not accepted lifecycle ownership | Maneuver remains open until displacement completes |
-| Obstacle overlap | Obstacles; Overlapping | SAI-065; CON-003 for integrated rule packages | No complete baseline Maneuver obstacle path was found | Applies at speed zero; effect detail remains rule-owned |
+| Tool/yaw/preview | Maneuver Tool; Ship Movement; Yaw | SAI-061; ADR-010 | Tool state derives segments, chart limits, alignment, and ghost | Preserve deterministic automatic tool-side derivation with no player side choice; extend it to the top/end-segment-only speed-zero interaction |
+| Commitment/execution | Ship Movement; Overlapping | SAI-060–SAI-062; amended ADR-006 | `ExecuteManeuverCommand` persists transform, but current early consumption is drift | Distinguish the RRG timing event, the Owner-assigned consequence hierarchy, and later Armada consumption; speed-zero uses authoritative progression |
+| Ship overlap | Overlapping | SAI-063 | Resolver/tests implement temporary reduction and damage path | Use the simplified rectangular `ShipBase`; after final geometry, displacement precedes ordinary collision damage and collision-triggered effects; applies at speed zero |
+| Squadron displacement | Overlapping | SAI-064; SAI-001; amended ADR-006 | Current Start/Commit Displacement commands, controller flow, and placement tests are verified production behavior, not accepted lifecycle ownership | Validate one complete batch against the maximum legally placeable subset and maximum direct-touch count; the non-moving player chooses identities among equally maximal subsets; only genuinely excluded identities are destroyed |
+| Obstacle overlap | Obstacles; Overlapping | SAI-065; ADR-003 responsibility-specific authority; CON-003 integration evidence | Current approximation and effect path are incomplete | Use verified explicit canonical contours; require asteroid, debris, and station slices to reach Owner-approved `Integrated`; invoke their implementation surfaces at the Owner-assigned boundary without transferring rule ownership |
+| Maneuver-triggered damage cards | Card text/data supplies Thruster Fissure's `when`, the FAQ supplies Damaged Controls' during-Move-Ship timing, and card text supplies Ruptured Engine's `after` timing | ADR-003 responsibility-specific authority; CON-003 integration evidence; amended ADR-006 consequence boundary | Current resolver has partial Thruster Fissure, Damaged Controls, and Ruptured Engine hooks | Limit prerequisites to those three Owner-approved `Integrated` slices, preserve cumulative faceup copies, and allocate obstacle-only Damaged Controls after displacement and before obstacle consequences as an Armada interpretation/deviation |
 | Play-area destruction | Destroyed Ships and Squadrons; Overlapping; Play Area; Movement FAQ | ADR-006 exceptional termination | No complete evidence of the required post-overlap final-position boundary was found | Evaluate actual final position after ship-overlap resolution |
 | Completion/recovery | Overlapping; Ship Activation | SAI-060, SAI-080; ADR-006; ADR-010 | Current paths reconstruct some surfaces but contain drift below | Consume only after every mandatory consequence |
 
@@ -785,6 +975,15 @@ copied into requirements or future work merely because it exists:
    `ShipActivationState`, modal steps, preview warnings, and displacement
    return are implementation evidence only. They do not authorize a generic
    activation FSM or continuation framework.
+6. Current obstacle overlap uses presentation-derived rectangular sprite
+   approximations rather than the required verified canonical contours.
+7. Current Squadron displacement validates placements incrementally and does
+   not prove one complete batch's global maximum direct-touch count or genuine
+   unplaceability.
+8. Current Maneuver damage-card hooks are partial: their placement in one
+   post-execution resolver does not express the required timing hierarchy, and
+   shared effect identifiers can collapse independently applicable faceup card
+   instances.
 
 The following accepted workbooks remain implementation specifications that
 require later reconciliation; they are not requirements authority for this

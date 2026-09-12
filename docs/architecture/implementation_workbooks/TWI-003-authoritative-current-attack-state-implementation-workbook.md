@@ -1,12 +1,25 @@
 # TWI-003: Authoritative CurrentAttackState Implementation Workbook
 
-Status: Accepted
+Status: Accepted historical implementation record — production cutover present;
+historical closure evidence incomplete
 
-Purpose: Implementation Workbook
+Purpose: Historical Implementation Workbook
 Accepted by: Project Owner
 Accepted date: 2026-08-03
+Reconciled date: 2026-09-10
 
-TWI-003 is the accepted implementation specification for the remaining authoritative attack-declaration migration, subject to its Entry Gate, stop conditions, and the authority of the referenced ADRs, Contracts, Migration Assessment, and TEST documents.
+TWI-003 records the historical authoritative attack-declaration migration. Its
+behavior-inert substrate and semantic cutover are present in the current
+production lineage. This reconciliation does not claim that the original final
+baseline renewal and Owner manual acceptance were completed: repository
+evidence for those closure activities was not found.
+
+No slice, gate, compatibility number, or Maneuver-adjacent instruction in this
+workbook is a current implementation instruction. The declaration architecture
+remains authoritative where later accepted authority has not superseded it.
+[BUG-043](BUG-043-network-maneuver-preview-speed-convergence-implementation-workbook.md)
+alone owns the current Maneuver execution-record, commitment, consequence,
+completion, recovery, and compatibility cutover.
 
 Source: MA-ATTACK-002 -- Post-Stabilization CON-006 Compliance Assessment
 
@@ -18,9 +31,10 @@ accepted no-active declaration `SkipAttackCommand`
 
 TWI-003 is the implementation counterpart to
 [MA-ATTACK-002](../migration_assessments/MA-ATTACK-002-post-stabilization-con-006-compliance.md).
-It translates that accepted repository evidence into one deterministic
-implementation specification. It does not reassess the repository, create
-architecture, or authorize implementation by itself.
+It translated that accepted repository evidence into the deterministic
+implementation specification used for the historical cutover. It does not
+reassess the repository, create architecture, or authorize a new implementation
+run now.
 
 The binding authorities are:
 
@@ -39,8 +53,17 @@ The binding authorities are:
 - [ADR-006](../adr/ADR-006-canonical-ship-activation-boundary-ownership.md)
   for the `ShipInstance`-owned declaration-adjacent ship-activation identity,
   Squadron-command and Maneuver opportunity dispositions, committed
-  Squadron-command activation count, and normal/exceptional terminal
-  invariants;
+  Squadron-command activation count, active Maneuver execution record, and
+  normal/exceptional terminal invariants;
+- [ADR-010](../adr/ADR-010-gameplay-interaction-decision-equivalent-recovery.md),
+  the accepted
+  [Ship Activation interaction requirements](../../requirements/gameplay_interactions/ship_activation_interaction.md),
+  the accepted
+  [Ship Activation Owner decisions](../../requirements/gameplay_interactions/ship_activation_interaction_owner_decisions.md),
+  and the accepted
+  [Ship Maneuver interaction requirements](../../requirements/gameplay_interactions/ship_maneuver_interaction.md)
+  for decision-equivalent recovery and the refined Maneuver commitment,
+  consequence, completion, Network, and reconstruction semantics;
 - [CON-001](../contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
   for current-attack membership, atomicity, serialization, reconstruction,
   replay, networking, and projection;
@@ -54,8 +77,13 @@ The binding authorities are:
 [TWI-001](TWI-001-timing-window-state-implementation-workbook.md) and
 [TWI-002](TWI-002-timing-window-core-and-h9-pilot-implementation-workbook.md)
 provide predecessor implementation and documentation conventions. They do not
-override the authorities above. TWI-003 executes only after the TWI-002
-production-activation compatibility checkpoint described in Section 8.
+override the authorities above. TWI-003 historically executed after the
+TWI-002 production-activation compatibility checkpoint described in Section 8.
+The reconciled
+[BUG-043 workbook](BUG-043-network-maneuver-preview-speed-convergence-implementation-workbook.md)
+is the active bounded implementation specification for current Maneuver
+changes. It is not a dependency of an unexecuted TWI-003 slice and TWI-003 does
+not allocate or duplicate any part of that cutover.
 
 The completed TWI-003 Architecture Audit Report supplied for this refinement is
 review evidence. Its BLOCKING, HIGH, and MEDIUM findings are resolved by this
@@ -63,11 +91,10 @@ workbook as summarized in Section 16.
 
 This document remains:
 
-- an implementation workbook;
+- a historical implementation workbook and audit trail;
 - subordinate to accepted ADRs and Contracts;
 - accepted by the Project Owner as recorded in the authoritative header; and
-- the sole implementation specification for the migration, subject to its
-  Entry Gate and accepted authorities.
+- the record of the declaration migration that produced the current lineage.
 
 It is not:
 
@@ -79,6 +106,41 @@ It is not:
 
 If this workbook and an accepted authority conflict, the accepted authority
 wins and Section 14 applies.
+
+### 1.1 2026-09-10 Maneuver Reconciliation
+
+This reconciliation preserves TWI-003's accepted attack-declaration scope. It
+does not turn TWI-003 into the implementation workbook for the complete Ship
+Maneuver interaction. Embedded instructions have the following disposition:
+
+| Previous instruction | Disposition | Reconciled instruction |
+| --- | --- | --- |
+| Attack declaration, Preview/Begin parity, no-active Skip, BUG-005, and squadron action cutover | **Implemented historical allocation; still valid where not superseded** | Current production contains the owner fields and semantic integration introduced by commits `440b670` and `7cfa47b`; accepted declaration authority continues to govern. |
+| ADR-006 comprised four activation-local facts | **Historically implemented, then superseded for current Maneuver work** | The four declaration-adjacent facts remain valid production history. Amended ADR-006 now adds at most one matching active Maneuver execution record, whose implementation belongs only to BUG-043. |
+| Maneuver execution directly performed `OPEN -> CONSUMED` | **Superseded** | Commitment creates the active execution and leaves Maneuver `OPEN`; only exact-once completion after all mandatory consequences consumes it and retires the record. |
+| TWI-003 should add/serialize or implement the current Maneuver execution/consequence flow | **Obsolete** | TWI-003 owns none of that work. BUG-043 owns the current record, serialization, interaction, overlap, Navigate, consequence, recovery, and compatibility cutover. |
+| Transient UI/controller state is non-authoritative and reconstruction derives from canonical state | **Still valid; refined by later authority** | Current Maneuver recovery must distinguish uncommitted `OPEN`, committed-but-`OPEN`, and completed `CONSUMED`, including purpose-specific nested consequence state and viewer-authorized passive Network representation. BUG-043 supplies the executable allocation. |
+
+Where a TWI-003 step touches Maneuver only as an adjacent activation boundary,
+the accepted Maneuver requirements govern. No lifecycle enum, generic FSM,
+stack, queue, callback owner, or general continuation mechanism is authorized.
+
+### 1.2 Current Repository Posture
+
+Read Sections 2 through 16 as the retained specification and evidence plan for
+the 2026-08 migration, not as instructions to rerun it:
+
+| Evidence | Current posture |
+| --- | --- |
+| Commit `440b670` | TWI-003 behavior-inert `GameState`, `ShipInstance`, and `SquadronInstance` substrate was implemented. |
+| Commit `7cfa47b` | TWI-003 declaration/squadron semantic cutover, save 3, and replay 5 were implemented. |
+| Current production | Declaration owners, commands, validation, serialization, reconstruction, Network projection/application, and focused tests retain that lineage. Current versions are save 6, replay 9, and Network protocol 6. |
+| Historical closure | The original workbook still recorded baseline-renewal and Owner manual verification work after the semantic checkpoint. No repository evidence reviewed here proves those activities complete, so they remain historical closure evidence debt rather than production implementation work. |
+| Current Maneuver work | Later accepted authority supersedes conflicting historical Maneuver assumptions. BUG-043 alone owns the current cutover. |
+
+Accordingly, imperative language below describes the accepted historical
+cutover at its then-current baseline. It SHALL NOT be used to revert current
+versions, recreate dormant slices, or select current Maneuver architecture.
 
 ## 2. Scope, Preserved Baseline, And Exclusions
 
@@ -212,7 +274,7 @@ The implementation SHALL preserve these owners:
 | Current phase, round, controller, turn, and phase progress | Canonical serialized `GameState` phase/turn state | Add only irreducible declaration-adjacent progress to the existing owner; do not create a phase object. |
 | Ship declaration opportunity and attack progress | Existing serialized `ShipInstance` activation-local attack state together with the ADR-006 activation boundary on that same `ShipInstance` | Preserve existing attack fields; bind Begin/Skip to the matching stable ship-activation identity and purpose-specific dispositions. |
 | Squadron activation and action progress | Existing serialized `SquadronInstance` and accepted enclosing activation state | Add the minimum irreducible action history to `SquadronInstance`; derive availability. |
-| Declaration-adjacent ship-activation boundary | Active ship's `ShipInstance`, as the sole writable ADR-006 owner | Add stable ship-activation identity, Squadron-command opportunity disposition, Maneuver opportunity disposition, and committed Squadron-command activation count in Slice 1; activate them only in Slice 2. |
+| Declaration-adjacent ship-activation boundary | Active ship's `ShipInstance`, as the sole writable ADR-006 owner | **Historical TWI-003 allocation:** the stable identity, two opportunity dispositions, and committed Squadron-command count were introduced by the completed slices. **Current Maneuver allocation:** BUG-043 alone adds the optional active execution record and its integration. |
 | Cross-fleet active ship-activation uniqueness | Canonical `GameState` aggregate over its fleets | Validate zero or one active ship identity at stable semantic command boundaries; do not make `GameState` a second writable owner. |
 | Ship Squadron-command use progress | Same ADR-006 `ShipInstance` activation-local boundary | Store committed use count scoped to the active identity; derive capacity and remaining activations from current authoritative resources and rules. |
 | Current attack | `GameState.current_attack_state` | Begin installs one complete state; no enclosing progress is copied into it. |
@@ -232,9 +294,10 @@ cannot be derived, implementation SHALL stop for Project Owner guidance. It
 SHALL NOT add a field merely because a scene or `InteractionFlow` currently
 contains a convenient value.
 
-ADR-006 is the accepted authorization to introduce its four owner-local facts
-on `ShipInstance`; those fields need not already exist in production before
-Slice 1. Their absence at the Entry Gate is not a missing-owner finding.
+ADR-006 was the accepted authorization for TWI-003's four declaration-adjacent
+owner-local concepts on `ShipInstance`. The amended fifth concept, the optional
+active Maneuver execution record, post-dates that cutover and belongs to
+BUG-043. Its present absence is not unfinished TWI-003 work.
 
 ### 3.2 Non-Owners
 
@@ -267,6 +330,8 @@ The implementation SHALL NOT introduce:
 
 - a declaration-state object or serialized declaration-opportunity record;
 - a general serialized ship activation FSM or general predecessor policy;
+- a generic Maneuver lifecycle enum, phase enum, stack, queue, callback, or
+  continuation owner;
 - `current_step` or another general activation-step state;
 - `activation_step_id` or another stored copy of every ship activation step;
 - a stored `squadron_step_active` duplicate;
@@ -424,10 +489,13 @@ result instead of stale scene state. The cutover SHALL NOT change:
 If satisfying a declaration criterion requires changing any item above,
 Section 14 applies.
 
-### 4.7 ADR-006 Ship-Activation Boundary Semantics
+### 4.7 ADR-006 Ship-Activation Boundary Semantics — Historical Integration
 
-TWI-003 SHALL implement, but SHALL NOT redesign, the accepted ADR-006 boundary
-on the active `ShipInstance`:
+This section records the boundary rules against which the historical
+declaration cutover must continue to be interpreted. TWI-003 implemented the
+declaration-adjacent identity, dispositions, and committed count. Later
+Maneuver refinements below are superseding constraints, not unperformed
+TWI-003 implementation allocations:
 
 - the stable ship-activation identity is assigned by the accepted semantic
   ship-activation entry transition and remains unchanged until a normal or
@@ -438,14 +506,21 @@ on the active `ShipInstance`:
   unavailable, passed, or otherwise canonically not exercised under the
   applicable rules;
 - for a surviving normal activation, Maneuver follows
-  `UNREACHED -> OPEN -> CONSUMED`; normal Maneuver execution performs
-  `OPEN -> CONSUMED`, and normal completion rejects both `UNREACHED` and
-  `OPEN` Maneuver dispositions;
+  `UNREACHED -> OPEN -> CONSUMED`; `OPEN` without an active execution record
+  means transient/uncommitted exploration, `OPEN` with the matching record
+  means one committed Maneuver whose mandatory consequences remain in
+  resolution, and `CONSUMED` requires no active record;
+- commitment atomically derives and consumes required Navigate resources,
+  applies the committed speed and course, creates the matching active execution
+  record, and leaves Maneuver `OPEN`; only final completion after all
+  still-applicable mandatory consequences performs `OPEN -> CONSUMED` and
+  retires the record;
 - normal completion requires both opportunity dispositions to be `CONSUMED`
   before clearing the activation boundary; and
 - an accepted exceptional terminal transition, including active-ship
-  destruction, MAY clear the identity, both dispositions, and committed count
-  without changing Maneuver to `CONSUMED` merely to terminate the activation.
+  destruction, MAY clear the identity, both dispositions, committed count,
+  active execution, and invalidated nested consequence state without changing
+  Maneuver to `CONSUMED` merely to terminate the activation.
 
 These are two purpose-specific opportunity dispositions, not a generic ship
 step, predecessor graph, `current_step`, or activation FSM. No new semantic
@@ -497,8 +572,9 @@ field and record the mapping rather than adding an alias.
 | `attack_action_disposition` | `SquadronInstance` action state | `available`, `begun`, or `declined`; accepted Begin changes available to begun, accepted Skip changes available to declined, and neither returns to available before round reset. |
 | Stable ship-activation identity (`ship_activation_identity`) | ADR-006 activation-local boundary on `ShipInstance` | Stable identity assigned by the accepted semantic ship-activation entry transition; unchanged for the activation and cleared only by accepted normal, exceptional, or defensive cleanup. The implementation may follow repository-private naming, but SHALL preserve this semantic identity rather than bind architecture to a current command name. |
 | Squadron-command opportunity disposition (`squadron_command_opportunity_disposition`) | Same ADR-006 activation-local boundary on `ShipInstance` | `UNREACHED`, `OPEN`, or `CONSUMED`, scoped to the stable identity. It follows `UNREACHED -> OPEN -> CONSUMED`, with direct `UNREACHED -> CONSUMED` only when legitimately unavailable, passed, or otherwise canonically not exercised. |
-| Maneuver opportunity disposition (`maneuver_opportunity_disposition`) | Same ADR-006 activation-local boundary on `ShipInstance` | `UNREACHED`, `OPEN`, or `CONSUMED`, scoped to the stable identity. A surviving normal activation follows `UNREACHED -> OPEN -> CONSUMED`; execution performs `OPEN -> CONSUMED`, and neither `UNREACHED` nor `OPEN` permits normal completion. |
+| Maneuver opportunity disposition (`maneuver_opportunity_disposition`) | Same ADR-006 activation-local boundary on `ShipInstance` | `UNREACHED`, `OPEN`, or `CONSUMED`, scoped to the stable identity. Commitment leaves it `OPEN`; exact-once completion after all mandatory consequences performs `OPEN -> CONSUMED`. Neither `UNREACHED` nor `OPEN` permits normal activation completion. |
 | `squadron_command_activations_committed` | Same ADR-006 activation-local boundary on `ShipInstance` | Count of accepted commanded-squadron activations for the matching active identity and `OPEN` opportunity; incremented exactly once by accepted activation commitment and cleared with that boundary. |
+| Optional active Maneuver execution record | Same ADR-006 activation-local boundary on `ShipInstance` | **Not a TWI-003 field.** Amended ADR-006 requires it; BUG-043 alone allocates its exact schema, serialization, recovery, creation, mutation, and retirement. |
 
 These fields contain irreducible history needed for duplicate rejection,
 save/load, replay, reconnect, and derivation. They SHALL be JSON-safe,
@@ -519,6 +595,8 @@ validated, serialized only from their listed owner, and absent from
 | Squadron-command capacity | Current authoritative ship dial/token/static squadron value and accepted command/rule semantics at validation time. |
 | Squadron-command remaining activations | Derived capacity minus stored committed count, constrained by current authoritative resource and eligibility state. |
 | Ship post-Skip Maneuver availability | Matching active ADR-006 identity plus Maneuver disposition `OPEN`; a valid no-active ship declaration Skip performs the authoritative `UNREACHED -> OPEN` transition. |
+| Maneuver commitment/completion state | `OPEN` plus absence/presence of the matching active execution record, or `CONSUMED` plus no active record, under ADR-006 and SMI-041. |
+| Remaining Maneuver consequences | Matching active execution plus purpose-specific canonical consequence owners; re-evaluated after each accepted consequence. |
 | Phase handoff or next selection | Canonical controller/count plus remaining eligible squadrons. |
 | Preview candidate, legality explanation, geometry, pool preview | Fresh resolver query from canonical state. |
 | Post-Begin/post-Skip route | Resulting canonical owners through existing flow policy/projector. |
@@ -544,7 +622,10 @@ The following may exist only as replaceable non-authoritative data:
   `_squadrons_activated_this_turn` as one-way caches during transition;
 - `InteractionFlow` and payload;
 - overlays, highlights, tooltips, and labels; and
-- filtered/projected network payloads.
+- uncommitted Navigate speed/yaw choices, maneuver-tool geometry, candidate
+  destination, and advisory overlap or play-area warnings; and
+- viewer affordances and presentation projections derived from an accepted
+  viewer-authorized passive Network representation.
 
 None serialize as gameplay authority or write back into canonical owners.
 
@@ -556,7 +637,8 @@ The implementation SHALL NOT add or preserve as a second writable fact:
 | --- | --- |
 | `activation_step_id` spanning all ship steps | General ship activation FSM and predecessor policy are outside the accepted declaration scope. |
 | new stored `squadron_step_active` | Duplicates the accepted purpose-specific Squadron-command disposition and encourages a generic step mirror. |
-| `current_step` or general activation-stage enum | ADR-006 authorizes only stable identity, two purpose-specific dispositions, and one committed count; it does not authorize a general activation FSM. |
+| `current_step` or general activation-stage enum | ADR-006 authorizes only stable identity, two purpose-specific dispositions, one committed count, and at most one purpose-specific active Maneuver execution record; it does not authorize a general activation FSM. |
+| generic Maneuver lifecycle/phase enum, stack, queue, callback, or continuation record | The purpose-specific active execution record plus its consequence owners supply the required distinction without general workflow infrastructure. |
 | new stored `squadron_command_capacity` | Capacity is derived from current authoritative resources and rules; freezing it is not authorized. |
 | new stored `activation_progress_active` | Active state is derivable from identity/context/completion and would duplicate them. |
 | new stored `activation_round` | Current/reset epoch and unique activation identity provide the required validation; no authority requires a second round copy. |
@@ -580,8 +662,10 @@ retain the same acceptance criterion.
   ship-activation entry transition. Current repository command paths may be
   named in implementation evidence, but their identifiers are not the
   architecture concept.
-- The same ship-activation identity scopes both ADR-006 dispositions and the
-  committed Squadron-command activation count until accepted terminal cleanup.
+- The same ship-activation identity scopes both historically implemented
+  ADR-006 dispositions and the committed Squadron-command activation count.
+  Amended ADR-006 also binds BUG-043's later active Maneuver execution record
+  to that identity.
 - Accepted `ActivateSquadronCommand.sequence` supplies the squadron activation
   identity; local, host, mirror, replay, save/load, and reconnect preserve it.
 - Begin uses the existing CON-001 current-attack identity mechanism unchanged.
@@ -649,13 +733,14 @@ or reset TWI-003 state:
   `UNREACHED -> OPEN` in the same atomic transaction;
 - the existing normal Attack-completion transition opens Maneuver with
   `UNREACHED -> OPEN` without otherwise changing protected post-Begin behavior;
-- accepted Maneuver execution validates the matching identity and `OPEN`
-  disposition, commits the legal maneuver result, including legal zero-speed
-  or no-movement results, and changes `OPEN -> CONSUMED`;
+- current Maneuver execution, consequence, completion, and exceptional cleanup
+  obey amended ADR-006 and the accepted requirements, but their concrete
+  mutations and evidence are allocated only by BUG-043;
 - surviving normal activation completion requires both dispositions to be
   `CONSUMED`, then clears the ADR-006 boundary atomically;
 - accepted destruction or another exceptional terminal transition clears the
-  ADR-006 boundary without fabricating Maneuver execution or consumption; and
+  ADR-006 boundary and invalidated nested consequence state without
+  fabricating Maneuver execution, consumption, return, or End Activation; and
 - defensive round cleanup clears stale activation-boundary facts and reports
   impossible aggregate uniqueness rather than choosing an owner from
   presentation state.
@@ -679,7 +764,7 @@ editing.
 | --- | --- | --- | --- |
 | Canonical phase state: `src/core/state/game_state.gd` | Add only irreducible Squadron Phase controller/count, invariant validation, and later Slice 2 serialization. | High: duplicates `GameManager.active_player`. | Structural write search plus save/load and phase-turn tests prove one writer. |
 | Squadron action owner: `src/core/state/squadron_instance.gd` | Add identity, context, commanding-ship reference, move fact, attack disposition, validation/snapshot/reset, and later serialization. | High: modal-local action state may continue writing. | Write inventory and scene-destruction/reconstruction tests. |
-| Ship activation boundary: `src/core/state/ship_instance.gd` | Preserve BUG-002 fields; add the ADR-006 stable identity, two purpose-specific dispositions, committed Squadron-command count, invariants, snapshot/restore, query, and reset substrate. | High: accidental BUG-002 reset, duplicate capacity, or generic step state. | Field classification and prohibited-shape searches plus full BUG-002 regression suite. |
+| Ship activation boundary: `src/core/state/ship_instance.gd` | **Historical:** preserve BUG-002 fields and add the identity, two dispositions, and committed Squadron-command count. **Current Maneuver:** BUG-043 alone allocates the optional execution record and related invariants. | High: accidental BUG-002 reset, duplicate capacity, premature Maneuver consumption, or generic step state. | Historical field classification and protected regressions; current Maneuver evidence belongs to BUG-043. |
 | Aggregate ship-activation validation: `src/core/state/game_state.gd` | Validate zero or one active ADR-006 identity across both fleets without becoming a writable owner. | High: duplicate `GameState` activation state. | Cross-fleet owner and write searches plus invalid reconstruction tests. |
 | Current attack: `src/core/state/current_attack_state.gd` | Normally unchanged; only existing validation/reference use is allowed. | High: enclosing state copied into current attack. | Membership and serialization shape tests. |
 | Phase entry/exit: `src/core/commands/advance_phase_command.gd`, `src/core/commands/status_phase_cleanup_command.gd` | Initialize/clear the new phase/action progress only within existing transactions. | Medium: scene still controls turn. | Command sequence and save/load phase tests. |
@@ -687,7 +772,7 @@ editing.
 | Ship step transition: `src/core/commands/advance_activation_step_command.gd` | Preserve sole `begin_attack_step()` initialization; own only its assigned Squadron opening/closure and normal Attack-to-Maneuver opening mutations, never a general FSM. | High: a purpose-specific disposition becomes generic step progression. | Entry Gate seam map and structural search for all activation-boundary writes. |
 | Squadron activation/action: `src/core/commands/activate_squadron_command.gd`, `move_squadron_command.gd`, `complete_squadron_activation_command.gd` | Validate context/controller/identity, commit action history, and coordinate existing enclosing count/closure. | High: command-mode and phase-mode behavior diverge; post-Begin completion ordering drifts. | Context matrix and explicit post-Begin regression oracles. |
 | Declaration commands: `src/core/commands/begin_attack_command.gd`, `skip_attack_command.gd` | Complete context validation and atomic mutation; preserve active/out-of-scope branches. | High: partial owner mutation or fallback initialization. | Failure injection, snapshots, command history, and active-branch regression. |
-| Maneuver and terminal paths: current semantic paths represented by `src/core/commands/execute_maneuver_command.gd`, `end_activation_command.gd`, accepted destruction/termination transactions, and defensive round cleanup | Open/consume/clear the ADR-006 boundary exactly at the accepted semantic transitions; normal completion requires Maneuver `CONSUMED`, while exceptional termination fabricates no consumption. | High: scene-owned speed-zero completion, premature normal completion, or exceptional cleanup misreported as Maneuver execution. | Entry Gate seam map, structural write search, normal/exceptional lifecycle tests, and reconstruction invariants. |
+| Maneuver and terminal paths | **Historical:** retain only the declaration transition that opens Maneuver and valid terminal invariants. **Current:** no TWI-003 implementation allocation; BUG-043 owns the complete Maneuver cutover. | High: treating this row as a second Maneuver plan. | Current Maneuver verification belongs only to BUG-043. |
 | Applicability/policy: `src/core/commands/command_applicability.gd`, `src/core/state/flow_spec.gd` | Make broad phase policy agree with concrete opportunity/controller validation. | Medium: flow becomes authority. | Direct submission tests with misleading/missing flow payloads. |
 | Declaration resolver: `src/core/combat/targeting_list_builder.gd`, `src/core/combat/attack_target_resolver.gd`, `src/autoload/game_scale.gd`, accepted rule surfaces | Establish Preview/Begin parity and BUG-005 distance-1 classification; do not change edge measurement. | High: range and distance remain conflated. | Production-scale inside/outside distance-1 tests including the close-only interval. |
 | Squadron-command adapter: `src/core/combat/squadron_command_resolver.gd` | Read capacity/use from authoritative owners; stop owning `_max_activations`/`_activations_used` semantically. | High: hidden mutable budget survives. | Search all reads/writes; destroy/recreate resolver mid-step. |
@@ -695,8 +780,8 @@ editing.
 | Activation controllers/modals: `src/scenes/game_board/ship_activation_controller.gd`, `squadron_phase_controller.gd`, `src/ui/combat/squadron_activation_modal.gd`, `src/scenes/game_board/modal_router.gd` | Replace gameplay writes/counters with queries and result-driven presentation. | High: scene lifecycle owns progress. | Direct command/replay plus teardown/reopen tests. |
 | Application routing: `src/autoload/game_manager.gd`, `src/scenes/game_board/game_board.gd`, `src/core/state/interaction_flow.gd` | Derive controller/route from canonical owners; keep caches one-way. | High: load currently trusts route/controller payloads. | Reconstruction with absent/stale route and canonical-state assertions. |
 | Projection/filtering: `src/core/network/ui_projector.gd`, `src/core/network/state_filter.gd` | Project new canonical state without authorizing commands. | Medium: filter drops required state or client synthesizes. | Viewer, host/client hash, reconnect, and direct-invalid-command tests. |
-| Save/load: `src/core/state/save_game_metadata.gd`, `src/autoload/save_game_manager.gd` | Activate new fields and version 3 only in Slice 2. | High: collision with TWI-002 or partial reconstruction. | Exact pre-cutover version check, unsupported-version rejection, round-trip matrix. |
-| Replay: `src/core/commands/game_replay.gd`, `src/autoload/replay_driver.gd`, command registrations | Activate format 5 only in Slice 2; preserve semantic command order and no Preview records. | High: collision or legacy reinterpretation. | Exact format gate before command application and sequence oracle. |
+| Save/load: `src/core/state/save_game_metadata.gd`, `src/autoload/save_game_manager.gd` | **Historical:** TWI-003 activated its fields with version 3 in Slice 2. Current production is version 6; this is not a cutover instruction. | High: misreading a historical allocation as current. | Historical compatibility evidence only; current Maneuver allocation belongs to BUG-043. |
+| Replay: `src/core/commands/game_replay.gd`, `src/autoload/replay_driver.gd`, command registrations | **Historical:** TWI-003 activated format 5 in Slice 2. Current production is format 9; this is not a cutover instruction. | High: legacy reinterpretation. | Historical sequence evidence only; current Maneuver allocation and fixture policy belong to BUG-043. |
 | Network submission/result: `src/autoload/command_processor.gd`, `src/autoload/network_manager.gd`, `src/autoload/game_manager.gd` | Reuse existing host authority and mirror ordering; add no transport architecture. | High: client local writes or result overtaking. | Host/client canonical equality and rejected-command ordering tests. |
 | Core state/command tests: `tests/unit/test_game_state.gd`, `test_ship_instance.gd`, `test_squadron_instance.gd`, `test_squadron_phase.gd`, `test_attack_commands.gd`, `test_command_applicability.gd`, `test_flow_spec.gd`, `test_squadron_command_resolver.gd` | Add owner, atomicity, context, policy, and protected regression evidence. | Medium: tests call helpers instead of production routes. | Contract matrix requires production command entry points. |
 | Resolver tests: `tests/unit/test_targeting_list_builder.gd` and existing parity tests | Add real distinct distance/range thresholds and all pairing/context parity. | High: fixture collapses distance 1 and close. | Assert 181/292-style distinct bands from production configuration semantics. |
@@ -710,54 +795,33 @@ documents were considered and SHALL remain unchanged unless an applicable
 existing declaration rule already has a directly assigned CON-003 validation
 surface. No new rule or timing participant is created.
 
-## 8. Execution Dependency And Compatibility Allocation
+## 8. Historical Compatibility Record — Not Current Instructions
 
-TWI-002 has accepted production-activation allocations:
+At the time TWI-003 ran, TWI-002 supplied save version 2 and replay format 4.
+TWI-003's behavior-inert Slice 1 preserved those values; its semantic Slice 2
+advanced them to save version 3 and replay format 5. The loaders rejected the
+immediately preceding formats rather than inferring or migrating missing
+declaration state. Network reconnect remained a same-semantic-build canonical
+snapshot path and TWI-003 allocated no Network protocol bump.
 
-- `SaveGameMetadata.CURRENT_VERSION`: 1 -> 2; and
-- `GameReplay.FORMAT_VERSION`: 3 -> 4, with the signed format alias following
-  the same semantic format.
+Those allocations are historical facts only. Current production emits:
 
-TWI-003 therefore has this fixed execution dependency:
+- `SaveGameMetadata.CURRENT_VERSION = 6`;
+- `GameReplay.FORMAT_VERSION = 9`, with the signed alias equal to 9; and
+- `NetworkManager.PROTOCOL_VERSION = 6`.
 
-1. TWI-002 production activation is implemented and its compatibility gate has
-   passed.
-2. Immediately before TWI-003 Slice 1 begins, the repository emits save
-   version 2 and replay format 4.
-3. Slice 1 preserves version 2 and format 4.
-4. TWI-003 Slice 2 atomically advances save version 2 -> 3 and replay format
-   4 -> 5 with the declaration semantic cutover.
-5. Save version 3 and replay format 5 are the sole post-TWI-003 formats.
+No current implementation may restore, reuse, or treat the historical values
+2/3 or 4/5 as an entry condition or next-version instruction. TWI-003 owns no
+future compatibility change. BUG-043 independently evaluates and owns every
+save, replay, and Network compatibility change required by the current
+Maneuver cutover.
 
-The implementer SHALL inspect the actual constants and focused compatibility
-tests immediately before Slice 1 and again immediately before Slice 2. The
-expected pre-cutover values are exactly 2 and 4. If either actual value differs,
-or TWI-002 production activation is incomplete, Section 14 applies. The
-implementer SHALL NOT select another value automatically, reuse a value,
-reinterpret an artifact, or edit TWI-002.
+## 9. Historical Entry Gate Record — Not Executable
 
-No TWI-003 version change occurs in Slice 1. Slice 1 fields remain at inactive
-defaults and are not connected to production serialization until Slice 2.
-
-At Slice 2, `SaveGameMetadata.CURRENT_VERSION` becomes 3. The existing save
-loader accepts version 3 and rejects version 2 as unsupported before installing
-the body. It does not infer missing declaration-adjacent state or migrate a
-version-2 body.
-
-At the same cutover, `GameReplay.FORMAT_VERSION` becomes 5 and the signed
-format constant remains the accepted alias of that same value. Replay loading
-accepts format 5 only and rejects format 4 before command deserialization or
-application. It does not relabel or reinterpret format-4 history.
-
-Reconnect remains a same-semantic-build snapshot path rather than a durable
-artifact-format migration. A stale or contradictory cross-cutover snapshot
-fails canonical validation before projection or routing. No mixed
-pre-cutover/post-cutover network session is supported.
-
-## 9. Entry Gate -- Authority And Baseline Proof
-
-The Entry Gate is not an implementation slice. It authorizes no semantic or
-production edit.
+The Entry Gate was not an implementation slice. It authorized no semantic or
+production edit. It is retained to explain the evidence required before the
+historical cutover; it must not be rerun against today's version constants or
+used to reopen the completed slices.
 
 ### 9.1 Required Read-Only Record
 
@@ -767,16 +831,19 @@ Before Slice 1, record in the implementation report:
 - all pre-existing changes that must be preserved;
 - exact save and replay format constants;
 - evidence that the TWI-002 production-activation checkpoint is present;
+- historical evidence available at that time for adjacent Maneuver behavior;
+  later BUG-043 work is outside this gate and never shares a TWI-003 cutover;
 - evidence that ADR-006 is Accepted and identifies `ShipInstance` as the sole
-  writable owner of its four-fact activation-local boundary;
+  writable owner of its five activation-local concepts;
 - every production write to the fields in Section 5;
 - every live submission of Begin, no-active Skip, squadron activation,
   squadron movement, squadron completion, phase advance, ship-step advance,
   and round cleanup;
 - the existing semantic command boundaries for ship-activation identity
   initialization, Squadron opportunity opening/consumption, commanded-squadron
-  commitment, Maneuver opening/consumption, normal activation completion,
-  exceptional destruction/termination, and defensive round cleanup;
+  commitment, Maneuver opening/commitment/consequence/completion, normal
+  activation completion, exceptional destruction/termination, and defensive
+  round cleanup;
 - evidence that no conflicting canonical activation-boundary owner exists;
 - evidence that Slice 1 can introduce the ADR-006 owner-local substrate with
   inactive defaults and zero live production integration;
@@ -811,19 +878,27 @@ disabled test, expected-failure test, or retained-for-later test. The baseline
 must be clean for TWI-003 production files; any unrelated pre-existing change
 must be identified, non-overlapping, and preserved.
 
-### 9.2 Entry Gate Criteria
+### 9.2 Historical Entry Gate Criteria
+
+The unchecked form is retained as historical procedure, not a current to-do
+list. In particular, the compatibility assertions below describe the former
+pre-cutover baseline and are superseded by Section 8.
 
 - [ ] The required startup and authority documents were read.
 - [ ] The TWI-003 production baseline is clean; unrelated non-overlapping
   worktree changes are recorded and protected.
 - [ ] TWI-002 production activation is present and passing at its accepted gate.
+- [ ] Later BUG-043 work is outside this historical gate and is not sequenced
+  with TWI-003.
 - [ ] ADR-006 is Accepted.
-- [ ] `ShipInstance` is the accepted sole writable owner of the stable
-  ship-activation identity, both purpose-specific opportunity dispositions,
-  and committed Squadron-command activation count; `GameState` is aggregate
-  validator only.
-- [ ] Save version is exactly 2.
-- [ ] Replay format is exactly 4 and signed format is the accepted alias.
+- [ ] `ShipInstance` is the accepted sole writable owner of the historical
+  stable identity, two dispositions, and committed Squadron-command count;
+  `GameState` is aggregate validator only. The later optional execution record
+  is a BUG-043 allocation, not a historical gate criterion.
+- [ ] Historical pre-cutover save version was exactly 2; this is not a current
+  version assertion.
+- [ ] Historical pre-cutover replay format was exactly 4; this is not a
+  current version assertion.
 - [ ] Each irreducible fact in Section 5.2 maps to its listed accepted owner,
   whether or not the Slice 1 field has already been introduced.
 - [ ] Existing semantic command boundaries needed to implement every ADR-006
@@ -839,11 +914,12 @@ must be identified, non-overlapping, and preserved.
 
 Failure of any criterion invokes the single stop list in Section 14.
 
-## 10. Slice 1 -- Behavior-Inert Canonical Substrate
+## 10. Historical Slice 1 -- Behavior-Inert Canonical Substrate
 
 ### 10.1 Classification And Objective
 
-Slice 1 is the only Implementation Slice. It prepares owner-local data
+Slice 1 was the behavior-inert implementation slice recorded by commit
+`440b670`. It prepared owner-local data
 invariants without changing live gameplay, command policy, projection,
 serialization, replay, networking, save/load, or reconnect behavior.
 
@@ -871,11 +947,13 @@ Only these production changes are permitted:
    context, commanding-ship reference, movement-use, and attack-disposition
    fields plus owner-local invariant, snapshot, restore, remaining-action, and
    reset operations.
-3. `ShipInstance` may declare the inactive/default ADR-006 stable
+3. `ShipInstance` may declare the inactive/default historical ADR-006 stable
    ship-activation identity, Squadron-command opportunity disposition,
    Maneuver opportunity disposition, and committed Squadron-command activation
-   count plus owner-local invariant, snapshot, restore, query, transition-guard,
-   normal-completion eligibility, exceptional-clear, and reset operations.
+   count, plus their owner-local invariant, snapshot, restore, query,
+   transition-guard, normal-completion eligibility, exceptional-clear, and
+   reset operations. The active Maneuver execution record was not part of this
+   slice and is not retroactively allocated here.
 4. Existing clone/test builders may initialize the same inactive defaults only
    when required for direct owner tests.
 
@@ -956,13 +1034,15 @@ The direct owner tests SHALL prove at least:
   `UNREACHED -> CONSUMED` only through a caller-validated semantic transition
   for a legitimately unavailable, passed, or otherwise canonically
   unexercised opportunity;
-- Maneuver permits `UNREACHED -> OPEN -> CONSUMED`, normal execution performs
-  `OPEN -> CONSUMED`, and normal progression has no
-  `UNREACHED -> CONSUMED` operation;
+- Maneuver historically permits `UNREACHED -> OPEN -> CONSUMED` and normal
+  progression has no `UNREACHED -> CONSUMED` operation; current commitment and
+  completion invariants are tested under BUG-043;
+- invalid historical boundary combinations reject, including a disposition
+  without the matching identity;
 - normal-completion eligibility is false while Maneuver is `UNREACHED` or
   `OPEN`, and requires both dispositions to be `CONSUMED`;
 - exceptional clear removes the identity and resets both dispositions and the
-  count without first consuming Maneuver or representing an execution;
+  count without first fabricating normal progression;
 - committed command activation count is non-negative and a positive count
   requires the matching active identity and `OPEN` Squadron opportunity;
 - the count itself does not assert that a Squadron command opportunity is
@@ -1020,7 +1100,12 @@ The safe intermediate state is fully pre-cutover production behavior with
 unused inactive owner-local substrate. Failure invokes Section 14. Only a
 passing checkpoint permits Slice 2.
 
-## 11. Slice 2 -- Complete Authoritative Declaration Cutover
+## 11. Historical Slice 2 -- Complete Authoritative Declaration Cutover
+
+This semantic cutover is present in the production lineage through commit
+`7cfa47b`. The retained instructions below document its intended atomic scope;
+they do not authorize a second cutover. Any later text concerning Maneuver is
+constrained by current accepted authority and allocated only by BUG-043.
 
 ### 11.1 Classification And Objective
 
@@ -1157,10 +1242,10 @@ remaining movement, another squadron activation, or the existing Repair
 boundary from canonical state. It SHALL not change any active attack's
 completion or post-Begin ordering.
 
-#### ADR-006 Entry, Maneuver, And Terminal Integration
+#### Historical ADR-006 Entry And Adjacent Maneuver Boundary
 
-The existing accepted semantic transitions SHALL own all ADR-006 mutations;
-TWI-003 SHALL add no boundary-maintenance command:
+The historical cutover assigned the declaration-adjacent ADR-006 mutations to
+existing semantic transitions and added no boundary-maintenance command:
 
 - accepted semantic ship-activation entry establishes one fresh identity and
   initializes both dispositions to `UNREACHED` and the committed count to zero;
@@ -1169,14 +1254,23 @@ TWI-003 SHALL add no boundary-maintenance command:
 - the existing transition after normal Attack completion performs Maneuver
   `UNREACHED -> OPEN` without changing `CompleteAttackCommand`, attack
   resolution, continuation, or post-Begin ordering;
-- accepted Maneuver execution validates the matching identity and `OPEN`
-  disposition, commits the legal result, and performs `OPEN -> CONSUMED`;
+- current Maneuver commitment, execution, consequences, completion, and
+  recovery are not TWI-003 allocations; BUG-043 supplies their concrete
+  commands, record fields, owners, evaluators, serialization, Network behavior,
+  compatibility changes, and verification;
 - normal activation completion rejects Maneuver `UNREACHED` and `OPEN`,
   requires both dispositions `CONSUMED`, and then clears the boundary;
 - accepted active-ship destruction or another exceptional terminal transaction
-  clears the boundary without fabricating Maneuver consumption; and
+  clears the boundary and invalidated nested consequence state without
+  fabricating Maneuver consumption, return, or End Activation; and
 - defensive round cleanup clears stale boundary facts and rejects or reports
   impossible aggregate uniqueness.
+
+TWI-003 SHALL NOT implement or redesign the complete Maneuver interaction. The
+accepted current requirements—including transient pre-commit exploration,
+atomic Navigate derivation/consumption, speed-zero execution, consequence
+ordering, and actual-final-position play-area destruction—supersede any
+conflicting historical assumption here and are intentionally not duplicated.
 
 If an existing semantic transition boundary required by this list cannot be
 identified, or atomic rollback cannot cover its adjacent owners, Section 14
@@ -1311,15 +1405,18 @@ gameplay validation and cannot be written first.
 #### Canonical serialization and save/load
 
 - New Section 5.2 fields serialize only on their existing owners.
-- The stable ship-activation identity, both dispositions, and committed count
-  serialize together only on the owning `ShipInstance` after the Slice 2
-  compatibility cutover.
+- The historical Slice 2 serialized the stable ship-activation identity, both
+  dispositions, and committed count on the owning `ShipInstance`.
+- The later optional active Maneuver execution record and purpose-specific
+  consequence state are not TWI-003 serialization allocations; BUG-043 owns
+  their exact current save/load and recovery contract.
 - Preview, replacement, deselection, rejection, pending, modal, and route cache
   state remain absent.
 - Cross-owner invariants validate before installation.
-- Reconstruction rejects an active identity whose dispositions/count are
-  invalid or a `GameState` aggregate containing more than one active ship
-  identity; it does not repair from route, controller, or scene state.
+- Historical reconstruction rejects an active identity whose dispositions or
+  count is invalid and rejects a `GameState` aggregate containing more than one
+  active ship identity; it does not repair from route, controller, or scene
+  state. BUG-043 owns current active-execution relationship validation.
 - A pre-Begin save contains the canonical opportunity but no Preview.
 - A post-Begin save contains the complete current attack and committed adjacent
   owner state.
@@ -1342,13 +1439,20 @@ gameplay validation and cannot be written first.
 - Only the authoritative host executes and accepts/rejects gameplay commands.
 - Clients may Preview locally but SHALL not synthesize semantic commands or
   mutate canonical progress optimistically.
-- Mirrored results preserve host command identity/order and canonical fields.
-- State filtering preserves all gameplay facts required by the recipient while
-  viewer affordances remain derived.
+- Mirrored results preserve accepted command identity/order and the
+  viewer-authorized canonical semantics required by the recipient. Passive
+  peers need not own an identical authority-private representation and do not
+  originate player decisions or automatic authoritative follow-up commands.
+- State filtering preserves the recipient's canonical or canonically
+  represented decision semantics while viewer affordances remain derived.
 - Reconnect installs a validated host snapshot before projection/routing.
 - Client-local Preview is not restored.
 - Reconnect before Begin, after Begin, and after each Skip row derives the same
   opportunity/route as local and replay execution.
+- Reconnect/save/load with Maneuver `OPEN` distinguishes absent active
+  execution (fresh transient exploration from canonical speed) from matching
+  active execution (resume unresolved mandatory consequences); `CONSUMED`
+  reconstructs with no active execution.
 
 No transport, RPC, session, or mixed-version architecture is added.
 
@@ -1370,7 +1474,7 @@ Before Slice 2 can pass, retire every superseded semantic write:
 - any `InteractionFlow`, `ShipActivationState`, scene/controller, modal,
   resolver cache/counter, presentation route, `squadron_step_active`,
   `activation_step_id`, `current_step`, or general activation FSM authority for
-  the ADR-006 identity, dispositions, or count; and
+  TWI-003's ADR-006 identity, dispositions, or count; and
 - obsolete comments describing no-active Skip as universally non-mutating or
   scene teardown as semantic completion.
 
@@ -1383,14 +1487,18 @@ mode.
 - [ ] Every supported context has one canonical opportunity/controller.
 - [ ] Every Section 5.2 field is live, serialized, validated, and written only
   by its existing accepted command owner.
-- [ ] The ADR-006 four-fact boundary is serialized only on `ShipInstance`, and
-  `GameState` owns only aggregate/cross-fleet validation.
+- [ ] The historical four-concept ADR-006 boundary is serialized only on
+  `ShipInstance`, and `GameState` owns only aggregate/cross-fleet validation.
+  The later fifth concept is outside this checkpoint and belongs to BUG-043.
 - [ ] Stable ship-activation identity is assigned once by accepted semantic
   entry and remains unchanged until accepted terminal cleanup.
 - [ ] Squadron-command follows its accepted lifecycle, including only the
   rule-permitted direct `UNREACHED -> CONSUMED` bypass.
-- [ ] Normal Maneuver execution performs `OPEN -> CONSUMED`; normal completion
-  rejects Maneuver `UNREACHED` and `OPEN`.
+- [ ] Current Maneuver commitment/completion is outside this historical
+  checkpoint; BUG-043 alone requires `OPEN` with a matching active execution
+  until exact-once completion performs `OPEN -> CONSUMED` after
+  all mandatory consequences resolve; normal activation completion rejects
+  Maneuver `UNREACHED` and `OPEN`.
 - [ ] Exceptional termination clears the boundary without fabricating
   Maneuver consumption.
 - [ ] Every derived/transient/prohibited fact remains non-authoritative.
@@ -1513,8 +1621,14 @@ Automated evidence SHALL cover:
   case that legitimately uses direct `UNREACHED -> CONSUMED`;
 - no-active ship declaration Skip and normal Attack completion each opening
   Maneuver with `UNREACHED -> OPEN`;
-- normal Maneuver execution performing `OPEN -> CONSUMED`, and normal
-  activation completion rejecting Maneuver `UNREACHED` and `OPEN`;
+- Maneuver commitment producing `OPEN` plus one matching active execution,
+  the distinct RRG executed-maneuver event, mandatory consequence recovery and
+  re-evaluation, and final exact-once completion producing `CONSUMED` with no
+  active execution;
+- speed-zero commitment executing without ordinary movement while retaining
+  applicable consequence and destruction semantics;
+- actual-final-position play-area destruction after ship-overlap
+  placement/reduction, never destruction from the transient plotted preview;
 - active-ship destruction and other accepted exceptional terminal coverage
   clearing the boundary without a fabricated Maneuver execution/consumption;
 - equivalent canonical ownership and results for local human, remote human,
@@ -1524,7 +1638,8 @@ Automated evidence SHALL cover:
 - pre-Begin, post-Begin, and every post-Skip save/load state;
 - the same replay command order and canonical end state;
 - hot-seat, host authority, client mirror, viewer filtering, reconnect, and
-  scene recreation;
+  scene recreation, including viewer-authorized passive representations that
+  need not duplicate authority-private state;
 - applicable timing-window inactivity/ownership boundaries under TEST-003;
 - unchanged Preview/Confirm stabilization; and
 - unchanged BUG-002 Step 6 and second-normal-attack behavior, including
@@ -1596,15 +1711,22 @@ Implementation SHALL stop, preserve the current passing checkpoint, and report
 the exact evidence when any of the following occurs:
 
 - TWI-002 production activation is incomplete;
+- reconciled BUG-043 is incomplete and cannot be safely sequenced before or
+  atomically with Slice 2 while the production baseline still uses pre-commit
+  canonical SetSpeed mutation or direct execution-to-consumption;
 - pre-cutover save/replay constants are not exactly 2 and 4;
 - a required durable fact has no existing accepted owner and cannot be derived;
-- ADR-006 is not Accepted, no longer assigns the four-fact boundary solely to
+- ADR-006 is not Accepted, no longer assigns the five-concept boundary solely to
   `ShipInstance`, or conflicts with another accepted authority;
 - a conflicting canonical owner of the ADR-006 activation boundary exists;
 - an existing semantic transition boundary required by Sections 6.3, 7, or
   11.4 cannot be identified;
 - implementation would require `activation_step_id`, a general ship activation
-  FSM, `current_step`, generic step progression, or new predecessor policy;
+  FSM, `current_step`, generic step progression, a generic Maneuver lifecycle
+  enum/stack/queue/continuation owner, or new predecessor policy;
+- TWI-003 declaration work would require implementing or redesigning the
+  complete Navigate, movement, overlap, consequence, or play-area-destruction
+  behavior rather than preserving the accepted adjacent boundary;
 - implementation would require storing a derived field, freezing
   Squadron-command capacity, or duplicating an owner;
 - Slice 1 would need a live production reference, serializer, command, policy,
@@ -1660,7 +1782,7 @@ evidence is Fail unless the row explicitly calls for Owner manual testing.
 | CON-006-SKIP-008--011 | Active/unsupported/stale Skip is outside or rejects without declaration mutation. | Protected active Skip behavior and direct invalid submissions remain unchanged. |
 | CON-006 section 11.2 | Exact ship, non-Rogue, Rogue, and command-squadron effects. | State, route, replay, persistence, and duplicate-rejection assertions pass per row. |
 | CON-006-FLOW-001--012 | Routing remains available, then derives from accepted Begin/Skip; UI owns nothing. | Missing/stale flow payload cannot authorize; rejection/acceptance projection tests pass. |
-| CON-006-DET-001--007 | Identical inputs/order produce identical results; no inference or repair. | Local, host, mirror, replay, save/load, and reconnect state/command oracles agree. |
+| CON-006-DET-001--007 | Equivalent authoritative inputs/order produce equivalent accepted results; no inference or repair. | Local, host, viewer-authorized mirror, replay, save/load, and reconnect semantic/command oracles agree without requiring identical authority-private representation. |
 | CON-006-SER-001--006 | Only accepted Begin/Skip results serialize; Preview never does. | Pre-Begin, post-Begin, and all post-Skip round trips pass. |
 | CON-006-RECON-001--005 | Reconstruction restores canonical opportunity/result before routing. | Save/load and reconnect matrix passes without Preview or scene authority. |
 | CON-006-COMPAT-001--006 | Compatibility is fail-closed and never creates a second owner/mode. | Version 2 save rejects under version 3 before installation; invalid cross-owner state rejects. |
@@ -1675,23 +1797,23 @@ evidence is Fail unless the row explicitly calls for Owner manual testing.
 | ADR-003; CON-003 | Rule and resolver responsibilities remain on accepted surfaces. | Applicability/rule/query agreement tests pass; no CAP status or rule owner changes. |
 | ADR-004; CON-004 | Runtime-upgrade ownership is unchanged. | Structural diff and existing runtime-upgrade tests show no migration. |
 | ADR-005; CON-005; TEST-003 | Ordinary declaration does not synthesize timing lifecycle or continuation. | Applicable ownership, reconstruction, replay, network, projection, and visibility tests pass. |
-| ADR-006 | `ShipInstance` solely owns stable ship-activation identity, Squadron/Maneuver dispositions, and committed count; normal and exceptional terminal invariants remain distinct. | Owner/write searches, lifecycle tests, aggregate validation, serialization/reconstruction, and controller-independent command evidence pass without a generic activation FSM. |
+| ADR-006; ADR-010; SAI-060--065; SMI-001--091 | TWI-003 historically integrated the identity, dispositions, and committed count. Later Maneuver execution-record and consequence semantics remain binding but belong only to BUG-043. | Historical declaration owner/write evidence remains valid; BUG-043 owns current Maneuver lifecycle, recovery, Network, speed-zero, destruction, and no-generic-FSM evidence. |
 | MA-ATTACK-002 BUG-005 outcome | Outgoing squadron declaration enforces distance 1, not close range. | Both pairings pass inside/outside tests with distinct production thresholds through Preview and Begin. |
 | MA-ATTACK-002 completed baseline | Preview/Confirm and BUG-002 behavior is preserved. | Protected regression files pass with unchanged post-Begin semantic command oracles. |
 | MA-ATTACK-002 exclusions | BUG-003, BUG-004, active completion, and unrelated cleanup are unchanged. | Diff scope and protected tests show no excluded behavior change. |
 
-## 16. Audit Closure And Implementation Readiness
+## 16. Historical Audit Closure And Current Status
 
 ### 16.1 BLOCKING Finding Closure
 
 | Audit finding | Closure |
 | --- | --- |
-| The original workbook invented a complete serialized ship activation FSM and predecessor policy. | Sections 2.3, 3.3, 4.7, 5.3, 5.5, 6.3, 9, 11.4, and 14 prohibit `activation_step_id`, `current_step`, and general step policy while implementing only the four purpose-specific facts accepted by ADR-006. |
-| The pre-ADR-006 Entry Gate required pre-existing canonical owners for post-Skip Maneuver and the active Squadron-command opportunity and therefore stopped when those fields were absent. | Accepted ADR-006 now supplies the `ShipInstance` owner. Section 9 verifies the accepted authority, absence of conflicting ownership, identifiable semantic seams, and behavior-inert Slice 1 feasibility without requiring Slice 1 fields or Slice 2 integration to pre-exist. |
-| The original save 1 -> 2 and replay 3 -> 4 allocation collided with accepted TWI-002. | Section 8 makes TWI-002 production activation an execution dependency, requires exact pre-cutover values 2/4, allocates TWI-003 values 3/5, and stops on any mismatch instead of guessing. |
+| The original workbook invented a complete serialized ship activation FSM and predecessor policy. | The historical cutover prohibited `activation_step_id`, `current_step`, and general step policy and implemented four purpose-specific activation-boundary concepts. Amended ADR-006's fifth concept is allocated only by BUG-043 without generic lifecycle infrastructure. |
+| The pre-ADR-006 Entry Gate required pre-existing canonical owners for post-Skip Maneuver and the active Squadron-command opportunity and therefore stopped when those fields were absent. | Accepted ADR-006 supplied the `ShipInstance` owner used by the historical slices. Current Maneuver record ownership is separately fixed by amended ADR-006 and allocated by BUG-043. |
+| The original save 1 -> 2 and replay 3 -> 4 allocation collided with accepted TWI-002. | The historical cutover correctly used pre-cutover 2/4 and emitted 3/5. Section 8 clearly marks those values historical and records the current 6/9/6 baseline. |
 
-Every BLOCKING audit finding is resolved in the specification. The actual
-repository must still satisfy the Entry Gate before implementation can begin.
+Every historical BLOCKING audit finding was resolved in the specification used
+for the production cutover. No current Entry Gate run is authorized.
 
 ### 16.2 HIGH Finding Closure
 
@@ -1717,47 +1839,27 @@ Every HIGH audit finding is resolved.
 
 Every MEDIUM audit finding is resolved.
 
-### 16.4 Deterministic Execution Summary
+### 16.4 Historical Execution Record
 
-The only permitted execution sequence is:
+The accepted sequence was Entry Gate, behavior-inert Slice 1, its checkpoint,
+atomic semantic Slice 2, its checkpoint, and Exit Gate. Commits `440b670` and
+`7cfa47b` demonstrate that the two implementation slices entered the current
+production lineage. This sequence is retained for auditability and SHALL NOT be
+run again.
 
-1. pass the Entry Gate without edits;
-2. implement Slice 1 owner-local substrate;
-3. pass the Slice 1 checkpoint;
-4. implement Slice 2 as one complete semantic cutover;
-5. pass the Slice 2 checkpoint;
-6. pass the Exit Gate and prepare Owner manual testing; and
-7. hold only final production network save/load acceptance if the independent
-   BUG-001 prerequisite remains unresolved.
+### 16.5 Current Status Verdict
 
-There are exactly two implementation slices. Entry Gate and Exit Gate are not
-slices.
+TWI-003 is **not an active implementation workbook**. Its implemented
+declaration architecture remains authoritative where not superseded. Its
+historical compatibility allocations are not current cutover instructions.
 
-### 16.5 Readiness Verdict
+The original post-checkpoint baseline renewal and Owner manual verification
+cannot be confirmed from the repository evidence reviewed for this
+reconciliation. They remain independent historical closure evidence debt; they
+do not authorize production changes and they do not block BUG-043's bounded
+Maneuver work.
 
-TWI-003 is an accepted, deterministic implementation specification. Execution
-remains contingent on the Entry Gate passing and does not begin merely because
-the workbook is accepted.
-
-At the repository baseline reviewed for this refinement, the Entry Gate must
-demonstrate rather than assume:
-
-- TWI-002 production activation must supply save version 2 and replay format 4;
-- ADR-006 remains Accepted and `ShipInstance` remains the sole writable owner
-  of its four activation-local facts;
-- the required existing semantic transition boundaries are identifiable;
-- no conflicting canonical owner exists; and
-- Slice 1 can add the ADR-006 owner-local substrate behavior-inertly.
-
-The ADR-006 fields and production integrations do not need to pre-exist at the
-Entry Gate; Slice 1 and Slice 2 respectively own that substrate and cutover.
-Failure of the accepted-authority, semantic-seam, uniqueness, behavior-inert,
-or compatibility checks invokes Section 14. The implementer may not solve a
-stop by restoring a general activation FSM or treating `InteractionFlow` as
-authoritative.
-
-Subject to that gate, no other architecture or contract-shaping decision is
-left to the implementer. Private helper names and exact placement of a test in
-an already-listed test file may follow repository conventions only when the
-owner, behavior, artifact allocation, scope, and binary evidence remain exactly
-as specified here.
+TWI-003 owns no current Maneuver record, transaction, consequence, recovery,
+version, fixture, or verification allocation. BUG-043 alone owns that current
+semantic cutover. No new architecture decision or Owner decision is required
+to interpret TWI-003's present status.

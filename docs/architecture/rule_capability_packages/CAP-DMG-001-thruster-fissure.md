@@ -23,7 +23,10 @@ that instance makes the ship suffer one damage before Move Ship. The ship owner
 chooses the affected hull zone because the card does not specify one.
 
 SMI-067 and SMI-091 require this package to reach Owner-approved CON-003
-`Integrated` before BUG-043 depends on it. This Draft changes no behavior.
+`Integrated` before accepted release/cutover depends on it. Its complete path
+may participate earlier only after the whole workbook reaches Owner Decision
+27's `candidate-code-complete` condition in the unreleased 7/10/7 Integration
+Candidate, without changing this Draft status.
 
 Classification rationale: **mixed**. The effect originates from a damage-card
 instance but participates in the core Maneuver commitment lifecycle.

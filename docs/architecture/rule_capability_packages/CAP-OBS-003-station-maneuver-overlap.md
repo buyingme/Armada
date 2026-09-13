@@ -9,6 +9,7 @@ Related ADRs: ADR-003, ADR-006, ADR-010, ADR-013
 Related Contracts: CON-003
 Related Context Packs: CP-001
 Related Tests: TEST-003; required tests listed below
+Related Requirements: SMI-063, SMI-064, SMI-091; Ship Maneuver Owner Decision Record Section 25
 Created: 2026-09-12
 Last Updated: 2026-09-12
 Owner: Project Owner
@@ -20,8 +21,11 @@ Capability Classification: mixed
 This package traces the core station effect when a surviving ship's final
 position after executing a Maneuver overlaps the core station. The ship may
 discard one of its faceup or facedown damage cards. SMI-091 requires it to
-reach CON-003 `Integrated`, with explicit Owner approval, before BUG-043
-depends on it.
+reach CON-003 `Integrated`, with explicit Owner approval, before accepted
+release/cutover depends on it. Its complete ordinary path may participate
+earlier only after the whole workbook reaches Owner Decision 27's
+`candidate-code-complete` condition in the unreleased 7/10/7 Integration
+Candidate, without changing this Draft status.
 
 This Draft records boundaries and missing evidence only.
 
@@ -45,6 +49,11 @@ station component but participates in the core Maneuver consequence lifecycle.
 - Squadron hull recovery, attack obstruction, and objective-specific station
   behavior. Contested Outpost's suppression of the normal station effect is an
   external objective capability dependency, not part of this core package.
+- Integration of Contested Outpost or any other objective, and any generic
+  Station-, objective-, obstacle-, or modifier-framework. When an active
+  objective would modify or suppress Station behavior and its required
+  objective capability is not `Integrated`, the unsupported configuration
+  fails closed instead of invoking ordinary Station behavior.
 - Generic repair, optional-rule, obstacle-effect, consequence, continuation,
   queue, stack, or FSM ownership.
 - Runtime presentation-derived geometry.
@@ -55,6 +64,10 @@ station component but participates in the core Maneuver consequence lifecycle.
 - Verified canonical station contour and baseline final-position detection.
 - Existing ship faceup/facedown damage state, damage deck discard, passive
   damage ledger, and reusable low-level discard/application helpers.
+- A purpose-specific objective capability when the active objective modifies
+  or suppresses Station. The ordinary Station path may run only when no such
+  modifier applies or the applicable objective capability is `Integrated` and
+  supplies its accepted purpose-specific behavior.
 
 ### Assumptions
 
@@ -64,6 +77,10 @@ station component but participates in the core Maneuver consequence lifecycle.
   decline, selection, discard, and completion.
 - Baseline Maneuver detection/invocation owns cross-obstacle order and validates
   its rules-assigned actor. No shared obstacle consequence manager is introduced.
+- Baseline invocation fails closed before ordinary Station resolution when the
+  active configuration names a Station-modifying or -suppressing objective
+  whose capability is not `Integrated`; absence of objective integration is
+  never treated as absence of the objective rule.
 - A canonical contour may be extracted once from sufficiently faithful
   official artwork only after provenance and physical scale are verified and
   the result is accepted. Runtime or dynamic sprite, bounds, alpha-mask, or
@@ -89,6 +106,9 @@ station component but participates in the core Maneuver consequence lifecycle.
 
 - A surviving ship's authoritative final base overlaps an unresolved station
   placement after earlier SMI-064 consequences converge.
+- No active objective requires a Station modification/suppression whose
+  purpose-specific capability is absent or not `Integrated`; that unsupported
+  configuration fails closed before ordinary Station activation.
 
 ### Runtime Prerequisites
 
@@ -118,8 +138,8 @@ Exact implementation filenames may remain deferred until implementation.
 
 | Surface | Required? | Evidence | Notes |
 | --- | --- | --- | --- |
-| RuleRegistry | Optional | ADR-003; no active station registration | Objective suppression may use a narrow accepted modifier surface; registry is not the effect owner. |
-| RuleSurface | Required | SMI-063/091 | Station invocation and external suppression point must be responsibility-specific. |
+| RuleRegistry | Not Applicable to ordinary Station | ADR-003; no active station registration | This package does not invent a generic modifier registry. A separately Integrated objective capability owns its purpose-specific registration, if any. |
+| RuleSurface | Required | SMI-063/091; Ship Maneuver Owner Decision Record Section 25 | Station invocation must distinguish ordinary applicability from an unsupported active objective configuration and fail closed without a generic modifier surface. |
 | Commands | Required | `RepairActionCommand` is related evidence only | Require station-specific explicit decline/discard boundary; do not reuse Engineering semantics as owner. |
 | Resolvers | Required | Final obstacle detection missing; discard helper behavior exists | Shared pure geometry and discard helpers are allowed. |
 | State Classes | Required | Ship damage/deck/ledger and obstacle placements are partial | Pending optional decision, exact-once state, and execution binding are missing. |
@@ -187,7 +207,12 @@ stop gate for this package.
 ### Integration Tests
 
 - Outstanding: SMI-064 order, baseline-selected multiple-obstacle invocation,
-  destruction before station, return/re-evaluation, and external objective suppression seam.
+  destruction before station, return/re-evaluation, ordinary behavior when no
+  modifier applies, and fail-closed rejection when a Station-modifying
+  objective capability is absent or not Integrated. A positive modified/
+  suppressed-objective path is required only if an applicable purpose-specific
+  objective capability actually exists at `Integrated` status; otherwise it is
+  recorded as not applicable and BUG-043 performs no objective implementation.
 
 ### Replay Tests
 
@@ -221,11 +246,11 @@ stop gate for this package.
 | Controller / priority rule | The affected ship's controller decides use/decline and selected card; baseline separately validates the moving ship's actor for cross-obstacle order. |
 | Use and decline commands | Explicit station-specific discard/use and decline semantic boundaries, each bound to activation/execution/placement identity; automatic no-legal-option completion creates no fabricated decision. Exact filenames deferred. |
 | Authoritative state changed | Selected card removal, authority/public discard, passive facedown count/application, station-specific completion fact; decline changes only purpose-specific resolution state/history. |
-| Re-derivation trigger | Accepted use/decline, no-legal-option determination, target destruction, objective modifier change, or recovery installation. |
+| Re-derivation trigger | Accepted use/decline, no-legal-option determination, target destruction, purpose-specific objective capability change, or recovery installation. An unsupported active objective configuration fails closed before ordinary Station resolution. |
 | Continuation command | Purpose-specific completion returns to the matching live ADR-006 Maneuver boundary; no generic optional-rule or continuation owner. Exact filename deferred. |
 | Cleanup events | Use, decline, no legal option, target destruction, source suppression/invalidation, exceptional termination, or Maneuver retirement. |
 | Unit tests | Required contour, eligibility, rules-actor validation, faceup/facedown selection, decline, no-option, hidden application, exact-once, rejection, and cleanup tests. |
-| Protocol tests | Required opener -> projection -> use/decline -> mutation -> re-derivation -> return lifecycle, including baseline-selected multiple obstacles and objective suppression seam. |
+| Protocol tests | Required opener -> projection -> use/decline -> mutation -> re-derivation -> return lifecycle, including baseline-selected multiple obstacles and fail-closed unsupported configuration. Add a positive modified/suppressed-objective path only when an applicable objective capability already exists at `Integrated`; otherwise record it not applicable. |
 | UI-route tests | Required station projector/router/modal construction and dispatch, including explicit decline, hidden facedown selection, no-option absence, and rejection recovery. |
 | Serialization tests | Required before decision, after explicit decline/use, and after completion. |
 | Replay tests | Required explicit use/decline, discard identity result, order, continuation, and no repeated prompt/discard. |
@@ -251,7 +276,7 @@ stop gate for this package.
 | Network impact | high | Owner choice with passive peers | TEST-003 end-to-end protocol tests. |
 | Visibility impact | high | Facedown identity disclosure boundary | ADR-013 filtering/application tests. |
 | Migration impact | high | No effect route; Repair command is not transferable ownership | Add station-specific boundary only. |
-| Complexity | high | Geometry, optional choice, hidden data, objective modifiers | Keep modifier seam narrow and package-owned. |
+| Complexity | high | Geometry, optional choice, hidden data, objective modifiers | Keep ordinary behavior and the unsupported-modifier fail-closed boundary package-owned; objective behavior remains external. |
 
 ## 10. Integration Status
 
@@ -263,8 +288,10 @@ Evidence Summary:
 
 Outstanding Work:
 
-- Close contour evidence; implement/verify applicable surfaces and objective
-  modifier seam; align metadata; obtain explicit Owner approval.
+- Close contour evidence; implement/verify ordinary Station and the unsupported-
+  modifier fail-closed boundary; add positive modifier evidence only when an
+  applicable objective capability is already `Integrated`; align metadata;
+  obtain explicit Owner approval.
 
 Approval State:
 

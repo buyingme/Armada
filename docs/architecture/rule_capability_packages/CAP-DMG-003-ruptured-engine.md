@@ -22,8 +22,11 @@ executes a Maneuver. After obstacle consequences converge, if the ship's
 canonical speed dial is greater than one, each still-applicable instance makes
 the ship suffer one damage on a hull zone chosen by its owner.
 
-SMI-067/091 require Owner-approved CON-003 `Integrated` status before BUG-043
-depends on this slice. This Draft changes no behavior.
+SMI-067/091 require Owner-approved CON-003 `Integrated` status before accepted
+release/cutover depends on this slice. Its complete path may participate
+earlier only after the whole workbook reaches Owner Decision 27's
+`candidate-code-complete` condition in the unreleased 7/10/7 Integration
+Candidate, without changing this Draft status.
 
 Classification rationale: **mixed**. The effect originates from a damage-card
 instance but participates in core Maneuver post-execution re-evaluation.

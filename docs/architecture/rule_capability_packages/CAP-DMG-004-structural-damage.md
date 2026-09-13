@@ -9,7 +9,7 @@ Related ADRs: ADR-001, ADR-003, ADR-006, ADR-010, ADR-012, ADR-013, ADR-014
 Related Contracts: CON-001, CON-003  
 Related Context Packs: CP-001  
 Related Tests: TEST-003; required tests listed below  
-Related Requirements: DM-005, DM-008  
+Related Requirements: DM-005, DM-008; Ship Maneuver Owner Decision Record Section 24
 Related Boundaries: ADR-001/CON-001 Attack authority and return dependency; ADR-014; ADR-012/ADR-013 and BUG-042 damage/RNG result-application boundary  
 Related Gaps: ADR-014 physical-card identity, active-obligation, recovery, and purpose-specific return implementation gaps  
 Created: 2026-09-12  
@@ -25,8 +25,11 @@ Package Authority Role: Traceability/integration artifact only; it owns no runti
 ## 1. Purpose
 
 This package traces Structural Damage: when this card is dealt faceup, deal the
-ship one additional facedown damage card, then flip Structural Damage facedown.
-It is a general damage-card capability usable from every legal faceup draw.
+ship one additional facedown damage card when a physical card is available
+after ordinary recycling, then flip Structural Damage facedown. If draw and
+discard are both empty, deal none and still flip/complete normally under Owner
+Decision 24. It is a general damage-card capability usable from every legal
+faceup draw.
 
 The capability is mixed because component-origin behavior blocks and returns to
 an enclosing Attack, Maneuver, debug-authoritative, or future legal draw owner.
@@ -52,8 +55,10 @@ an enclosing Attack, Maneuver, debug-authoritative, or future legal draw owner.
 - Stable physical faceup `DamageCard` instance identity.
 - Authority-owned damage-deck availability/reshuffle boundary: an empty draw
   pile recycles and shuffles the discard pile before the required draw under
-  DM-008 and the existing shared `DamageDeck` boundary. This capability neither
-  defines the both-piles-empty outcome nor invents substitute/proxy damage.
+  DM-008 and the existing shared `DamageDeck` boundary. Under the accepted
+  Owner decision, if draw and discard are both empty, no additional card is
+  dealt; Structural Damage still flips facedown and the obligation completes
+  normally. This capability never invents substitute/proxy damage.
 - The ADR-014 purpose-specific source binding: matching `CurrentAttackState`,
   matching `ship_activation_id` plus active ADR-006 Maneuver-execution identity,
   authoritative debug application identity, or a future accepted source identity.
@@ -95,8 +100,8 @@ an enclosing Attack, Maneuver, debug-authoritative, or future legal draw owner.
 | Responsibility | Owner | Rationale | Evidence |
 | --- | --- | --- | --- |
 | State | `ShipInstance` assigned-card collection and its at-most-one ADR-014 active record; authoritative damage deck outside this capability | The record references the stable physical card; it does not copy it. No player decision exists. | `damage_card.gd`; `damage_deck.gd`; ADR-014 |
-| Validation | Structural branch of `ResolveImmediateEffectCommand` | Must validate card instance, ship, purpose-specific source, unresolved status, exact-once eligibility, and draw availability; no chooser is assigned. | `resolve_immediate_effect_command.gd` |
-| Execution | Structural branch using shared deck draw/application boundary | Owns the extra facedown damage and flip, not recycling policy. | `_execute_structural_damage()` |
+| Validation | Structural branch of `ResolveImmediateEffectCommand` | Must validate card instance, ship, purpose-specific source, unresolved status, exact-once eligibility, and canonical deck/discard state; both piles empty is a valid no-additional-card outcome, not rejection. No chooser is assigned. | `resolve_immediate_effect_command.gd`; Ship Maneuver Owner Decision Record Section 24 |
+| Execution | Structural branch using shared deck draw/application boundary | Owns the attempted extra facedown draw, source flip, and completion, not recycling policy. If no physical card exists after ordinary recycling, it applies no substitute damage and still completes. | `_execute_structural_damage()`; Ship Maneuver Owner Decision Record Section 24 |
 | Projection | Existing damage-card/hull projection routes | Projection reflects committed state only. | `immediate_effect_signals.gd`; `game_manager.gd` |
 | Serialization | Existing state owners plus stable card/application identity | Exact instance and completion state must round-trip. | `damage_card.gd`; `game_state.gd` |
 | Replay | `CommandProcessor` history and authority RNG/deck state | Ordered semantic commands reproduce draw, flip, destruction, and return. | ADR-012 |
@@ -198,11 +203,11 @@ required.
 | Opener / entry | Attack, Maneuver/Asteroid, and authoritative debug assignment atomically establish/resolve the ADR-014 obligation; future sources require accepted identity. |
 | Participants / controller | No chooser or controller; authority performs the mandatory automatic effect. |
 | Validation | Exact card/ship/source record, survival, deck availability, source identity, and exact-once eligibility; DM-008 and the shared DamageDeck boundary govern exhaustion, including the accepted both-piles-empty outcome. |
-| Authoritative command | Structural command draws exactly one facedown card through the shared deck boundary and flips the source; it does not own recycling/RNG policy. |
+| Authoritative command | Structural command requests exactly one facedown card through the shared deck boundary and flips the source. If both piles are empty, it deals none, synthesizes nothing, flips the source, and completes the obligation normally; it does not own recycling/RNG policy. |
 | Continuation / return | Re-evaluate destruction; return exactly once to matching Attack or Maneuver parent, perform valid Attack terminal cleanup, suppress invalid Maneuver return, and terminate after debug. |
 | State ownership | ShipInstance owns assigned cards and at most one referencing active record; deck owns draw/discard/RNG state. |
 | Serialization | Round-trip physical identities, location, unresolved record, source parent, accepted RNG/deck state, including exhaustion/reshuffle and both-piles-empty cases. |
-| Replay | Reproduce draw exhaustion, discard reshuffle, accepted RNG order, extra draw, flip, destruction, and exact return without live UI/passive synthesis. |
+| Replay | Reproduce draw exhaustion, discard reshuffle, accepted RNG order, extra draw when available, both-piles-empty no-draw completion, flip, destruction, and exact return without live UI/passive synthesis. |
 | Network protocol / application | Authority alone draws/shuffles; passive peers apply the realized aggregate damage/card result and never learn hidden identity/order. |
 | Visibility / filtering | Retire faceup correlation after flip; hide added facedown identity, deck/discard order, RNG, command history, saves, and reconnect payloads as ADR-013 requires. |
 | UI / projection | No decision modal; refresh public faceup/facedown aggregates, hull/destruction, and enclosing state from canonical application. |
@@ -214,9 +219,10 @@ is supplied, stale purpose-specific parent, duplicate submission, exact-once
 save/load recovery, reconnect, source-card lifecycle rejection/atomic cleanup,
 passive application, and destruction. Damage-deck tests SHALL additionally
 cover draw exhaustion plus discard reshuffle, both piles empty under the
-accepted rule, authority RNG/save continuity, replay, passive aggregate
-application, and hidden-card non-disclosure. BUG-042/ADR-012/ADR-013 remain the
-external result-application boundary.
+accepted rule with no synthesized damage or pending interaction, authority
+RNG/save continuity, replay, passive aggregate application, and hidden-card
+non-disclosure. BUG-042/ADR-012/ADR-013 remain the external result-application
+boundary.
 
 TEST-003 SHALL prove that `CommandApplicability`, `FlowSpec.allowed_commands`,
 and `ResolveImmediateEffectCommand.validate()` agree: projection cannot offer a

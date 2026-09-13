@@ -21,7 +21,10 @@ This package traces the core asteroid-field effect when a ship's final position
 after executing a Maneuver overlaps any of the three core asteroid tokens. The
 asteroid rule deals that ship one faceup damage card. It is one of the six
 prerequisites that SMI-091 requires to reach CON-003 `Integrated`, with
-explicit Owner approval, before BUG-043 depends on it.
+explicit Owner approval, before accepted release/cutover depends on it. Its
+complete path may participate earlier only after the whole workbook reaches
+Owner Decision 27's `candidate-code-complete` condition in the unreleased
+7/10/7 Integration Candidate, without changing this Draft status.
 
 This Draft records boundaries and missing evidence only. It changes no runtime
 behavior or integration status.

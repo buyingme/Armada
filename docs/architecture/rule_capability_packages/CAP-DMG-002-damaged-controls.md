@@ -22,8 +22,11 @@ Maneuver that overlaps at least one ship or obstacle. Each applicable instance
 deals one facedown damage card exactly once for that Maneuver at the
 Owner-assigned SMI-064 boundary.
 
-SMI-067/091 require Owner-approved CON-003 `Integrated` status before BUG-043
-depends on this slice. This Draft changes no behavior.
+SMI-067/091 require Owner-approved CON-003 `Integrated` status before accepted
+release/cutover depends on this slice. Its complete path may participate
+earlier only after the whole workbook reaches Owner Decision 27's
+`candidate-code-complete` condition in the unreleased 7/10/7 Integration
+Candidate, without changing this Draft status.
 
 Classification rationale: **mixed**. The effect originates from a damage-card
 instance but participates at two accepted core Maneuver consequence boundaries.

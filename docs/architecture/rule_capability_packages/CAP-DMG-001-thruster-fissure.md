@@ -10,7 +10,7 @@ Related Contracts: CON-003
 Related Context Packs: CP-001
 Related Tests: TEST-003; existing and required tests listed below
 Created: 2026-09-12
-Last Updated: 2026-09-12
+Last Updated: 2026-09-13
 Owner: Project Owner
 Test Owner: Capability implementation owner; Project Owner review required
 Capability Classification: mixed
@@ -52,7 +52,9 @@ instance but participates in the core Maneuver commitment lifecycle.
 ### Dependencies
 
 - Atomic ADR-006 Maneuver commitment exposing committed starting/resulting
-  speed and the matching active Maneuver execution identity while Maneuver stays `OPEN`.
+  speed, committed geometry/result facts, and the matching active Maneuver
+  execution identity while Maneuver stays `OPEN` and canonical ship
+  position/orientation remain at their pre-Maneuver values.
 - Stable public identity for every faceup DamageCard instance.
 - Existing ship hull-zone/shield state, authority damage deck, passive damage
   ledger, and reusable one-point damage/draw/application helpers.
@@ -137,7 +139,7 @@ The concrete representation is deferred; it must not be a deduplicated list of e
 
 ### Lifecycle
 
-- Created by: authoritative re-derivation immediately after qualifying Maneuver commitment.
+- Created by: authoritative re-derivation immediately after qualifying Maneuver commitment and before final-transform application.
 - Updated by: player order/zone choice and Thruster-Fissure-specific command.
 - Consumed by: accepted one-point damage for that source instance.
 - Removed or expired by: completion, source becoming inactive, or ADR-006 exceptional termination.
@@ -204,14 +206,14 @@ The concrete representation is deferred; it must not be a deduplicated list of e
 | Field | Required package evidence |
 | --- | --- |
 | Timing-window identity | Ship Activation / matching live ADR-006 Maneuver execution / committed Navigate speed-change boundary during Determine Course, before Move Ship, once per source instance. |
-| Opener | Accepted atomic Maneuver commitment exposes a qualifying non-temporary canonical speed change and matching activation/execution identities, then re-derives applicable faceup instances. |
+| Opener | Accepted atomic Maneuver commitment exposes a qualifying non-temporary canonical speed change, committed geometry/result facts, and matching activation/execution identities while leaving the canonical board transform unchanged, then re-derives applicable faceup instances. |
 | Participants | Every applicable faceup Thruster Fissure instance, affected ship, rules-assigned ship owner, legal hull zones/shields, authority damage deck, and other accepted same-timing effects. |
 | Source owners | Individual public faceup `DamageCard` instances on `ShipInstance`; Thruster-Fissure-specific pending choice/guard; existing ship/deck/ledger owners. |
 | Controller / priority rule | The affected ship's owner chooses each hull zone and same-player same-timing order; first-player ordering applies across players under SMI-067. |
 | Use and decline commands | One mandatory instance-bound hull-zone resolution command per source; decline is Not Applicable. Payload binds source-card, activation, execution, and chosen-zone identities. Exact filename deferred. |
 | Authoritative state changed | Selected hull-zone shields/hull, authority deck and damage state, per-source exact-once state, passive representation, and exceptional destruction state. |
 | Re-derivation trigger | Each accepted instance command, source inactivity, ship destruction, or recovery installation; re-derive remaining same-timing obligations before Move Ship. |
-| Continuation command | Purpose-specific completion returns to the same live Maneuver boundary; Move Ship cannot begin until no Thruster Fissure obligation remains. Exact existing/future command filename deferred. |
+| Continuation command | Purpose-specific completion returns to the same live Maneuver boundary; atomic final-transform application cannot occur until no Thruster Fissure obligation remains. Exact existing/future command filename deferred. |
 | Cleanup events | Per-instance resolution, source becoming facedown/discarded, target destruction, exceptional activation termination, or Maneuver retirement. |
 | Unit tests | Required qualifying-change, temporary-change exclusion, source identity, actor/order, zone/shield/draw, exact-once, rejection, and destruction tests. |
 | Protocol tests | Required commitment -> re-derive -> project/order -> resolve each source -> Move Ship or exceptional termination lifecycle. |

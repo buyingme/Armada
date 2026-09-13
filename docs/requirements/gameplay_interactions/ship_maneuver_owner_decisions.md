@@ -93,7 +93,11 @@ This is an intentional digital approximation, not an accidental limitation.
 
 ### Decision
 
-Core obstacle Maneuver effects must be integrated through the CON-003 Rule Capability Package architecture before BUG-043's semantic Maneuver cutover depends on those effects.
+Core obstacle Maneuver effects must be integrated through the CON-003 Rule
+Capability Package architecture before accepted release/cutover depends on
+those effects. Owner Decisions 26--27 permit candidate-code-complete paths to run
+together earlier in the unreleased 7/10/7 Integration Candidate solely to
+gather the required evidence.
 
 The baseline prerequisite scope is limited to the core Maneuver-overlap behavior required for:
 
@@ -121,7 +125,11 @@ The prerequisite is deliberately narrow: it does not require unrelated obstacle 
 
 ### Decision
 
-Damage-card effects required by the baseline Maneuver lifecycle must be integrated through CON-003 Rule Capability Packages before BUG-043 depends on them.
+Damage-card effects required by the baseline Maneuver lifecycle must be
+integrated through CON-003 Rule Capability Packages before accepted
+release/cutover depends on them. Owner Decisions 26--27 permit candidate-code-
+complete paths to run together earlier in the unreleased 7/10/7 Integration
+Candidate solely to gather the required evidence.
 
 The currently identified prerequisite scope is:
 
@@ -380,15 +388,17 @@ Each effect resolves individually.
 
 Survival and applicability are re-evaluated between consequences.
 
-### Damaged Controls obstacle-overlap allocation still requiring normative placement
+### Damaged Controls obstacle-overlap allocation resolved by normative refinement
 
-Damaged Controls also applies when the qualifying Maneuver overlap consists of obstacle overlap without ship collision.
+Damaged Controls also applies when the qualifying Maneuver overlap consists of
+obstacle overlap without ship collision. Accepted SMI-064 now places that
+single obstacle-only resolution after collision-triggered effects and before
+obstacle consequences.
 
-The normative refinement must establish the placement of that single Damaged Controls resolution within the accepted Maneuver consequence hierarchy when its qualifying overlap consists only of obstacle overlap.
-
-The normative refinement must also ensure that a Maneuver overlapping both a ship and an obstacle does **not** cause the same faceup Damaged Controls instance to resolve more than once during that Maneuver.
-
-This paragraph records a remaining normative allocation rather than silently creating an Owner decision that was not made during the Q&A.
+When a Maneuver overlaps both a ship and an obstacle, the same faceup Damaged
+Controls instance resolves no more than once during that Maneuver. The ship-
+collision boundary owns that instance's resolution and the obstacle-only
+boundary excludes it.
 
 ### Rationale
 
@@ -494,9 +504,12 @@ A new generic continuation mechanism would duplicate purpose-specific authority 
 
 ## 22. Normative refinement boundary
 
-These decisions must next be translated into the appropriate normative authorities.
+The accepted Ship Maneuver requirements and the twelve RCPs translate these
+decisions into their applicable normative and traceability surfaces. Owner
+Decisions 24--26 are additionally incorporated by the 2026-09-12 audit
+refinement.
 
-At minimum, subsequent refinement must address:
+The completed refinement addresses:
 
 - Ship Maneuver interaction requirements;
 - obstacle Rule Capability Packages for the required asteroid, debris, and station Maneuver slices;
@@ -505,7 +518,12 @@ At minimum, subsequent refinement must address:
 - authoritative obstacle geometry data and verification requirements;
 - authoritative Squadron displacement validation semantics;
 - purpose-specific Maneuver consequence ordering and recovery;
-- the normative placement of Damaged Controls when its qualifying Maneuver overlap consists only of obstacle overlap.
+- the normative placement of Damaged Controls when its qualifying Maneuver overlap consists only of obstacle overlap;
+- Structural Damage exhaustion with both damage piles empty;
+- ordinary Station ownership and unsupported objective fail-closed behavior;
+  and
+- the unreleased Integration Candidate evidence sequence.
+- Maneuver commitment versus canonical final-transform application timing.
 
 This decision record must **not** be used as permission to expand BUG-043 into ownership of those prerequisite capabilities.
 
@@ -531,3 +549,178 @@ This decision record does **not** authorize:
 - treating intermediate collision-search positions as independent gameplay events;
 - collapsing multiple faceup damage-card instances into one effect;
 - resolving the same faceup Damaged Controls instance more than once during one Maneuver merely because multiple qualifying overlaps occurred.
+
+---
+
+## 24. Structural Damage when both damage piles are empty
+
+### Decision
+
+When Structural Damage requires one additional facedown damage card, the
+ordinary damage-deck rule first recycles and shuffles the discard pile if the
+draw pile is empty.
+
+If both the draw pile and discard pile are empty, no additional damage card is
+dealt. The specific Structural Damage card still flips facedown and its
+immediate-resolution obligation completes normally through its actual
+purpose-specific enclosing boundary.
+
+Authority does not synthesize damage, create a placeholder card, or leave a
+pending interaction merely because no physical card is available.
+
+### Rationale
+
+The card requires dealing another physical damage card. When none exists in
+either canonical pile, there is no legal physical card to transfer. Completing
+the remaining printed effect preserves exact-once resolution without inventing
+state or stranding the enclosing Attack, Maneuver, or debug application.
+
+---
+
+## 25. Ordinary Station behavior and objective suppression
+
+### Decision
+
+The Station Rule Capability owns only ordinary Station behavior.
+
+Contested Outpost and any other objective that modifies or suppresses Station
+behavior retain their own purpose-specific objective capability ownership. If
+such an objective is active but the required objective capability is not
+`Integrated`, the unsupported configuration fails closed before ordinary
+Station behavior is invoked. The implementation must not silently apply the
+ordinary Station effect as though the objective were absent.
+
+BUG-043 does not absorb Contested Outpost or other objective integration and
+does not create a generic Station-modifier, objective-modifier, or obstacle-
+modifier framework.
+
+### Rationale
+
+Applying the ordinary effect in a configuration known to modify or suppress it
+would produce incorrect gameplay. Failing closed preserves responsibility-
+specific ownership without expanding the Maneuver integration into an
+objective project or speculative framework.
+
+---
+
+## 26. Unreleased Integration Candidate evidence sequence
+
+### Decision / workflow condition
+
+The coordinated Maneuver implementation uses an **Unreleased Integration
+Candidate** to gather CON-003 and TEST-003 evidence without creating a new
+CON-003 lifecycle status.
+
+The required sequence is:
+
+`normative Draft acceptance → candidate-code-complete → unreleased testable
+Integration Candidate → TEST-003 evidence → implementation-complete / Tested
+readiness → explicit Owner Integrated approval → accepted release/cutover`
+
+Only after the whole workbook reaches Decision 27's `candidate-code-complete`
+condition and every activation prerequisite is satisfied may the complete
+purpose-specific paths be activated together in an unreleased
+save-7/replay-10/protocol-7 candidate. Runtime,
+Network, recovery, replay, visibility, and cross-package evidence may then be
+gathered before Owner `Integrated` approval. An incomplete path must never
+become reachable merely to support incremental testing.
+
+The candidate is not an RCP status, does not imply `Tested` or `Integrated`,
+and is not an accepted release. Owner approval remains distinct for every RCP.
+
+### Rationale
+
+Live cross-package and distributed evidence requires the completed paths to be
+reachable together, while CON-003 requires that evidence before an Owner can
+approve `Integrated`. An unreleased candidate supplies that evidence boundary
+without weakening package status or exposing incomplete behavior in a release.
+
+---
+
+## 27. Candidate-code-complete and manual replay capture
+
+### Decision / workflow condition
+
+`candidate-code-complete` is the pre-evidence implementation condition for the
+Ship Maneuver / BUG-043 workbook. It means **all Codex-owned implementation and
+test code required by the workbook exists**, including replay-10 format and
+version logic, serialization and passive application, fail-closed compatibility
+handling, and automated non-fixture replay tests.
+
+`candidate-code-complete` is a workbook execution condition only. It is not a CON-003 or RCP lifecycle status and does not mean `Implemented`, `Tested`,
+`Integrated`, or TEST-003 `implementation-complete`.
+
+The term `implementation-complete` remains reserved for the existing TEST-003
+threshold: every applicable TEST-003 obligation has passing evidence. This
+decision does not amend, weaken, or create an exception to TEST-003.
+
+Replay files and fixtures are not Codex implementation work. Codex must never
+create, generate, synthesize, regenerate, transform, patch, or relabel replay
+files or fixtures. Only after the implementation is candidate-code-complete
+and the unreleased candidate has otherwise converged through non-fixture
+verification does execution reach:
+
+**STOP FOR OWNER REPLAY CAPTURE.**
+
+The Project Owner manually records genuine replay-10 Hot-Seat and Network
+files. Only then may Codex resume to inspect, hash, compare, integrate, and
+verify those Owner-created files.
+
+### Rationale
+
+The separate condition permits the complete code surface to become testable
+without falsely claiming the evidence threshold that TEST-003 reserves for
+`implementation-complete`. Manual replay capture remains an Owner action after
+the candidate is stable, not a missing implementation task or a fixture-
+generation workaround.
+
+---
+
+## 28. Maneuver commitment and canonical transform timing
+
+### Decision
+
+Maneuver commitment does **not** immediately apply the ship's committed final
+board transform to canonical ship position/orientation.
+
+Commitment atomically establishes:
+
+- the committed Maneuver result;
+- canonical selected speed;
+- applicable Navigate resource consumption;
+- the committed geometry/result facts required for subsequent resolution; and
+- the active Maneuver execution record.
+
+The ship remains at its pre-Maneuver canonical board transform while mandatory
+post-commitment / pre-movement obligations resolve.
+
+Thruster Fissure resolves within this interval: after Maneuver commitment but
+before the committed final board transform is applied.
+
+Only after all applicable pre-movement obligations have converged, and if the
+ship remains eligible to continue the Maneuver, is the committed final board
+transform applied atomically to canonical ship position/orientation.
+
+If the ship is destroyed before that transform is applied, the committed final
+transform is not applied. The accepted destruction and Maneuver-cleanup rules
+govern termination.
+
+This decision does not change the accepted ordering of consequences that occur
+after the committed final board transform has been applied.
+
+### Rationale
+
+Maneuver commitment and physical movement are distinct authoritative events.
+
+The committed Maneuver result must be durable and recoverable before mandatory
+effects that occur after commitment can resolve, while effects such as Thruster
+Fissure must still resolve before the ship physically moves to its committed
+destination.
+
+Applying the final canonical transform during commitment would make that timing
+impossible and would contradict the accepted Thruster Fissure requirement.
+
+Separating commitment from final-transform application preserves the accepted
+Maneuver execution record, decision-equivalent recovery, purpose-specific
+continuation, and consequence ordering without introducing a generic Maneuver
+FSM or continuation mechanism.

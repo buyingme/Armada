@@ -50,7 +50,7 @@ Accepted normative authority, in descending topic-specific order:
    and the incorporated decisions preserved in the
    [Ship Maneuver Owner Decision Record](../../requirements/gameplay_interactions/ship_maneuver_owner_decisions.md),
    especially SMI-001--004, SMI-010--052, SMI-060--071, SMI-080--081,
-   SMI-090--091, and SMI-AC-001--027;
+   SMI-090--091, SMI-AC-001--027, and Owner Decision 28;
 4. [ADR-003](../adr/ADR-003-rule-and-validation-surfaces.md),
    [CON-003](../contracts/CON-003-rule-capability-contract.md), and
    [TEST-003](../tests/TEST-003-interactive-rule-timing-window-verification.md),
@@ -387,7 +387,10 @@ speed/resources/rule modifiers, minimum Navigate source consumption, legal
 speed/yaw/tool side, committed course, actual final result, and rollback data.
 
 Acceptance atomically consumes the selected minimum sources, applies canonical
-speed/result, creates the active execution, and leaves Maneuver `OPEN`.
+speed, establishes the committed geometry/result facts and active execution,
+and leaves Maneuver `OPEN`. It does not apply the committed final board
+transform: canonical ship position/orientation remain at their pre-Maneuver
+values while post-commitment/pre-movement obligations resolve.
 Rejection changes none of speed, resources, transform, execution, opportunity,
 history, cursor, or projection-success state. Normal completion is a later
 identity-bound semantic transition and is unavailable while any purpose-
@@ -399,7 +402,9 @@ serialization helpers, and pure re-evaluation interface behavior-inert. WP3a
 then lands the pure authority derivation used by commitment. Finally, one
 **WP1/WP3a joint commitment checkpoint** replaces caller-authored geometry and
 proves atomic intent validation, source consumption, final transform,
-execution-record creation, and rollback. This checkpoint creates no new work
+execution-record creation, and rollback. Here `final transform` means the
+committed final-transform facts, not mutation of canonical ship
+position/orientation. This checkpoint creates no new work
 package, owner, or state; WP1 and WP3a are not candidate-code-complete until it
 passes.
 
@@ -436,8 +441,10 @@ serialization-helper, reconstructed re-evaluation, duplicate/stale, and
 destruction tests that do not require final geometry. Final WP1 convergence
 occurs only at the joint WP1/WP3a checkpoint and additionally requires
 intent-only command validation, authority-derived final geometry, atomic
-source consumption/transform/record creation, rollback, speed zero, and
-purpose-specific return tests. Stop if implementation requires a generic
+source consumption/committed-result/record creation with unchanged canonical
+board transform, rollback, speed zero, exact-once authority-generated transform
+application when no pre-movement obligation remains, and purpose-specific
+return tests. Stop if implementation requires a generic
 activation FSM/continuation structure or a writable owner outside
 `ShipInstance`.
 
@@ -666,8 +673,10 @@ or become live before that checkpoint.
 Move authoritative course/attachment/final-transform derivation into pure
 model-space movement helpers called by the commitment transaction. The command
 accepts legal intent; authority derives tool side, actual course, attempted
-transform, and normalized final transform. Scene tokens, ghosts, warnings, and
-caller-authored `did_overlap`/final coordinates are never authority.
+transform, and normalized committed final transform. Commitment persists the
+committed geometry/result facts while leaving canonical ship
+position/orientation unchanged. Scene tokens, ghosts, warnings, and caller-
+authored `did_overlap`/final coordinates are never authority.
 
 Speed zero uses the same commitment/execution identity and consequence path:
 no translation or ordinary yaw, unchanged canonical transform, but full final
@@ -679,7 +688,12 @@ Search successively lower temporary speeds using committed yaw, without
 changing canonical speed. Record only the stable non-derivable closest collided
 ship reference/evidence required by the purpose-specific collision boundary;
 intermediate attempts trigger nothing. The actual final transform becomes
-canonical once.
+canonical exactly once, only after the active evaluator proves that every
+post-commitment/pre-movement obligation has completed and the ship remains
+eligible to continue. Thruster Fissure resolves before this application. The
+application is one authority-generated, identity-bound atomic transition; if
+pre-movement damage destroys the ship, it is suppressed and the accepted
+exceptional cleanup path retires the execution without applying the transform.
 
 Evaluate SMI-065 play-area destruction from that actual post-reduction final
 position using the purpose-specific base footprint that excludes shield dials
@@ -1071,7 +1085,8 @@ mutation.
   from canonical state, and serialization emits that value as `"player"`
   (`owner_player` for ship-owned automatic immediate/obstacle/collision work,
   current attacker for Attack damage, moving-ship owner for Maneuver
-  completion, and the already-authorized host issuer for debug assignment).
+  transform application/completion, and the already-authorized host issuer for
+  debug assignment).
   Such a command is never accepted from a remote/player submission surface.
   The derived value is routing/audit identity, not a fabricated rules choice;
   `actor_player` remains `-1` in automatic immediate state. Passive/result
@@ -1137,7 +1152,7 @@ mutation.
 | State owner/key | Exact schema and rules | Retirement/filtering |
 | --- | --- | --- |
 | `DamageCard` authority serialization | Existing six keys plus required `physical_card_id:String`; while faceup, required `public_card_ref:String`; while facedown or in draw/discard, `public_card_ref` is forbidden. The three applicable persistent cards conditionally carry exactly one matching key: `last_thruster_fissure_execution_id:String`, `last_damaged_controls_execution_id:String`, or `last_ruptured_engine_execution_id:String`. The conditional key is absent on other card types and initially `""`. | Physical id persists deck↔ship↔discard. Public ref persists only for that faceup occurrence and maps to this physical object. Last-execution value changes only on accepted matching resolution and cannot suppress a later distinct execution. Filtered faceup serialization is exactly `PublicFaceupDamageCard`; filtered discard uses six-field `PublicDamageCard`; all authority-only keys are omitted. |
-| `ShipInstance.active_maneuver_execution` | Absent or exact `{maneuver_execution_id:String, ship_activation_identity:String, navigate_speed_changed:bool, obstacle_resolution_order:Array[String], ship_collision:Dictionary}`. `ship_collision` is exactly `{kind:"none"}` or `{kind:"closest_ship",target_owner_player:int,target_ship_index:int,exact_once_key:String,damage_resolved:bool}`. Its key is exactly `"collision:<ship_activation_identity>:<maneuver_execution_id>:<target_owner_player>:<target_ship_index>"`. The closest-target branch is the non-derivable result of the accepted RRG closest-ship comparison across every ship overlapped by the attempted committed result, including deterministic accepted tie handling; it is established atomically with final-course/final-transform commitment, before displacement or collision damage, and is immutable except `damage_resolved:false→true`. Order is empty until no obstacle choice is required or an accepted `commit_maneuver_obstacle_order` supplies every currently overlapped `obstacle_id` exactly once; afterward immutable. | Exists only with matching activation and Maneuver `OPEN`. Collision result survives transform/displacement changes so recovery never recomputes closest from final position. Accepted collision damage sets `damage_resolved:true` atomically with both damage applications. Normal completion removes the whole record while setting `CONSUMED`; destruction removes it without `CONSUMED`, along with any invalid nested collision state. |
+| `ShipInstance.active_maneuver_execution` | Absent or an exact base `{maneuver_execution_id:String, ship_activation_identity:String, navigate_speed_changed:bool, final_transform_applied:bool, obstacle_resolution_order:Array[String], ship_collision:Dictionary}` with conditional `committed_result:Dictionary`. While `final_transform_applied:false`, `committed_result` is required and is exactly `{yaw_clicks:Array[int],yaw_bonus_joint:int,pos_x:float,pos_y:float,rotation_deg:float}`; it contains the non-derivable committed course/final-transform facts, while canonical speed remains owned by `ShipInstance.current_speed`. Atomic transform application changes `final_transform_applied:false→true` and removes `committed_result`; while `true`, that key is forbidden because canonical position/orientation then own the applied transform. `ship_collision` is exactly `{kind:"none"}` or `{kind:"closest_ship",target_owner_player:int,target_ship_index:int,exact_once_key:String,damage_resolved:bool}`. Its key is exactly `"collision:<ship_activation_identity>:<maneuver_execution_id>:<target_owner_player>:<target_ship_index>"`. The closest-target branch is the non-derivable result of the accepted RRG closest-ship comparison across every ship overlapped by the attempted committed result, including deterministic accepted tie handling; it is established atomically with committed course/result facts, before transform application, displacement, or collision damage, and is immutable except `damage_resolved:false→true`. Order is empty until no obstacle choice is required or an accepted `commit_maneuver_obstacle_order` supplies every currently overlapped `obstacle_id` exactly once; afterward immutable. | Exists only with matching activation and Maneuver `OPEN`. Collision evidence survives later transform/displacement changes so recovery never recomputes it from a changed position. Before movement, recovery uses `committed_result`; after movement, it uses the canonical applied transform. Accepted collision damage sets `damage_resolved:true` atomically with both damage applications. Normal completion removes the whole record while setting `CONSUMED`; destruction before movement removes it without applying `committed_result` and without `CONSUMED`, along with any invalid nested state. |
 | `ShipInstance.active_immediate_resolution` | Authority state is absent or base exact `{immediate_resolution_id:String, public_card_ref:String, physical_card_id:String, effect_id:String, actor_player:int, exact_once_key:String, enclosing_kind:String}` plus exactly one enclosure branch: Attack `{attack_id:String}`; Maneuver `{ship_activation_identity:String, maneuver_execution_id:String, maneuver_source_kind:"asteroid", maneuver_source_id:String}`; debug `{debug_application_id:String}`. `actor_player` is `-1` only for automatic cards, otherwise the accepted rules actor. Filtered state uses that exact applicable branch but omits `physical_card_id` and `exact_once_key`; it exists only while `public_card_ref` remains public. | Removed atomically on resolution/destruction. Faceup→facedown removes the entire filtered record, so no public reference can correlate the physical facedown card. It never stores a choice, stage, callback, or continuation. |
 | Obstacle placement in `GameState.objectives["obstacles"]` | Authority state uses the existing placement keys plus required `obstacle_id:String` and authority-only `last_maneuver_execution_id:String`; the latter initially `""` and changes only when that placement's ordinary effect completes for the matching execution. Filtered placement has the same exact shape except that `last_maneuver_execution_id` is always omitted. | Placement persists. The filtered active purpose record and InteractionFlow carry only the viewer-needed public unresolved identity; the authority exact-once marker is save/replay state and never published. |
 | `ShipInstance.active_asteroid_resolution` | Absent or exact `{maneuver_execution_id:String, ship_activation_identity:String, obstacle_id:String, immediate_resolution_id:String, disposition:"OPEN"}`. | Created atomically with faceup assignment; removed after nested immediate return or destruction, setting the obstacle's last-execution marker only on normal completion. |
@@ -1196,7 +1211,8 @@ application result.
 
 | Command type and actor | Exact payload after serialized `"player"` → in-memory `player_index` mapping | Exact authority result / passive application result | Cleanup and purpose-specific return |
 | --- | --- | --- | --- |
-| `execute_maneuver`; moving ship controller | Required `{ship_index:int, ship_activation_identity:String, speed:int, yaw_clicks:Array[int], yaw_bonus_joint:int}`. `speed>=0`; yaw array length is zero at speed 0 and otherwise equals joint count; bonus is `-1` or a legal joint. No `pos_x`, `pos_y`, `rotation_deg`, `did_overlap`, `speed_delta`, or source-selection field is legal. | Authority and application exact `{owner_player:int, ship_index:int, ship_activation_identity:String, maneuver_execution_id:String, speed:int, yaw_clicks:Array[int], yaw_bonus_joint:int, navigate_dial_spent:bool, navigate_token_spent:bool, navigate_speed_changed:bool, pos_x:float, pos_y:float, rotation_deg:float, maneuver_opportunity_disposition:"OPEN"}`. Contract id `execute_maneuver`, v2. | Atomically applies minimum source consumption, speed/final transform, and execution record. Rejection rolls all back. It invokes only the matching execution evaluator. |
+| `execute_maneuver`; moving ship controller | Required `{ship_index:int, ship_activation_identity:String, speed:int, yaw_clicks:Array[int], yaw_bonus_joint:int}`. `speed>=0`; yaw array length is zero at speed 0 and otherwise equals joint count; bonus is `-1` or a legal joint. No `pos_x`, `pos_y`, `rotation_deg`, `did_overlap`, `speed_delta`, or source-selection field is legal. | Authority and application exact `{owner_player:int, ship_index:int, ship_activation_identity:String, maneuver_execution_id:String, speed:int, yaw_clicks:Array[int], yaw_bonus_joint:int, navigate_dial_spent:bool, navigate_token_spent:bool, navigate_speed_changed:bool, pos_x:float, pos_y:float, rotation_deg:float, maneuver_opportunity_disposition:"OPEN"}`. The position/rotation fields are committed-result facts and are not applied to canonical ship position/orientation by this result. Contract id `execute_maneuver`, v2. | Atomically applies minimum source consumption and canonical speed and establishes the committed result plus execution record while leaving the canonical board transform unchanged. Rejection rolls all back. It invokes only the matching execution evaluator. |
+| `apply_maneuver_transform`; authority-generated for moving controller | Required `{owner_player:int, ship_index:int, ship_activation_identity:String, maneuver_execution_id:String}`. | Authority/application exact same four identities plus `{pos_x:float,pos_y:float,rotation_deg:float,final_transform_applied:true}`; coordinates must equal the active execution's committed result. Contract id `apply_maneuver_transform`, v2. | Legal only while `final_transform_applied:false`, after fresh proof that no post-commitment/pre-movement obligation remains and the ship survives. Atomically applies the committed board transform, removes `committed_result`, and marks the transform applied exactly once, then returns to the matching evaluator. Destruction suppresses this command and uses exceptional cleanup. |
 | `complete_maneuver`; authority-generated for moving controller | Required `{owner_player:int, ship_index:int, ship_activation_identity:String, maneuver_execution_id:String}`. | Authority/application exact same four identities plus `{maneuver_opportunity_disposition:"CONSUMED", maneuver_execution_retired:true}`. Contract id `complete_maneuver`, v2. | Legal only after fresh proof of no mandatory consequence. Atomically consumes Maneuver and removes execution; never used for destruction. |
 | `commit_maneuver_obstacle_order`; moving ship controller | Required four Maneuver identities plus `obstacle_ids:Array[String]`, containing every currently overlapped unresolved obstacle exactly once. | Authority/application exact four identities plus accepted `obstacle_ids:Array[String]`. Contract id `commit_maneuver_obstacle_order`, v2. | Stores the immutable choice in the execution record, then returns to that execution evaluator. No generic queue is created. |
 | `start_displacement`; authority-generated for moving controller | Required four Maneuver identities plus `displaced_squadrons:Array[{owner:int,squadron_index:int}]`, unique and complete. `controller_player` is forbidden in payload and derived as the non-moving player. | Authority/application exact four identities plus `{controller_player:int, displaced_squadrons:Array[{owner:int,squadron_index:int}]}`. Contract id `start_displacement`, v2. | Opens only the existing displacement decision bound to the Maneuver execution. |
@@ -1407,7 +1423,7 @@ The only permitted boundary is:
 | Owner | Current | Final | Required behavior |
 | --- | ---: | ---: | --- |
 | `SaveGameMetadata.CURRENT_VERSION` | 6 | 7 | Save 7 requires the complete Maneuver, physical-card, location, immediate-record, purpose-specific state, and validation shape. Save 6 rejects before body installation. |
-| `GameReplay.FORMAT_VERSION` and signed alias | 9 | 10 | Replay 10 records the new commitment and all accepted consequence/completion commands. Replay 9 rejects before command application. |
+| `GameReplay.FORMAT_VERSION` and signed alias | 9 | 10 | Replay 10 records the new commitment, final-transform application, and all accepted consequence/completion commands. Replay 9 rejects before command application. |
 | `NetworkManager.PROTOCOL_VERSION` | 6 | 7 | Protocol 7 carries the complete new command/result/state vocabulary. Protocol 6 fails handshake before play. |
 | `GameCommand.APPLICATION_CONTRACT_VERSION` | 1 | 2 | Contract 2 gates changed exact intent/result shapes, especially immediate damage and the new purpose-specific damage/obstacle application paths. Contract 1 rejects for changed commands. |
 | `PassiveDamageLedger.SCHEMA_VERSION` | 1 | 1 | Repository evidence shows the accepted four-field aggregate hidden-state schema remains sufficient; transient public occurrence/application identity stays outside the ledger. Any required field/meaning change is a stop, not a silent schema-1 widening. |
@@ -1563,11 +1579,11 @@ semantics.
 | Entry | One drift baseline/full suite (or proven same-snapshot result), architecture lint, versions/status/contour/worktree inventory. |
 | WP1 foundation | Focused owner/aggregate/serialization-helper/recovery/destruction tests; structural dormant-reference search; no final-geometry claim. |
 | WP3a pure authority | Course/final-transform/collision/play-area/displacement characterization without a live route. |
-| WP1/WP3a joint checkpoint | `ExecuteManeuverCommand` intent-only schema, atomic derivation/source consumption/transform/record creation/rollback, speed zero, and recovery. Neither WP is complete before this passes. |
+| WP1/WP3a joint checkpoint | `ExecuteManeuverCommand` intent-only schema, atomic derivation/source consumption/committed-result/record creation/rollback with unchanged canonical board transform, speed zero, recovery, and exact-once `apply_maneuver_transform` when no pre-movement obligation remains. Neither WP is complete before this passes. |
 | WP-ID foundation | Identity/location/install/assignment/retirement/filter/application/redeal/destruction tests. |
 | Each WP-ID slice | RCP-focused unit/protocol/negative/UI as applicable; no repository full suite after each card. |
 | WP-ID implementation convergence | Shared all-six Attack/debug/direct-purpose-binding matrix, save/load/reconnect/non-fixture replay/passive filtering; no Asteroid dependency. |
-| WP2 | Pre-move timing, per-instance suffered damage, destruction-before-movement, recovery/distributed tests. |
+| WP2 | Pre-move timing with unchanged canonical board transform, per-instance suffered damage, destruction-before-movement with no transform application, surviving exact-once transform application, and recovery/distributed tests. |
 | WP3a | Geometry/speed-zero/collision/play-area/maximum-displacement/collision-nesting groups. |
 | Contour approval + WP3b | Evidence hash audit, synthetic plus all real-contour characterization, Damaged Controls two-boundary protocol. |
 | WP4 | Separate CAP-OBS-001/002/003 suites; Asteroid supplies the six later cross-source evidence rows. Station always covers ordinary behavior and unsupported-objective fail-closed behavior; positive modifier evidence is required only if an applicable objective capability already exists at `Integrated`, otherwise it is not applicable. |

@@ -13,6 +13,7 @@ Accepted by: Project Owner
 Accepted date: 2026-09-10
 Refined from committed Owner decisions: 2026-09-11
 Audit corrections and additional Owner decisions: 2026-09-12
+Owner Decision 28 timing correction: 2026-09-13
 
 ## 1. Purpose and authority
 
@@ -389,9 +390,11 @@ applicable integrated rule modifiers.
 
 Acceptance atomically derives and consumes the minimum required Navigate
 source or sources under SMI-030, applies the resulting canonical speed,
-establishes the committed Maneuver result, and creates one matching active
-Maneuver execution record under
-ADR-006, or changes none of them. Once accepted, the selected course must be
+establishes the committed geometry/result facts, and creates one matching
+active Maneuver execution record under ADR-006, or changes none of them.
+Commitment does not apply the committed final board transform: canonical ship
+position and orientation remain unchanged while mandatory post-commitment/
+pre-movement obligations resolve. Once accepted, the selected course must be
 executed and cannot be cancelled merely because its result or overlap
 consequences are undesirable.
 
@@ -425,6 +428,12 @@ At positive speed, authoritative execution places the ship at the position and
 facing produced by the committed course at the joint corresponding to its
 canonical speed. Only the starting and final positions matter for overlap;
 ships may move through ships, squadrons, and obstacles.
+
+The committed final board transform is applied atomically only after all
+applicable post-commitment/pre-movement obligations, including Thruster
+Fissure, have completed and the ship remains eligible to continue. If the ship
+is destroyed before movement, that transform is not applied and the accepted
+destruction and Maneuver-cleanup path terminates the execution.
 
 The canonical position and rotation change only through the accepted Maneuver
 execution path. Animation or instantaneous visual placement is presentation
@@ -656,10 +665,15 @@ itself provide an optional result; that option remains governed by the rule and
 its responsibility-specific implementation authority and is traced by its Rule
 Capability Package.
 
-Before BUG-043's semantic Maneuver cutover depends on their effects, the core
-Maneuver-overlap slices for asteroid fields, debris fields, and the station must
-each have a CON-003 Rule Capability Package at `Integrated` status, including
-the explicit Owner approval required by CON-003. `Integrated` records complete
+Before an accepted release/cutover depends on their effects, the core Maneuver-
+overlap slices for asteroid fields, debris fields, and the station must each
+have a CON-003 Rule Capability Package at `Integrated` status, including the
+explicit Owner approval required by CON-003. Only after the whole workbook is
+candidate-code-complete under Owner Decision 27 may the complete paths be
+activated together in the unreleased 7/10/7 Integration Candidate so required
+TEST-003/runtime/Network evidence can be gathered. The candidate is not a
+CON-003 status and no incomplete path may be
+made reachable for incremental testing. `Integrated` records complete
 traceability, evidence, tests, metadata alignment, and applicable-surface
 coverage; it does not make the package a gameplay authority owner. Maneuver
 owns only detection of the committed overlap, invocation of the
@@ -752,11 +766,15 @@ object retains its own purpose-specific authority.
 
 ### SMI-067 — Maneuver-triggered damage-card capability boundaries
 
-Before BUG-043's semantic Maneuver cutover depends on them, the Thruster
-Fissure, Damaged Controls, and Ruptured Engine prerequisite slices must each
-have a CON-003 Rule Capability Package at `Integrated` status, including the
-explicit Owner approval required by CON-003. Together with the three obstacle
-slices in SMI-063, all six prerequisite slices SHALL satisfy that gate.
+Before accepted release/cutover depends on them, the Thruster Fissure, Damaged
+Controls, and Ruptured Engine prerequisite slices must each have a CON-003 Rule
+Capability Package at `Integrated` status, including the explicit Owner
+approval required by CON-003. Together with the three obstacle slices in
+SMI-063, all six prerequisite slices SHALL satisfy that release gate. Their
+complete paths may participate earlier in the same unreleased 7/10/7
+Integration Candidate, but only after the whole workbook is candidate-code-
+complete under Owner Decision 27, solely to gather the evidence required for
+Tested readiness and Owner review; this does not advance package status.
 `Integrated` is a traceability/completeness status and does not transfer
 gameplay authority to the package. Maneuver SHALL expose only the authoritative
 interaction and return boundaries needed by the responsibility-specific
@@ -843,9 +861,12 @@ reconstructs the minimal top-segment and `+`/`−` representation, while positiv
 speed reconstructs the normal tool.
 
 `OPEN` with the matching active execution reconstructs the committed Maneuver
-and resumes its remaining mandatory authoritative consequences rather than
-offering a different course or duplicating completed effects. `CONSUMED`
-reconstructs with no active Maneuver execution and no live Maneuver decision.
+and resumes from its authoritative committed-result/transform-application
+state: pre-movement recovery preserves the unchanged canonical board transform
+and resumes applicable obligations, while post-movement recovery uses the
+already-applied canonical transform. Neither path offers a different course or
+duplicates completed effects. `CONSUMED` reconstructs with no active Maneuver
+execution and no live Maneuver decision.
 
 ### SMI-081 — Replay and passive Network behavior
 
@@ -884,9 +905,20 @@ Rule Capability Package. The prerequisite Maneuver-overlap slices for asteroid
 fields, debris fields, and station, plus Thruster Fissure, Damaged Controls,
 and Ruptured Engine, retain those purpose-specific owners even though the
 Maneuver boundary must invoke and await them. Each of those six slices must
-reach CON-003 `Integrated` status with explicit Owner approval before BUG-043's
-semantic cutover depends on it. This document does not integrate those packages
-or invent speculative behavior.
+reach CON-003 `Integrated` status with explicit Owner approval before accepted
+release/cutover depends on it. Before that approval, complete paths may be
+activated together only after the whole workbook is candidate-code-complete
+under Owner Decision 27, in the unreleased 7/10/7 Integration Candidate to
+gather TEST-003/runtime/Network evidence. The candidate is not a
+CON-003 lifecycle status, does not imply Tested or Integrated, and may not make
+an incomplete path reachable.
+
+CAP-OBS-003 owns ordinary Station behavior only. If an active objective such as
+Contested Outpost modifies or suppresses Station behavior and its purpose-
+specific objective capability is not `Integrated`, the unsupported
+configuration fails closed rather than applying ordinary Station behavior.
+BUG-043 does not absorb objective integration or invent a generic Station-
+modifier framework.
 
 In particular, baseline speed zero exposes no ordinary yaw controls. A
 speed-zero yaw interaction exists only when an **Integrated** rule or card
@@ -913,15 +945,15 @@ return, or exact-once completion invariants.
 | SMI-AC-005 | All speed results enforce minimum 0 and the ship's maximum-speed value, including unavailable speed-chart columns. |
 | SMI-AC-006 | Candidate speed changes are transient, leave canonical speed/resources unchanged, and re-derive the tool; accepted commitment atomically applies the resulting canonical speed. |
 | SMI-AC-007 | A rejected, unrelated, duplicate, or stale-identity commitment changes none of canonical speed, resources, committed result, active execution, or opportunity state. |
-| SMI-AC-008 | Before commitment, candidate speed/yaw, course geometry, and preview are reversible and non-authoritative; accepted commitment atomically derives and consumes sources, applies speed/result, and creates the matching active execution while leaving Maneuver `OPEN`. |
-| SMI-AC-009 | Positive-speed execution uses the committed course and canonical speed; speed-zero execution preserves transform but still executes a Maneuver; authoritative final geometry is established before dependent consequences and intermediate collision-search attempts do not trigger them. |
+| SMI-AC-008 | Before commitment, candidate speed/yaw, course geometry, and preview are reversible and non-authoritative; accepted commitment atomically derives and consumes sources, applies canonical speed, establishes committed geometry/result facts and the matching active execution, leaves Maneuver `OPEN`, and leaves canonical ship position/orientation unchanged. |
+| SMI-AC-009 | After all post-commitment/pre-movement obligations complete, positive-speed execution atomically applies the committed final board transform using the committed course and canonical speed; speed-zero execution preserves transform but still crosses the same authoritative execution boundary; intermediate collision-search attempts do not trigger consequences. Destruction before movement prevents final-transform application and uses exceptional cleanup. |
 | SMI-AC-010 | Ship overlap searches successively lower temporary speeds without changing canonical speed; after final geometry and Squadron displacement, ordinary collision damage precedes collision-triggered effects. |
 | SMI-AC-011 | Speed-zero execution evaluates applicable ship, squadron, and obstacle overlaps. |
 | SMI-AC-012 | The non-moving player proposes one complete Squadron-displacement batch containing placed and excluded identities and all placed positions. Authority validates the maximum legally placeable subset, permits identity choice only among equally maximal legal subsets, validates the maximum direct-touch count and secondary placement, and destroys exactly the identities genuinely excluded from the chosen maximal subset. Suboptimal selection, order, or placement cannot cause additional destruction and receives deficiency guidance. |
-| SMI-AC-013 | The asteroid, debris, and station Maneuver slices each reach CON-003 `Integrated` status with explicit Owner approval before BUG-043 cutover depends on them. Maneuver invokes the responsibility-specific implementation without transferring obstacle-rule ownership to Maneuver or the package; rule-provided options remain optional, and the moving ship's controller chooses among multiple RRG-permitted orders unless another accepted gameplay-rule authority assigns the choice. |
+| SMI-AC-013 | The asteroid, debris, and ordinary-station Maneuver slices may become reachable together only after the whole workbook reaches Owner Decision 27's `candidate-code-complete` condition in the unreleased 7/10/7 Integration Candidate, then satisfy TEST-003 `implementation-complete`/Tested readiness and reach CON-003 `Integrated` with explicit Owner approval before accepted release/cutover. Maneuver invokes the responsibility-specific implementation without transferring obstacle-rule ownership; an unsupported active Station-modifying objective configuration fails closed, and the moving ship's controller chooses among multiple RRG-permitted orders unless another accepted gameplay-rule authority assigns the choice. |
 | SMI-AC-014 | For a surviving normal activation, Maneuver remains `OPEN` through all mandatory consequences; after purpose-specific authority-side return and re-evaluation, completion consumes it and retires the active execution exactly once. |
 | SMI-AC-015 | Passive peers project ordered viewer-authorized canonical state and originate neither player decisions nor automatic authoritative follow-up commands; identical authority-private representation is not required. |
-| SMI-AC-016 | Save/load/reconnect rebuild transient pre-commit geometry from canonical state or resume committed mandatory consequences without duplication. |
+| SMI-AC-016 | Save/load/reconnect rebuild transient pre-commit geometry from canonical state or resume the committed Maneuver without duplication, preserving whether its canonical final transform remains unapplied or has already been applied. |
 | SMI-AC-017 | A rejected Maneuver preserves authoritative state and re-exposes the same legal decision unless an exceptional terminal transition ended it. |
 | SMI-AC-018 | An active ship destroyed by a Maneuver consequence uses the accepted exceptional terminal path and receives no fabricated normal completion. |
 | SMI-AC-019 | The RRG-derived timing statements and the Owner-assigned cross-category hierarchy remain explicitly distinguished: ship-collision effects satisfy the RRG pre-execution requirement, while displacement-first and obstacle-only Damaged Controls after displacement but before obstacle consequences are Armada interpretations/deviations. Mandatory consequences may keep Armada Maneuver `OPEN` beyond any RRG executed-maneuver timing event. |
@@ -931,7 +963,7 @@ return, or exact-once completion invariants.
 | SMI-AC-023 | Dial effect permits speed ±1 and optional +1 yaw on one joint; token effect permits speed ±1 with no yaw; combined effects permit total speed ±2 and optional dial yaw. Armada exposes no explicit source choice or no-effect resolution. |
 | SMI-AC-024 | Tool-side alignment is derived automatically and deterministically; if both sides are legal, the player receives no side-selection decision. |
 | SMI-AC-025 | The ship-overlap footprint is the simplified rectangular `ShipBase`; core obstacle overlap uses verified explicit canonical contours and never runtime sprite-derived geometry. |
-| SMI-AC-026 | Thruster Fissure is exposed at the committed Determine Course speed-change boundary, each Damaged Controls faceup instance once at its Owner-assigned SMI-064 boundary, and Ruptured Engine only after obstacle convergence. All three slices reach CON-003 `Integrated` status with explicit Owner approval before BUG-043 depends on them; detailed rule ownership remains with the responsibility-specific authorities recorded by those packages. |
+| SMI-AC-026 | Thruster Fissure is exposed after committed Determine Course speed-change facts exist but before the committed final board transform is applied; each Damaged Controls faceup instance is exposed once at its Owner-assigned SMI-064 boundary, and Ruptured Engine only after obstacle convergence. Their complete paths may participate in the unreleased 7/10/7 Integration Candidate for evidence only after the whole workbook reaches Owner Decision 27's `candidate-code-complete` condition, then satisfy TEST-003 `implementation-complete`/Tested readiness and reach CON-003 `Integrated` with explicit Owner approval before accepted release/cutover; detailed rule ownership remains responsibility-specific. |
 | SMI-AC-027 | Multiple applicable faceup instances are not collapsed by shared card identity; a player chooses the order of that player's same-timing effects, and when both players have effects at the same timing the first player resolves all of theirs first. Facedown copies provide no active effect. |
 
 ## Appendix A — Evidence classification and traceability
@@ -945,11 +977,11 @@ return, or exact-once completion invariants.
 | Speed bounds | Speed; Speed Chart | MVP MV-020–MV-022 | `ShipInstance`, `SetSpeedCommand`, activation state, and tests enforce 0..max | `−` stays visible and inert at 0 |
 | Candidate and committed speed | Speed | ADR-006 Sections 3.3 and 4; ADR-010 | Current separate speed mutation and BUG-043 convergence tests are implementation evidence that predate the accepted atomic commitment boundary | Collapse and expand transient tool across candidate 0↔positive |
 | Tool/yaw/preview | Maneuver Tool; Ship Movement; Yaw | SAI-061; ADR-010 | Tool state derives segments, chart limits, alignment, and ghost | Preserve deterministic automatic tool-side derivation with no player side choice; extend it to the top/end-segment-only speed-zero interaction |
-| Commitment/execution | Ship Movement; Overlapping | SAI-060–SAI-062; amended ADR-006 | `ExecuteManeuverCommand` persists transform, but current early consumption is drift | Distinguish the RRG timing event, the Owner-assigned consequence hierarchy, and later Armada consumption; speed-zero uses authoritative progression |
+| Commitment/execution | Ship Movement; Overlapping | SAI-060–SAI-062; amended ADR-006; Owner Decision Record Section 28 | `ExecuteManeuverCommand` persists transform, but current commitment-time transform application and early consumption are drift | Commitment establishes speed, committed result, and active execution while preserving the pre-Maneuver board transform; apply the committed transform atomically only after pre-movement obligations; retain the accepted later consequence hierarchy and speed-zero authoritative progression |
 | Ship overlap | Overlapping | SAI-063 | Resolver/tests implement temporary reduction and damage path | Use the simplified rectangular `ShipBase`; after final geometry, displacement precedes ordinary collision damage and collision-triggered effects; applies at speed zero |
 | Squadron displacement | Overlapping | SAI-064; SAI-001; amended ADR-006 | Current Start/Commit Displacement commands, controller flow, and placement tests are verified production behavior, not accepted lifecycle ownership | Validate one complete batch against the maximum legally placeable subset and maximum direct-touch count; the non-moving player chooses identities among equally maximal subsets; only genuinely excluded identities are destroyed |
-| Obstacle overlap | Obstacles; Overlapping | SAI-065; ADR-003 responsibility-specific authority; CON-003 integration evidence | Current approximation and effect path are incomplete | Use verified explicit canonical contours; require asteroid, debris, and station slices to reach Owner-approved `Integrated`; invoke their implementation surfaces at the Owner-assigned boundary without transferring rule ownership |
-| Maneuver-triggered damage cards | Card text/data supplies Thruster Fissure's `when`, the FAQ supplies Damaged Controls' during-Move-Ship timing, and card text supplies Ruptured Engine's `after` timing | ADR-003 responsibility-specific authority; CON-003 integration evidence; amended ADR-006 consequence boundary | Current resolver has partial Thruster Fissure, Damaged Controls, and Ruptured Engine hooks | Limit prerequisites to those three Owner-approved `Integrated` slices, preserve cumulative faceup copies, and allocate obstacle-only Damaged Controls after displacement and before obstacle consequences as an Armada interpretation/deviation |
+| Obstacle overlap | Obstacles; Overlapping | SAI-065; ADR-003 responsibility-specific authority; CON-003 integration evidence; Owner Decision Record Sections 25--26 | Current approximation and effect path are incomplete | Use verified explicit canonical contours; activate only complete paths together in the unreleased candidate for evidence; require Owner-approved `Integrated` before release; fail closed for unsupported Station-modifying objectives without transferring rule ownership |
+| Maneuver-triggered damage cards | Card text/data supplies Thruster Fissure's `when`, the FAQ supplies Damaged Controls' during-Move-Ship timing, and card text supplies Ruptured Engine's `after` timing | ADR-003 responsibility-specific authority; CON-003 integration evidence; amended ADR-006 consequence boundary; Owner Decision Record Section 26 | Current resolver has partial Thruster Fissure, Damaged Controls, and Ruptured Engine hooks | Limit prerequisites to the three purpose-specific slices, preserve cumulative faceup copies and ordering, activate only complete candidate paths for evidence, and require Owner-approved `Integrated` before accepted release |
 | Play-area destruction | Destroyed Ships and Squadrons; Overlapping; Play Area; Movement FAQ | ADR-006 exceptional termination | No complete evidence of the required post-overlap final-position boundary was found | Evaluate actual final position after ship-overlap resolution |
 | Completion/recovery | Overlapping; Ship Activation | SAI-060, SAI-080; ADR-006; ADR-010 | Current paths reconstruct some surfaces but contain drift below | Consume only after every mandatory consequence |
 

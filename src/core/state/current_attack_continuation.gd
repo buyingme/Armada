@@ -273,7 +273,7 @@ static func _build_next_defense_or_damage(game_state: GameState,
 
 static func _build_resolve_damage(
 		attack: CurrentAttackState) -> GameCommand:
-	return ResolveDamageCommand.new(attack.attacker_player, {
+	return CandidateResolveDamageCommand.new(attack.attacker_player, {
 		"attack_id": attack.attack_id,
 	})
 

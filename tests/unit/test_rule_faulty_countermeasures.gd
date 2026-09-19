@@ -218,6 +218,8 @@ func _add_faulty_countermeasures(ship: ShipInstance) -> DamageCard:
 	card.effect_text = "You cannot spend exhausted defense tokens."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:faulty-countermeasures"
+	card.public_card_ref = "faceup:test:faulty-countermeasures"
 	ship.add_faceup_damage(card)
 	return card
 

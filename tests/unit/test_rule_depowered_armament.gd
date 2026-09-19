@@ -201,5 +201,7 @@ func _add_depowered_armament(ship: ShipInstance) -> DamageCard:
 	card.effect_text = "You cannot attack at long range."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:depowered-armament"
+	card.public_card_ref = "faceup:test:depowered-armament"
 	ship.add_faceup_damage(card)
 	return card

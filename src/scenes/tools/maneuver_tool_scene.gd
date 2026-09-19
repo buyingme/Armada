@@ -70,6 +70,13 @@ var _activation_mode: bool = false
 ## Only set when _activation_mode is true.
 var _activation_state: ShipActivationState = null
 
+## Stable identity of the activation for which this transient tool was built.
+var _activation_identity: String = ""
+
+## One client-authored SetSpeed request awaiting authoritative acceptance.
+## This is transient presentation recovery state, never gameplay authority.
+var _pending_speed_change: Dictionary = {}
+
 ## Node2D overlay that draws yaw bonus "N" badges on joints.
 ## Requirements: NAV-006, EXE-005.
 var _yaw_badge_layer: Node2D = null
@@ -121,6 +128,8 @@ func setup(ship_token: ShipToken, side: String = "left") -> void:
 func set_activation_mode(activation_state: ShipActivationState) -> void:
 	_activation_mode = true
 	_activation_state = activation_state
+	var ship: ShipInstance = activation_state.get_ship()
+	_activation_identity = ship.ship_activation_identity if ship else ""
 	# Apply yaw bonus from activation state, if any.
 	var yaw_joint: int = activation_state.get_yaw_bonus_joint()
 	if yaw_joint >= 0:
@@ -137,6 +146,87 @@ func is_activation_mode() -> bool:
 ## Returns the ManeuverToolState for external queries.
 func get_state() -> ManeuverToolState:
 	return _state
+
+
+## Returns the canonical ship for this activation-mode tool.
+func get_activation_ship() -> ShipInstance:
+	return _activation_state.get_ship() if _activation_state else null
+
+
+## Returns the activation identity captured when this tool was built.
+func get_activation_identity() -> String:
+	return _activation_identity
+
+
+## Returns true while this exact ship activation awaits SetSpeed acceptance.
+func has_pending_speed_change() -> bool:
+	return not _pending_speed_change.is_empty()
+
+
+## Applies an accepted canonical speed to the matching transient preview.
+## Both ship and activation identity must match the pending request.
+func accept_pending_speed_change(ship: ShipInstance,
+		activation_identity: String, accepted_speed: int) -> bool:
+	if not _pending_matches(ship, activation_identity):
+		return false
+	if int(_pending_speed_change.get("target_speed", -1)) != accepted_speed:
+		return false
+	_pending_speed_change.clear()
+	_refresh_preview_from_canonical(ship)
+	return true
+
+
+## Restores transient Navigate/preview state after rejection of the matching
+## SetSpeed command. Canonical ShipInstance.current_speed is never changed.
+func reject_pending_speed_change(command: GameCommand,
+		ship: ShipInstance, activation_identity: String) -> bool:
+	if command == null or command.command_type != "set_speed" \
+			or not _pending_matches(ship, activation_identity):
+		return false
+	if command.player_index != int(_pending_speed_change.get("owner", -1)) \
+			or int(command.payload.get("ship_index", -1)) \
+			!= int(_pending_speed_change.get("ship_index", -1)):
+		return false
+	var snapshot: Dictionary = _pending_speed_change.get(
+			"activation_snapshot", {}) as Dictionary
+	_pending_speed_change.clear()
+	_activation_state.restore_speed_change_snapshot(snapshot)
+	_refresh_preview_from_canonical(ship)
+	EventBus.ship_speed_changed.emit(ship, ship.current_speed)
+	return true
+
+
+## Re-derives a matching live preview from canonical speed without resolving a
+## pending request. Used by the pre-commit stale-preview guard.
+func refresh_matching_preview_from_canonical(ship: ShipInstance,
+		activation_identity: String) -> bool:
+	if ship == null or ship != get_activation_ship() \
+			or activation_identity.is_empty() \
+			or activation_identity != _activation_identity \
+			or ship.ship_activation_identity != activation_identity:
+		return false
+	_refresh_preview_from_canonical(ship)
+	return true
+
+
+func _pending_matches(ship: ShipInstance,
+		activation_identity: String) -> bool:
+	return ship != null \
+			and not _pending_speed_change.is_empty() \
+			and _pending_speed_change.get("ship") == ship \
+			and activation_identity == _activation_identity \
+			and activation_identity == str(_pending_speed_change.get(
+					"activation_identity", "")) \
+			and ship.ship_activation_identity == activation_identity
+
+
+func _refresh_preview_from_canonical(ship: ShipInstance) -> void:
+	_refresh_navigation_chart_for_ship(ship)
+	_state.set_activation_preview_speed(ship.current_speed)
+	_update_visual()
+	maneuver_preview_changed.emit()
+	EventBus.navigate_token_spend_preview.emit(
+			ship, _activation_state.is_using_token_for_speed())
 
 
 ## Refreshes the visual representation after state changes.
@@ -742,28 +832,58 @@ func _try_speed_button_click() -> bool:
 ## [param delta] — +1 or -1.
 func _handle_speed_change(delta: int) -> void:
 	if _activation_mode and _activation_state:
+		if has_pending_speed_change():
+			_log.info("SetSpeedCommand still awaiting authoritative result.")
+			return
+		var submitter: CommandSubmitter = GameManager.get_command_submitter()
+		if submitter is NetworkCommandSubmitter \
+				and (submitter as NetworkCommandSubmitter).is_awaiting_response():
+			# A replacement/reconstructed tool cannot create a new pending
+			# speed request while an older command still owns the Network gate.
+			_log.info("Network command result still pending; speed input blocked.")
+			return
+		var activation_snapshot: Dictionary = \
+				_activation_state.speed_change_snapshot()
 		var applied: bool = _activation_state.apply_speed_change(delta)
 		if applied:
 			# Submit command to mutate ShipInstance.current_speed.
 			var ship: ShipInstance = _activation_state.get_ship()
-			var target_speed: int = ship.current_speed + delta
+			var game_state: GameState = GameManager.current_game_state
+			var ship_index: int = game_state.find_ship_index(ship) \
+					if game_state else -1
+			var target_speed: int = _activation_state.get_original_speed() \
+					+ _activation_state.get_total_speed_change()
 			var result: Dictionary = GameManager.submit_set_speed(
 					ship, target_speed)
 			if result.is_empty():
+				_activation_state.restore_speed_change_snapshot(
+						activation_snapshot)
+				_refresh_preview_from_canonical(ship)
 				_log.info("SetSpeedCommand rejected for speed %d." %
 						target_speed)
 				return
-			# Sync the tool state to the new actual speed.
-			_refresh_navigation_chart_for_ship(ship)
-			_state.set_simulated_speed(ship.current_speed)
-			_update_visual()
-			maneuver_preview_changed.emit()
+			if bool(result.get("awaiting_remote", false)):
+				_pending_speed_change = {
+					"ship": ship,
+					"owner": ship.owner_player,
+					"ship_index": ship_index,
+					"activation_identity": _activation_identity,
+					"activation_snapshot": activation_snapshot,
+					"target_speed": target_speed,
+				}
+				_state.set_activation_preview_speed(target_speed)
+				_update_visual()
+				maneuver_preview_changed.emit()
+				EventBus.navigate_token_spend_preview.emit(
+						ship, _activation_state.is_using_token_for_speed())
+				_log.info(("SetSpeedCommand submitted for speed %d " \
+						+ "(awaiting authoritative result).") % target_speed)
+				return
+			# Synchronous host/local acceptance already mutated canonical speed.
+			_refresh_preview_from_canonical(ship)
 			_log.info("Activation speed %+d → %d" % [
 					delta, ship.current_speed])
 			EventBus.ship_speed_changed.emit(ship, ship.current_speed)
-			EventBus.navigate_token_spend_preview.emit(
-					ship,
-					_activation_state.is_using_token_for_speed())
 	else:
 		var old_speed: int = _state.get_simulated_speed()
 		_state.set_simulated_speed(old_speed + delta)

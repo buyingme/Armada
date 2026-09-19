@@ -164,6 +164,8 @@ func test_activation_ended_logged() -> void:
 
 func test_game_ended_logged() -> void:
 	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
+	# This logging test verifies the event log, not replay capture.
+	CommandProcessor.reset()
 	GameManager.end_game("round_6")
 	var content: String = _get_log_content()
 	assert_string_contains(content, "game_ended",

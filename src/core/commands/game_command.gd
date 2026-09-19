@@ -72,7 +72,21 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	],
 	"reroll_attack_die": ["die_index", "expected_color", "expected_face"],
 	"resolve_damage": [],
-	"resolve_immediate_effect": ["owner_player", "ship_index", "card_index"],
+	"resolve_immediate_effect": ["owner_player", "ship_index",
+		"defense_token_index", "replacement_command"],
+	"apply_maneuver_transform": ["owner_player", "ship_index"],
+	"complete_maneuver": ["owner_player", "ship_index"],
+	"commit_maneuver_obstacle_order": ["owner_player", "ship_index"],
+	"commit_displacement": ["owner_player", "ship_index"],
+	"resolve_ship_collision_damage": ["owner_player", "ship_index",
+		"target_owner_player", "target_ship_index"],
+	"resolve_thruster_fissure": ["owner_player", "ship_index"],
+	"resolve_damaged_controls": ["owner_player", "ship_index"],
+	"resolve_asteroid_overlap": ["owner_player", "ship_index"],
+	"resolve_debris_overlap": ["owner_player", "ship_index"],
+	"resolve_station_overlap": ["owner_player", "ship_index",
+		"facedown_ordinal"],
+	"resolve_ruptured_engine": ["owner_player", "ship_index"],
 	"reveal_dial": ["ship_index"],
 	"select_evade_die": [
 		"defender_index", "die_index", "expected_color", "expected_face",
@@ -91,7 +105,7 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	],
 	"spend_dial": ["ship_index"],
 	"spend_token": ["ship_index", "token_type"],
-	"start_displacement": ["ship_index", "controller_player"],
+	"start_displacement": ["owner_player", "ship_index", "controller_player"],
 	"tarkin_choice": ["command"],
 	"use_concentrate_fire_token_reroll": [
 		"die_index", "expected_color", "expected_face",
@@ -114,6 +128,7 @@ const _INTEGER_ARRAY_PAYLOAD_FIELDS: Dictionary = {
 const _NESTED_INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	"commit_displacement": {
 		"placements": ["owner", "squadron_index"],
+		"excluded_squadrons": ["owner", "squadron_index"],
 	},
 	"start_displacement": {
 		"displaced_squadrons": ["owner", "squadron_index"],
@@ -125,7 +140,7 @@ const _NESTED_INTEGER_PAYLOAD_FIELDS: Dictionary = {
 ## their owning serialization boundary.
 const _MAX_SAFE_JSON_INTEGER: float = 9007199254740991.0
 
-const APPLICATION_CONTRACT_VERSION: int = 1
+const APPLICATION_CONTRACT_VERSION: int = 2
 const _EXACT_LIVE_PAYLOAD_FIELDS: Dictionary = {
 	"roll_dice": ["attack_id"],
 	"reroll_attack_die": [

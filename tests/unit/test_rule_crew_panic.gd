@@ -127,6 +127,8 @@ func _add_crew_panic(ship: ShipInstance) -> void:
 			+"do not reveal a dial this round."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:crew-panic"
+	card.public_card_ref = "faceup:test:crew-panic"
 	ship.add_faceup_damage(card)
 
 

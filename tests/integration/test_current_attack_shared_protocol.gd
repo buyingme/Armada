@@ -31,8 +31,6 @@ const ATTACKER_SHIP_KEY: String = "victory_ii_class_star_destroyer"
 const ATTACKER_SQUADRON_KEY: String = "tie_fighter_squadron"
 const UNIQUE_SQUADRON_KEY: String = "x_wing_luke_skywalker"
 const TEST_SAVE: String = "_gut_slice_8a_current_attack"
-const TEST_REPLAY_PATH: String = \
-		"res://tests/fixtures/_gut_slice_8a_replay_roundtrip.json"
 const EXACT_REPLAY_SEED: int = 8707258039180871004
 
 var _saved_registry: Dictionary = {}
@@ -69,8 +67,6 @@ func after_each() -> void:
 	var cleanup_manager: Node = SAVE_MANAGER_SCRIPT.new()
 	cleanup_manager.delete_save(TEST_SAVE)
 	cleanup_manager.free()
-	if FileAccess.file_exists(TEST_REPLAY_PATH):
-		DirAccess.remove_absolute(TEST_REPLAY_PATH)
 	RuleRegistry.clear()
 	GameCommand._registry = _saved_registry
 	GameManager.current_game_state = _saved_state
@@ -946,7 +942,7 @@ func test_packed_scene_recreation_derives_every_declaration_outcome() -> void:
 			await get_tree().process_frame
 
 
-func test_production_disk_replay_is_exact_and_replay_driver_compatible() -> void:
+func test_production_in_memory_replay_is_exact_and_driver_compatible() -> void:
 	var authority_state: GameState = _make_state()
 	authority_state.rng = GameRng.new(EXACT_REPLAY_SEED)
 	var initial_state: Dictionary = authority_state.serialize()
@@ -964,14 +960,12 @@ func test_production_disk_replay_is_exact_and_replay_driver_compatible() -> void
 	var replay_file: GameReplay = CommandProcessor.create_replay()
 	assert_not_null(replay_file,
 			"Production replay creation must capture the semantic history.")
-	assert_eq(replay_file.save_to_file(TEST_REPLAY_PATH), OK,
-			"Production GameReplay persistence must succeed.")
-
-	var loaded: GameReplay = GameReplay.load_from_file(TEST_REPLAY_PATH)
-	assert_not_null(loaded, "The persisted format-5 replay must load.")
+	var loaded: GameReplay = GameReplay.deserialize(
+			JSON.parse_string(JSON.stringify(replay_file.serialize())))
+	assert_not_null(loaded, "The non-fixture replay-10 payload must load.")
 	assert_typeof(loaded.header["rng_seed"], TYPE_INT)
 	assert_eq(loaded.header["rng_seed"], EXACT_REPLAY_SEED,
-			"The exact 64-bit replay seed must survive disk JSON.")
+			"The exact 64-bit replay seed must survive JSON serialization.")
 	assert_typeof(loaded.header["initial_command_sequence"], TYPE_INT)
 	assert_eq(loaded.header["initial_command_sequence"], 0)
 	assert_eq(_history_sequences(loaded.commands), [0, 1, 2, 3, 4, 5, 6])

@@ -34,6 +34,8 @@ func after_each() -> void:
 		EventBus.command_tokens_changed.disconnect(_track_tokens_changed)
 	if EventBus.active_player_changed.is_connected(_track_active_player):
 		EventBus.active_player_changed.disconnect(_track_active_player)
+	# Fixture teardown is not a replay-capture surface.
+	CommandProcessor.reset()
 	GameManager.end_game()
 
 
@@ -553,6 +555,8 @@ func _create_ship_with_dials(player: int, dial_count: int) -> ShipInstance:
 	ship.data_key = "test_ship"
 	ship.ship_data = ShipData.new()
 	ship.ship_data.ship_name = "Test Ship"
+	ship.pos_x = 0.35 + float(player) * 0.3
+	ship.pos_y = 0.5
 	ship.command_dial_stack = CommandDialStack.create(dial_count)
 	ship.command_tokens = CommandTokenManager.create(dial_count)
 	var cmds: Array = []
@@ -586,6 +590,8 @@ func _create_ship_with_dials_and_command_value(
 	ship.data_key = "test_ship"
 	ship.ship_data = ShipData.new()
 	ship.ship_data.ship_name = "Test Ship"
+	ship.pos_x = 0.35 + float(player) * 0.3
+	ship.pos_y = 0.5
 	ship.command_dial_stack = CommandDialStack.create(cmd_value)
 	ship.command_tokens = CommandTokenManager.create(cmd_value)
 	var cmds: Array = []

@@ -179,5 +179,7 @@ func _add_life_support_failure(ship: ShipInstance) -> DamageCard:
 			+"any command tokens."
 	card.timing = "immediate_persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:life-support-failure"
+	card.public_card_ref = "faceup:test:life-support-failure"
 	ship.add_faceup_damage(card)
 	return card

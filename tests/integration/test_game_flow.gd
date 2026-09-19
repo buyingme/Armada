@@ -54,8 +54,11 @@ func _on_round_started(_round: int) -> void:
 	_round_started_count += 1
 
 
-func _on_round_ended(_round: int) -> void:
+func _on_round_ended(round_number: int) -> void:
 	_round_ended_count += 1
+	if round_number == 6:
+		# This flow test verifies game termination, not replay capture.
+		CommandProcessor.reset()
 
 
 func _on_phase_changed(phase: Constants.GamePhase) -> void:
@@ -132,6 +135,8 @@ func test_game_ends_after_six_rounds() -> void:
 
 func test_end_game_emits_signal_with_winner() -> void:
 	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
+	# This flow test verifies termination signals, not replay capture.
+	CommandProcessor.reset()
 	GameManager.end_game("round_6")
 	assert_true(_game_ended, "Should emit game_ended signal")
 	assert_eq(_game_ended_details.get("reason"), "round_6",

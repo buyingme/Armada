@@ -131,5 +131,7 @@ func _add_compartment_fire(ship: ShipInstance) -> DamageCard:
 	card.effect_text = "You cannot ready your defense tokens during the Status Phase."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:compartment-fire"
+	card.public_card_ref = "faceup:test:compartment-fire"
 	ship.add_faceup_damage(card)
 	return card

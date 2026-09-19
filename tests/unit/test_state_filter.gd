@@ -29,11 +29,16 @@ func _make_ship(owner: int, hidden_dials: int = 0, revealed_dials: int = 0,
 	var fd_cards: Array[Dictionary] = []
 	for i: int in facedown:
 		fd_cards.append({"trait_type": "structural", "title": "Structural Damage",
-				"is_faceup": false, "effect_text": "", "timing": "", "effect_id": ""})
+				"is_faceup": false, "effect_text": "", "timing": "persistent",
+				"effect_id": "test_facedown", "physical_card_id":
+						"damage:ship:%d:fd:%d" % [owner, i]})
 	var fu_cards: Array[Dictionary] = []
 	for i: int in faceup:
 		fu_cards.append({"trait_type": "crew", "title": "Injured Crew",
-				"is_faceup": true, "effect_text": "effect", "timing": "", "effect_id": ""})
+				"is_faceup": true, "effect_text": "effect", "timing": "persistent",
+				"effect_id": "test_faceup", "physical_card_id":
+						"damage:ship:%d:fu:%d" % [owner, i],
+				"public_card_ref": "faceup:test:%d:%d" % [owner, i]})
 
 	var result: Dictionary = instance.serialize()
 	result["facedown_damage"] = fd_cards
@@ -74,11 +79,13 @@ func _make_game_state(p0_ships: Array[Dictionary] = [],
 	var draw: Array[Dictionary] = []
 	for i: int in draw_pile_size:
 		draw.append({"trait_type": "structural", "title": "Structural Damage",
-				"is_faceup": false, "effect_text": "", "timing": "", "effect_id": ""})
+				"is_faceup": false, "effect_text": "", "timing": "persistent",
+				"effect_id": "test_draw", "physical_card_id": "damage:draw:%d" % i})
 	var discard: Array[Dictionary] = []
 	for i: int in discard_size:
 		discard.append({"trait_type": "crew", "title": "Injured Crew",
-				"is_faceup": true, "effect_text": "effect", "timing": "", "effect_id": ""})
+				"is_faceup": false, "effect_text": "effect", "timing": "persistent",
+				"effect_id": "test_discard", "physical_card_id": "damage:discard:%d" % i})
 	var state := GameState.new()
 	state.rng = GameRng.new(42)
 	state.initialize()

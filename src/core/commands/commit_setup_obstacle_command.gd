@@ -78,12 +78,14 @@ static func _validate_normalized_position(values: Dictionary) -> String:
 
 func _payload_obstacle(placement_order: int) -> Dictionary:
 	return {
+		"obstacle_id": "obstacle:%d" % placement_order,
 		"data_key": str(payload.get("data_key", "")).strip_edges(),
 		"pos_x": float(payload.get("pos_x", 0.0)),
 		"pos_y": float(payload.get("pos_y", 0.0)),
 		"rotation_deg": float(payload.get("rotation_deg", 0.0)),
 		"placing_player": player_index,
 		"placement_order": placement_order,
+		"last_maneuver_execution_id": "",
 	}
 
 

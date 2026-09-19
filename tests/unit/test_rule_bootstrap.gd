@@ -108,9 +108,9 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 25,
-			"Bootstrap should invoke all twenty-five production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 41,
+	assert_eq(registered, 22,
+			"Bootstrap should invoke the twenty-two active rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 38,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(RuleRegistry.registered_timing_window_participant_count(), 2,
 			"Bootstrap should register Concentrate Fire and H9 participants.")
@@ -164,8 +164,8 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Capacitor Failure should expose one repair-shield blocker.")
 	assert_eq(maneuver_yaw_hooks.size(), 1,
 			"Thrust Control Malfunction should expose one yaw modifier.")
-	assert_eq(maneuver_observers.size(), 3,
-			"Three movement damage cards should observe execute_maneuver.")
+	assert_eq(maneuver_observers.size(), 0,
+			"Retired raw movement-card observers must not duplicate WP6 commands.")
 	assert_eq(ecm_status_enablers.size(), 1,
 			"Electronic Countermeasures should expose one status ready-cost enabler.")
 	assert_eq(ecm_status_enablers[0].rule_id, ECM_RULE_ID,

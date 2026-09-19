@@ -112,8 +112,8 @@ func test_create_replay_rejects_unpaired_reconstructed_cursor() -> void:
 
 
 func test_bug_031_cutover_uses_replay_format_nine() -> void:
-	assert_eq(GameReplay.FORMAT_VERSION, 9,
-			"BUG-031 Move decline semantics require replay format 9")
+	assert_eq(GameReplay.FORMAT_VERSION, 10,
+			"Ship Maneuver convergence requires replay format 10")
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION,
 			"Signing must not create a second semantic replay format")
 

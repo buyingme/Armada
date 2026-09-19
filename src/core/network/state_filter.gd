@@ -47,6 +47,13 @@ static func filter_for_player_checked(
 	if not identity_error.is_empty():
 		return _failure(identity_error)
 	var filtered: Dictionary = authority.serialize()
+	var objectives: Dictionary = filtered.get("objectives", {}) as Dictionary
+	var obstacle_data: Variant = objectives.get("obstacles", [])
+	if obstacle_data is Array:
+		for raw_obstacle: Variant in obstacle_data as Array:
+			if raw_obstacle is Dictionary:
+				(raw_obstacle as Dictionary).erase(
+						"last_maneuver_execution_id")
 
 	# 1. Strip RNG — server-only
 	filtered.erase("rng")
@@ -75,7 +82,10 @@ static func filter_for_player_checked(
 				return _failure("Network state filtering rejected unstable ship damage identity.")
 			seen_keys[key] = true
 			counts[key] = (ship.get("facedown_damage", []) as Array).size()
-		player_states[i] = _filter_player_state(ps, is_owner)
+		var filtered_player: Dictionary = _filter_player_state(ps, is_owner)
+		if filtered_player.is_empty():
+			return _failure("Network state filtering rejected invalid public damage state.")
+		player_states[i] = filtered_player
 	filtered.erase("damage_deck")
 	filtered["passive_damage_ledger"] = {
 		"schema_version": PassiveDamageLedger.SCHEMA_VERSION,
@@ -103,7 +113,10 @@ static func _filter_player_state(ps_data: Dictionary, is_owner: bool) -> Diction
 	var filtered: Dictionary = ps_data.duplicate(true)
 	var ships: Array = filtered.get("ships", [])
 	for i: int in ships.size():
-		ships[i] = _filter_ship(ships[i])
+		var ship: Dictionary = _filter_ship(ships[i])
+		if ship.is_empty():
+			return {}
+		ships[i] = ship
 	if not is_owner:
 		var dial_filtered: Array = filtered.get("ships", [])
 		for i: int in dial_filtered.size():
@@ -119,6 +132,23 @@ static func _filter_player_state(ps_data: Dictionary, is_owner: bool) -> Diction
 ## - command_dial_stack hidden dials → command field removed
 static func _filter_ship(ship_data: Dictionary) -> Dictionary:
 	var filtered: Dictionary = ship_data.duplicate(true)
+	var public_faceup: Array[Dictionary] = []
+	for raw_card: Variant in filtered.get("faceup_damage", []):
+		if not raw_card is Dictionary:
+			return {}
+		var card: DamageCard = DamageCard.deserialize_for_save7(
+				raw_card as Dictionary, "ship")
+		if card == null or not card.is_faceup:
+			return {}
+		public_faceup.append(card.public_faceup_damage_card())
+	filtered["faceup_damage"] = public_faceup
+	var immediate: Variant = filtered.get("active_immediate_resolution", {})
+	if not immediate is Dictionary:
+		return {}
+	var public_immediate: Dictionary = (immediate as Dictionary).duplicate(true)
+	public_immediate.erase("physical_card_id")
+	public_immediate.erase("exact_once_key")
+	filtered["active_immediate_resolution"] = public_immediate
 
 	# Facedown damage: replace card array with count
 	var facedown: Array = filtered.get("facedown_damage", [])

@@ -36,6 +36,20 @@ var timing: String = ""
 ## Identifier used by command resolvers and RuleRegistry rules.
 var effect_id: String = ""
 
+## Dormant save-7 authority identity. It is assigned once during candidate
+## deck construction and remains private across every physical location.
+var physical_card_id: String = ""
+
+## One assignment-scoped public faceup occurrence. It exists only while this
+## physical card is faceup on a ship and is erased before concealment.
+var public_card_ref: String = ""
+
+## Purpose-specific exact-once evidence for the three persistent Maneuver
+## cards. Only the matching effect may publish its key in save 7.
+var last_thruster_fissure_execution_id: String = ""
+var last_damaged_controls_execution_id: String = ""
+var last_ruptured_engine_execution_id: String = ""
+
 
 ## Creates a DamageCard with the given trait and title.
 static func create(card_trait: String, card_title: String) -> DamageCard:
@@ -68,6 +82,7 @@ func flip_faceup() -> void:
 ## Rules Reference: DM-006.
 func flip_facedown() -> void:
 	is_faceup = false
+	public_card_ref = ""
 
 
 ## Returns true if this card has a persistent effect (stays faceup).
@@ -98,6 +113,61 @@ func serialize() -> Dictionary:
 	}
 
 
+## Strict dormant save-7 authority shape. Current save-6 callers continue to
+## use serialize() and therefore publish none of these candidate fields.
+func serialize_for_save7(location: String) -> Dictionary:
+	if not validate_candidate_identity_for_location(location):
+		return {}
+	var data: Dictionary = serialize()
+	data["physical_card_id"] = physical_card_id
+	if is_faceup:
+		data["public_card_ref"] = public_card_ref
+	match effect_id:
+		"thruster_fissure":
+			data["last_thruster_fissure_execution_id"] = \
+					last_thruster_fissure_execution_id
+		"damaged_controls":
+			data["last_damaged_controls_execution_id"] = \
+					last_damaged_controls_execution_id
+		"ruptured_engine":
+			data["last_ruptured_engine_execution_id"] = \
+					last_ruptured_engine_execution_id
+	return data
+
+
+func validate_candidate_identity_for_location(location: String) -> bool:
+	if physical_card_id.is_empty() \
+			or not physical_card_id.begins_with("damage:") \
+			or location not in ["draw", "discard", "ship"]:
+		return false
+	if location != "ship" and (is_faceup or not public_card_ref.is_empty()):
+		return false
+	if is_faceup != not public_card_ref.is_empty():
+		return false
+	if effect_id != "thruster_fissure" \
+			and not last_thruster_fissure_execution_id.is_empty():
+		return false
+	if effect_id != "damaged_controls" \
+			and not last_damaged_controls_execution_id.is_empty():
+		return false
+	if effect_id != "ruptured_engine" \
+			and not last_ruptured_engine_execution_id.is_empty():
+		return false
+	return true
+
+
+func public_damage_card() -> Dictionary:
+	return serialize()
+
+
+func public_faceup_damage_card() -> Dictionary:
+	if not is_faceup or public_card_ref.is_empty():
+		return {}
+	var data: Dictionary = serialize()
+	data["public_card_ref"] = public_card_ref
+	return data
+
+
 ## Restores a DamageCard from a serialized dictionary.
 ## Preserves the [member is_faceup] state (unlike [method from_data] which
 ## always creates facedown cards).
@@ -110,3 +180,77 @@ static func deserialize(data: Dictionary) -> DamageCard:
 	card.timing = data.get("timing", "")
 	card.effect_id = data.get("effect_id", "")
 	return card
+
+
+## Restores the exact filtered public faceup value. This never creates an
+## authority physical identity and is therefore legal only on a passive ship.
+static func deserialize_public_faceup(data: Dictionary) -> DamageCard:
+	var expected: Array[String] = [
+		"public_card_ref", "trait_type", "title", "is_faceup",
+		"effect_text", "timing", "effect_id",
+	]
+	if not _has_exact_keys(data, expected) \
+			or typeof(data.get("public_card_ref")) != TYPE_STRING \
+			or str(data["public_card_ref"]).is_empty() \
+			or typeof(data.get("trait_type")) != TYPE_STRING \
+			or typeof(data.get("title")) != TYPE_STRING \
+			or data.get("is_faceup") != true \
+			or typeof(data.get("effect_text")) != TYPE_STRING \
+			or typeof(data.get("timing")) != TYPE_STRING \
+			or str(data["timing"]) not in [
+				"persistent", "immediate", "immediate_persistent"] \
+			or typeof(data.get("effect_id")) != TYPE_STRING:
+		return null
+	var card: DamageCard = deserialize(data)
+	card.public_card_ref = str(data["public_card_ref"])
+	return card
+
+
+static func deserialize_for_save7(data: Dictionary,
+		location: String) -> DamageCard:
+	var allowed: Array[String] = [
+		"trait_type", "title", "is_faceup", "effect_text", "timing",
+		"effect_id", "physical_card_id",
+	]
+	if bool(data.get("is_faceup", false)):
+		allowed.append("public_card_ref")
+	var effect: String = str(data.get("effect_id", ""))
+	var marker_key: String = _candidate_marker_key(effect)
+	if not marker_key.is_empty():
+		allowed.append(marker_key)
+	if not _has_exact_keys(data, allowed):
+		return null
+	var card: DamageCard = deserialize(data)
+	card.physical_card_id = str(data["physical_card_id"])
+	card.public_card_ref = str(data.get("public_card_ref", ""))
+	match effect:
+		"thruster_fissure":
+			card.last_thruster_fissure_execution_id = str(data[marker_key])
+		"damaged_controls":
+			card.last_damaged_controls_execution_id = str(data[marker_key])
+		"ruptured_engine":
+			card.last_ruptured_engine_execution_id = str(data[marker_key])
+	if not card.validate_candidate_identity_for_location(location):
+		return null
+	return card
+
+
+static func _candidate_marker_key(effect: String) -> String:
+	match effect:
+		"thruster_fissure":
+			return "last_thruster_fissure_execution_id"
+		"damaged_controls":
+			return "last_damaged_controls_execution_id"
+		"ruptured_engine":
+			return "last_ruptured_engine_execution_id"
+	return ""
+
+
+static func _has_exact_keys(data: Dictionary,
+		allowed: Array[String]) -> bool:
+	if data.size() != allowed.size():
+		return false
+	for key: String in allowed:
+		if not data.has(key):
+			return false
+	return true

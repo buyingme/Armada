@@ -150,6 +150,8 @@ func _add_targeter_disruption(ship: ShipInstance) -> DamageCard:
 	card.effect_text = "While attacking, you cannot resolve critical effects."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:targeter-disruption"
+	card.public_card_ref = "faceup:test:targeter-disruption"
 	ship.add_faceup_damage(card)
 	return card
 

@@ -203,5 +203,7 @@ func _add_blinded_gunners(ship: ShipInstance) -> DamageCard:
 	card.effect_text = "While attacking, you cannot spend accuracy icons."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:blinded-gunners"
+	card.public_card_ref = "faceup:test:blinded-gunners"
 	ship.add_faceup_damage(card)
 	return card

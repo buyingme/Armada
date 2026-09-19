@@ -224,6 +224,9 @@ func test_quit_network_game_tears_down_session_before_main_menu() -> void:
 	LobbyManager.current_lobby = LobbyState.new()
 	LobbyManager._pending_initial_start = {"scenario_id": "stale"}
 	LobbyManager._pending_resume = {"attempt_id": "stale"}
+	# Quit owns replay persistence in production. This lifecycle fixture is not
+	# replay evidence and must not inherit another test's command history.
+	CommandProcessor.reset()
 
 	_mgr._on_quit_confirmed()
 

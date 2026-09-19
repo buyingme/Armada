@@ -300,6 +300,8 @@ func _add_capacitor_failure(ship: ShipInstance) -> DamageCard:
 			+"zone is defending, you cannot spend Redirect tokens."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:capacitor-failure"
+	card.public_card_ref = "faceup:test:capacitor-failure"
 	ship.add_faceup_damage(card)
 	return card
 

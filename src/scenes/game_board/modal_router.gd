@@ -165,6 +165,9 @@ func _apply_hud_intent(intent: UIProjector.UIIntent) -> void:
 
 func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 		game_state: GameState, command: GameCommand) -> void:
+	if _ship_activation_controller != null:
+		_ship_activation_controller.project_maneuver_consequence(
+				game_state, _local_viewer(game_state))
 	if _drive_completed_attack_result(intent):
 		return
 	if _recover_commanded_squadron_remaining_action(game_state):

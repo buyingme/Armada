@@ -146,5 +146,7 @@ func _add_power_failure(ship: ShipInstance) -> DamageCard:
 			+"rounded down."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:power-failure"
+	card.public_card_ref = "faceup:test:power-failure"
 	ship.add_faceup_damage(card)
 	return card

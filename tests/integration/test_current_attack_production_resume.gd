@@ -400,15 +400,19 @@ func test_immediate_critical_resolves_before_complete_attack_without_hidden_resu
 	defender.current_shields["FRONT"] = 0
 	var replaced_top: DamageCard = state.damage_deck.draw_card()
 	assert_not_null(replaced_top)
-	var structural: DamageCard = DamageCard.create("Ship", "Structural Damage")
+	var structural: DamageCard = replaced_top
+	structural.trait_type = "Ship"
+	structural.title = "Structural Damage"
 	structural.timing = "immediate"
 	structural.effect_id = "structural_damage"
+	structural.flip_facedown()
+	structural.public_card_ref = ""
 	state.damage_deck._draw_pile.append(structural)
 	GameManager.current_game_state = state
 	GameManager.is_game_active = true
 
 	var damage_result: Dictionary = CommandProcessor.submit(
-			ResolveDamageCommand.new(0, {
+			CandidateResolveDamageCommand.new(0, {
 				"attack_id": state.current_attack_state.attack_id,
 			}))
 	assert_false(damage_result.is_empty())
@@ -421,12 +425,17 @@ func test_immediate_critical_resolves_before_complete_attack_without_hidden_resu
 	assert_eq(defender.faceup_damage.size(), 1)
 	assert_eq(defender.faceup_damage[0].effect_id, "structural_damage")
 
+	var immediate_record: Dictionary = defender \
+			.active_immediate_resolution_snapshot()
 	var immediate_result: Dictionary = CommandProcessor.submit(
-			ResolveImmediateEffectCommand.new(0, {
+			CandidateResolveImmediateEffectCommand.new(1, {
 				"owner_player": 1,
 				"ship_index": 0,
-				"card_index": 0,
-				"choice": {},
+				"public_card_ref": immediate_record["public_card_ref"],
+				"immediate_resolution_id": immediate_record[
+						"immediate_resolution_id"],
+				"enclosing_kind": "attack",
+				"attack_id": state.current_attack_state.attack_id,
 			}))
 	assert_false(immediate_result.is_empty())
 	assert_eq(_history_types(), [
@@ -1780,8 +1789,11 @@ func test_live_zero_attack_skip_projects_canonical_maneuver_boundary() -> void:
 	assert_true(board._ship_activation_controller.is_activation_modal_open(),
 			"Accepted canonical Skip must project usable Maneuver interaction.")
 	assert_true(activation_modal._is_interactable)
+	var yaw_clicks: Array[int] = []
+	yaw_clicks.resize(ship.current_speed)
+	yaw_clicks.fill(0)
 	assert_false(GameManager.submit_execute_maneuver(
-			ship, 0, [], ship.pos_x, ship.pos_y,
+			ship, ship.current_speed, yaw_clicks, ship.pos_x, ship.pos_y,
 			ship.rotation_deg).is_empty(),
 			"The projected interaction must use the canonical OPEN opportunity.")
 	assert_eq(ship.maneuver_opportunity_disposition,

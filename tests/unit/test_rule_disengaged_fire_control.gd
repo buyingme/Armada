@@ -198,5 +198,7 @@ func _add_disengaged_fire_control(ship: ShipInstance) -> DamageCard:
 	card.effect_text = "You cannot attack obstructed targets."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:disengaged-fire-control"
+	card.public_card_ref = "faceup:test:disengaged-fire-control"
 	ship.add_faceup_damage(card)
 	return card

@@ -121,7 +121,7 @@ func get_damage_deck(rng: GameRng = null) -> DamageDeck:
 		_damage_deck = DamageDeck.new()
 		if rng:
 			_damage_deck.set_rng(rng)
-		_damage_deck.initialize()
+		_damage_deck.initialize_for_save7()
 	return _damage_deck
 
 

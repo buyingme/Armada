@@ -228,5 +228,7 @@ func _add_point_defense_failure(ship: ShipInstance) -> DamageCard:
 			+"attack pool, remove 1 die of your choice."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:point-defense-failure"
+	card.public_card_ref = "faceup:test:point-defense-failure"
 	ship.add_faceup_damage(card)
 	return card

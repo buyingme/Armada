@@ -189,7 +189,7 @@ func test_deserialize_preserves_card_order() -> void:
 			"Deserialized deck should preserve card order (2nd)")
 
 
-func test_deserialize_preserves_faceup_state() -> void:
+func test_discard_retires_faceup_state() -> void:
 	var card: DamageCard = _deck.draw_card()
 	card.flip_faceup()
 	_deck.discard(card)
@@ -199,8 +199,8 @@ func test_deserialize_preserves_faceup_state() -> void:
 	# the serialized data directly.
 	var data: Dictionary = _deck.serialize()
 	var discard_data: Array = data["discard_pile"] as Array
-	assert_true((discard_data[0] as Dictionary)["is_faceup"] as bool,
-			"Serialized discard card should preserve faceup state")
+	assert_false((discard_data[0] as Dictionary)["is_faceup"] as bool,
+			"Discard must retire public faceup correlation before serialization")
 
 
 func test_deserialize_empty_data() -> void:

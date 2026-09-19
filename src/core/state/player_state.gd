@@ -69,7 +69,10 @@ static func deserialize(data: Dictionary) -> PlayerState:
 		if template == null:
 			push_warning("PlayerState.deserialize: ship template not found for '%s'" % key)
 			continue
-		state.ships.append(ShipInstance.deserialize(sd, template))
+		var ship: ShipInstance = ShipInstance.deserialize(sd, template)
+		if ship == null:
+			return null
+		state.ships.append(ship)
 	for squad_data: Variant in data.get("squadrons", []):
 		var sd: Dictionary = squad_data as Dictionary
 		var key: String = sd.get("data_key", "") as String

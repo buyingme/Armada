@@ -253,6 +253,26 @@ func test_spend_defense_token_validate_ok_squadron_phase() -> void:
 			"Should accept spending defense token in Squadron Phase.")
 
 
+func test_spend_defense_token_rejects_canonical_speed_zero_defender() -> void:
+	var idx: int = _add_ship(1)
+	var defender: ShipInstance = _state.get_ship(1, idx)
+	defender.set_speed(0)
+	_install_defense_attack(idx, [0])
+	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": idx,
+		"token_index": 0,
+		"expected_token_type": int(Constants.DefenseToken.BRACE),
+		"spend_method": "exhaust",
+	})
+
+	assert_ne(cmd.validate(_state), "",
+			"Canonical speed-0 defender must not spend a defense token.")
+	assert_eq(defender.defense_tokens[0]["state"],
+			Constants.DefenseTokenState.READY,
+			"Rejected spend must leave the canonical token unchanged.")
+
+
 func test_spend_defense_token_validate_bad_ship() -> void:
 	var cmd := SpendDefenseTokenCommand.new(1, {
 		"ship_index": 99,

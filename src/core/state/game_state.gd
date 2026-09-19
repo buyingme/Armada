@@ -433,6 +433,49 @@ func validate_for_full_authority_installation() -> bool:
 			and validate_completed_attack_inspection()
 
 
+## Dormant save-7 aggregate identity/location validator. Current save-6 live
+## installation deliberately does not invoke this candidate-only boundary.
+func validate_damage_state_for_save7() -> bool:
+	if damage_deck == null or passive_damage_ledger != null:
+		return false
+	var identities: Dictionary = {}
+	var public_refs: Dictionary = {}
+	var entries: Array[Dictionary] = \
+			damage_deck.candidate_identity_locations()
+	for player_state: PlayerState in player_states:
+		if player_state == null:
+			return false
+		for raw_ship: Variant in player_state.ships:
+			if not raw_ship is ShipInstance:
+				return false
+			var ship: ShipInstance = raw_ship as ShipInstance
+			if not ship.validate_damage_state_for_save7():
+				return false
+			var immediate: Dictionary = \
+					ship.active_immediate_resolution_snapshot()
+			if not immediate.is_empty() \
+					and str(immediate.get("enclosing_kind", "")) == "attack" \
+					and (_current_attack_state == null \
+						or not _current_attack_state.active \
+						or _current_attack_state.attack_id \
+								!= str(immediate.get("attack_id", ""))):
+				return false
+			entries.append_array(ship.candidate_damage_identity_locations())
+	for entry: Dictionary in entries:
+		var identity: String = str(entry.get("physical_card_id", ""))
+		var card: DamageCard = entry.get("card") as DamageCard
+		var location: String = str(entry.get("location", ""))
+		if identity.is_empty() or identities.has(identity) or card == null \
+				or not card.validate_candidate_identity_for_location(location):
+			return false
+		identities[identity] = location
+		if not card.public_card_ref.is_empty():
+			if public_refs.has(card.public_card_ref):
+				return false
+			public_refs[card.public_card_ref] = identity
+	return true
+
+
 func validate_for_passive_network_installation() -> bool:
 	if rng != null or damage_deck != null or passive_damage_ledger == null \
 			or not has_valid_match_player_control_binding() \
@@ -627,6 +670,7 @@ func validate_completed_attack_inspection() -> bool:
 ## ShipInstance remains the sole writable owner of each activation identity.
 func validate_ship_activation_identity_aggregate() -> bool:
 	var active_count: int = 0
+	var maneuver_execution_count: int = 0
 	for player_state: PlayerState in player_states:
 		if player_state == null:
 			continue
@@ -638,6 +682,10 @@ func validate_ship_activation_identity_aggregate() -> bool:
 			if ship.has_active_ship_activation():
 				active_count += 1
 				if active_count > 1:
+					return false
+			if ship.has_active_maneuver_execution():
+				maneuver_execution_count += 1
+				if maneuver_execution_count > 1:
 					return false
 	return true
 
@@ -660,6 +708,42 @@ func get_active_ship_activation() -> ShipInstance:
 				return null
 			active_ship = ship
 	return active_ship
+
+
+## Returns a writable canonical obstacle placement owned by objectives, or an
+## empty dictionary when the v7 identity schema is absent/ambiguous.
+func obstacle_placement(obstacle_id: String) -> Dictionary:
+	var raw_obstacles: Variant = objectives.get("obstacles", [])
+	if obstacle_id.is_empty() or not raw_obstacles is Array:
+		return {}
+	var found: Dictionary = {}
+	for raw: Variant in raw_obstacles as Array:
+		if not raw is Dictionary:
+			return {}
+		var obstacle: Dictionary = raw as Dictionary
+		if str(obstacle.get("obstacle_id", "")) != obstacle_id:
+			continue
+		if not found.is_empty():
+			return {}
+		found = obstacle
+	return found
+
+
+func mark_obstacle_resolved_for_maneuver(obstacle_id: String,
+		execution_id: String) -> bool:
+	var obstacle: Dictionary = obstacle_placement(obstacle_id)
+	if obstacle.is_empty() or execution_id.is_empty() \
+			or str(obstacle.get("last_maneuver_execution_id", "")) \
+					== execution_id:
+		return false
+	obstacle["last_maneuver_execution_id"] = execution_id
+	return true
+
+
+func selected_objective_key() -> String:
+	var selected: Variant = objectives.get("selected_objective", {})
+	return str((selected as Dictionary).get("data_key", "")) \
+			if selected is Dictionary else ""
 
 
 ## Records one ship-targeting attack for [param ship] in the current round.
@@ -721,7 +805,8 @@ func serialize() -> Dictionary:
 	if passive_damage_ledger != null:
 		data["passive_damage_ledger"] = passive_damage_ledger.serialize()
 	else:
-		data["damage_deck"] = damage_deck.serialize() if damage_deck else {}
+		data["damage_deck"] = damage_deck.serialize_for_save7() \
+				if damage_deck else {"draw_pile": [], "discard_pile": []}
 		data["rng"] = rng.serialize() if rng else {}
 	return data
 
@@ -812,14 +897,20 @@ static func _deserialize_representation(data: Dictionary,
 	if objective_data is Dictionary:
 		state.objectives = (objective_data as Dictionary).duplicate(true)
 	for player_state_data: Variant in data.get("player_states", []):
-		state.player_states.append(PlayerState.deserialize(player_state_data))
+		var player_state: PlayerState = PlayerState.deserialize(
+				player_state_data)
+		if player_state == null:
+			return null
+		state.player_states.append(player_state)
 	if not state.install_match_player_control_binding(binding):
 		return null
 	state.ship_target_attack_counts = _deserialize_attack_counts(
 			data.get("ship_target_attack_counts", {}))
 	var deck_data: Dictionary = data.get("damage_deck", {})
 	if not deck_data.is_empty():
-		state.damage_deck = DamageDeck.deserialize(deck_data)
+		state.damage_deck = DamageDeck.deserialize_for_save7(deck_data)
+		if state.damage_deck == null:
+			return null
 	var rng_data: Dictionary = data.get("rng", {})
 	if not rng_data.is_empty():
 		state.rng = GameRng.deserialize(rng_data)
@@ -866,7 +957,8 @@ static func _deserialize_representation(data: Dictionary,
 		return null
 	if not passive and (not state.has_valid_match_player_control_binding() \
 			or not state.validate_declaration_adjacent_state() \
-			or not state.validate_completed_attack_inspection()):
+			or not state.validate_completed_attack_inspection() \
+			or not state.validate_damage_state_for_save7()):
 		return null
 	if not bool(TIMING_WINDOW_ORCHESTRATOR.validate_reconstructed_state(
 			state).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):

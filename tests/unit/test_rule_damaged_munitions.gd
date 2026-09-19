@@ -239,5 +239,7 @@ func _add_damaged_munitions(ship: ShipInstance) -> DamageCard:
 			+"remove 1 die of your choice."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:damaged-munitions"
+	card.public_card_ref = "faceup:test:damaged-munitions"
 	ship.add_faceup_damage(card)
 	return card

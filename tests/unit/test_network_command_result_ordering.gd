@@ -27,6 +27,7 @@ func before_each() -> void:
 	AdvancePhaseCommand.register()
 	TarkinChoiceCommand.register()
 	SelectRedirectZoneCommand.register()
+	SetSpeedCommand.register()
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
@@ -231,6 +232,33 @@ func test_network_rejection_releases_gate_without_entering_ordered_history() -> 
 			GameManager, "network_command_rejected")
 	assert_eq((args[0] as GameCommand).command_type, "assign_dials")
 	assert_eq(args[1], "Controlled authoritative rejection.")
+
+
+func test_bug_043_ordered_set_speed_applies_before_presentation_and_gate_release() -> void:
+	var state: GameState = _install_client_state(false)
+	state.current_phase = Constants.GamePhase.SHIP
+	var ship: ShipInstance = state.get_ship(1, 0)
+	var submitter := GameManager.get_command_submitter() \
+			as NetworkCommandSubmitter
+	submitter._awaiting = true
+	submitter._in_flight_count = 1
+	submitter._awaiting_command_type = "set_speed"
+	var command := SetSpeedCommand.new(1, {
+		"ship_index": 0,
+		"new_speed": 1,
+	})
+	command.sequence = 0
+	watch_signals(EventBus)
+
+	GameManager._on_network_command_result(
+			command.serialize(), _envelope({"new_speed": 1}))
+
+	assert_eq(ship.current_speed, 1,
+			"Ordered mirror must commit canonical speed first")
+	assert_signal_emitted_with_parameters(
+			EventBus, "ship_speed_changed", [ship, 1])
+	assert_false(submitter.is_awaiting_response(),
+			"Submission gate releases after accepted presentation convergence")
 
 
 func test_bug_030_host_defender_projects_accepted_redirect_shields() -> void:

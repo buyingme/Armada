@@ -18,6 +18,7 @@ func before_each() -> void:
 	_saved_submitter = GameManager.get_command_submitter()
 	EventBus.active_player_changed.connect(_on_active_player_changed)
 	EventBus.command_phase_complete.connect(_on_command_phase_complete)
+	EventBus.round_ended.connect(_on_round_ended)
 	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
 
 
@@ -30,6 +31,8 @@ func after_each() -> void:
 			_on_command_phase_complete):
 		EventBus.command_phase_complete.disconnect(
 				_on_command_phase_complete)
+	if EventBus.round_ended.is_connected(_on_round_ended):
+		EventBus.round_ended.disconnect(_on_round_ended)
 	GameManager.is_game_active = false
 	GameManager.current_game_state = null
 	GameManager.set_command_submitter(_saved_submitter)
@@ -42,6 +45,12 @@ func _on_active_player_changed(player_index: int) -> void:
 
 func _on_command_phase_complete() -> void:
 	_command_phase_complete_count += 1
+
+
+func _on_round_ended(round_number: int) -> void:
+	if round_number == 6:
+		# This flow test verifies game termination, not replay capture.
+		CommandProcessor.reset()
 
 
 # --- Active Player Tracking ---

@@ -91,7 +91,7 @@ static func _attach_setup_payload(
 static func _initialize_damage_deck(state: GameState) -> void:
 	var deck: DamageDeck = DamageDeck.new()
 	deck.set_rng(state.rng)
-	deck.initialize()
+	deck.initialize_for_save7()
 	state.damage_deck = deck
 
 

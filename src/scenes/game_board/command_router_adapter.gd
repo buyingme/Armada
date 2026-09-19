@@ -31,6 +31,7 @@ const TIMING_WINDOW_OPPORTUNITY: GDScript = preload(
 var _attack_panel_controller: AttackPanelController = null
 var _debug_controller: DebugController = null
 var _damage_card_immediate_effect_controller: DamageCardImmediateEffectController = null
+var _ship_activation_controller: ShipActivationController = null
 var _modal_router: Node = null
 var _find_ship_token_fn: Callable = Callable()
 var _find_squadron_token_fn: Callable = Callable()
@@ -58,6 +59,7 @@ func initialize(
 	_attack_panel_controller = attack_panel_controller
 	_debug_controller = debug_controller
 	_damage_card_immediate_effect_controller = damage_card_immediate_effect_controller
+	_ship_activation_controller = ship_activation_controller
 	_find_ship_token_fn = find_ship_token_fn
 	_find_squadron_token_fn = find_squadron_token_fn
 	_create_modal_router(
@@ -159,6 +161,23 @@ func _route_to_controllers(cmd: GameCommand, result: Dictionary) -> void:
 		_project_debug_reposition(result)
 	if cmd != null and cmd.command_type == "persistent_effect_damage":
 		_emit_persistent_damage_events(cmd, result)
+	if cmd != null and cmd.command_type in ["resolve_ship_collision_damage",
+			"resolve_thruster_fissure", "resolve_damaged_controls",
+			"resolve_asteroid_overlap", "resolve_debris_overlap",
+			"resolve_station_overlap", "resolve_ruptured_engine",
+			"resolve_immediate_effect"]:
+		_emit_candidate_damage_events(cmd, result)
+	if cmd != null and cmd.command_type == "apply_maneuver_transform":
+		_project_applied_maneuver_transform(cmd)
+	if cmd != null and cmd.command_type == "complete_maneuver" \
+			and _ship_activation_controller != null:
+		var local_player: int = NetworkManager.get_local_player_index()
+		# Hot-seat has no fixed network viewer. In network play only the peer
+		# that owns the completed activation may originate the existing
+		# player-authored activation_done transition; passive mirrors project
+		# the authoritative result without synthesizing another command.
+		if local_player < 0 or local_player == cmd.player_index:
+			_ship_activation_controller.show_end_activation_after_maneuver()
 	if cmd != null and cmd.command_type == "destroy_unit":
 		_emit_destroyed_ship_presentation(cmd)
 
@@ -193,6 +212,39 @@ func _emit_persistent_damage_events(cmd: GameCommand,
 		return
 	EventBus.damage_card_dealt.emit(ship, null, false)
 	EventBus.ship_hull_changed.emit(ship, int(result.get("new_hull", 0)))
+
+
+func _emit_candidate_damage_events(cmd: GameCommand,
+		result: Dictionary) -> void:
+	var applications: Array[Dictionary] = []
+	for key: String in ["damage_application", "moving_damage_application",
+			"target_damage_application"]:
+		if result.get(key) is Dictionary:
+			applications.append(result[key] as Dictionary)
+	for application: Dictionary in applications:
+		var state: GameState = GameManager.current_game_state
+		var ship: ShipInstance = state.get_ship(
+				int(application.get("owner_player", -1)),
+				int(application.get("ship_index", -1))) if state != null else null
+		if ship == null:
+			continue
+		if int(application.get("facedown_delta", 0)) > 0 \
+				or not (application.get("faceup_additions", []) as Array).is_empty():
+			EventBus.damage_card_dealt.emit(ship, null,
+					not (application.get("faceup_additions", []) as Array).is_empty())
+		EventBus.ship_hull_changed.emit(
+				ship, int(application.get("new_hull", ship.get_remaining_hull())))
+
+
+func _project_applied_maneuver_transform(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _persistent_damage_ship(cmd, cmd.payload)
+	var token: Node2D = _find_ship_token_fn.call(ship) as Node2D \
+			if ship != null and _find_ship_token_fn.is_valid() else null
+	if token == null:
+		return
+	token.position = ship.get_pixel_position(GameScale.play_area_size_px)
+	token.rotation = deg_to_rad(ship.rotation_deg)
+	EventBus.ship_moved.emit(token)
 
 
 func _emit_destroyed_ship_presentation(cmd: GameCommand) -> void:

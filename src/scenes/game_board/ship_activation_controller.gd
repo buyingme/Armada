@@ -39,6 +39,11 @@ var _pending_crew_panic_ship_key: String = ""
 ## Lazily created OpponentChoiceModal for the Crew Panic prompt.
 var _crew_panic_modal: OpponentChoiceModal = null
 
+## Presentation-only owner for current purpose-specific Maneuver choices.
+var _maneuver_consequence_modal: OpponentChoiceModal = null
+var _pending_maneuver_action: Dictionary = {}
+var _pending_maneuver_action_key: String = ""
+
 ## Transient guard for projected Repair auto-advance command submission.
 var _repair_auto_advance_pending: bool = false
 
@@ -957,6 +962,14 @@ func _local_viewer() -> int:
 	return idx
 
 
+## Hot-seat owns both local actors; a network peer owns only its projected
+## player. The negative local-player sentinel is the existing session-neutral
+## authority seam and avoids a presentation-layer PlayMode discriminator.
+func _can_act_as(player: int) -> bool:
+	var local: int = NetworkManager.get_local_player_index()
+	return local < 0 or local == player
+
+
 # ---------------------------------------------------------------------------
 # Internal handlers — EventBus + DialDragController callbacks
 # ---------------------------------------------------------------------------
@@ -965,10 +978,74 @@ func _local_viewer() -> int:
 func _connect_signals() -> void:
 	# Activation lifecycle.
 	EventBus.activation_ended.connect(_on_board_activation_ended)
+	if not EventBus.ship_speed_changed.is_connected(
+			_on_accepted_ship_speed_changed):
+		EventBus.ship_speed_changed.connect(_on_accepted_ship_speed_changed)
+	if not GameManager.network_command_rejected.is_connected(
+			_on_network_speed_command_rejected):
+		GameManager.network_command_rejected.connect(
+				_on_network_speed_command_rejected)
 	# Network passive-peer modal mirroring (C7/C8).
 	if not EventBus.ship_activated_remotely.is_connected(
 			_on_remote_ship_activated):
 		EventBus.ship_activated_remotely.connect(_on_remote_ship_activated)
+
+
+## Converges only the matching pending activation preview after canonical
+## SetSpeed acceptance. Ship identity and activation identity are both required.
+func _on_accepted_ship_speed_changed(
+		ship: RefCounted, new_speed: int) -> void:
+	if not ship is ShipInstance or _maneuver_tool_controller == null:
+		return
+	var scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	if scene == null:
+		return
+	var ship_instance := ship as ShipInstance
+	var activation_identity: String = ship_instance.ship_activation_identity
+	var preview_refreshed: bool = false
+	var authored_pending: bool = scene.has_pending_speed_change()
+	if authored_pending:
+		preview_refreshed = scene.accept_pending_speed_change(
+				ship_instance, activation_identity, new_speed)
+	else:
+		var submitter: CommandSubmitter = GameManager.get_command_submitter()
+		if submitter is NetworkCommandSubmitter \
+				and (submitter as NetworkCommandSubmitter).is_awaiting_response():
+			# An authoring peer with no matching pending record has replaced its
+			# activation/tool; the delayed local result must not look passive.
+			return
+		# Passive peers do not own the accepted submission, but their matching
+		# observer preview is still transient presentation derived from canonical.
+		preview_refreshed = scene.refresh_matching_preview_from_canonical(
+				ship_instance, activation_identity)
+	if preview_refreshed and new_speed == 0:
+		var active_submitter: CommandSubmitter = \
+				GameManager.get_command_submitter()
+		if authored_pending or not active_submitter is NetworkCommandSubmitter:
+			_complete_live_speed_zero_maneuver(
+					ship_instance, activation_identity)
+		else:
+			_invalidate_passive_speed_zero_tool(
+					ship_instance, activation_identity)
+
+
+## Purpose-specific recovery owner for a rejected SetSpeed request.
+## A delayed rejection cannot touch a replacement activation/tool identity.
+func _on_network_speed_command_rejected(
+		command: GameCommand, _reason: String) -> void:
+	if command == null or command.command_type != "set_speed" \
+			or _maneuver_tool_controller == null \
+			or GameManager.current_game_state == null:
+		return
+	var scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	if scene == null or not scene.has_pending_speed_change():
+		return
+	var ship: ShipInstance = GameManager.current_game_state.get_ship(
+			command.player_index, int(command.payload.get("ship_index", -1)))
+	if ship == null:
+		return
+	scene.reject_pending_speed_change(
+			command, ship, ship.ship_activation_identity)
 
 
 ## Opens the activation modal as a read-only observer on the passive peer.
@@ -1142,6 +1219,178 @@ func _ensure_crew_panic_modal() -> void:
 	layer.layer = 95
 	add_child(layer)
 	layer.add_child(_crew_panic_modal)
+
+
+## Re-projects one current ADR-006 consequence decision. Gameplay ownership
+## remains in the purpose-specific command/state; this stores no progress.
+func project_maneuver_consequence(game_state: GameState,
+		_local_viewer: int) -> void:
+	if game_state == null:
+		_close_maneuver_consequence_modal()
+		return
+	var ship: ShipInstance = game_state.get_active_ship_activation()
+	if ship == null or not ship.has_active_maneuver_execution():
+		_close_maneuver_consequence_modal()
+		return
+	var ship_index: int = game_state.find_ship_index(ship)
+	var action: Dictionary = ManeuverExecutionEvaluator.next_action(
+			game_state, ship.owner_player, ship_index)
+	if str(action.get("kind", "")) != "decision" \
+			or not _can_act_as(int(action.get("player_index", -1))):
+		_close_maneuver_consequence_modal()
+		return
+	var key: String = JSON.stringify(action)
+	if key == _pending_maneuver_action_key \
+			and _maneuver_consequence_modal != null \
+			and _maneuver_consequence_modal.visible:
+		return
+	_ensure_maneuver_consequence_modal()
+	_pending_maneuver_action = action.duplicate(true)
+	_pending_maneuver_action_key = key
+	_maneuver_consequence_modal.open(
+			_maneuver_choice_descriptor(action, ship))
+
+
+func _ensure_maneuver_consequence_modal() -> void:
+	if _maneuver_consequence_modal != null:
+		return
+	_maneuver_consequence_modal = OpponentChoiceModal.new()
+	_maneuver_consequence_modal.name = "ManeuverConsequenceModal"
+	var layer := CanvasLayer.new()
+	layer.name = "ManeuverConsequenceModalLayer"
+	layer.layer = 96
+	add_child(layer)
+	layer.add_child(_maneuver_consequence_modal)
+	_maneuver_consequence_modal.choice_confirmed.connect(
+			_on_maneuver_consequence_choice)
+
+
+func _close_maneuver_consequence_modal() -> void:
+	_pending_maneuver_action.clear()
+	_pending_maneuver_action_key = ""
+	if _maneuver_consequence_modal != null:
+		_maneuver_consequence_modal.close_and_clear()
+
+
+func _maneuver_choice_descriptor(action: Dictionary,
+		ship: ShipInstance) -> Dictionary:
+	var command_type: String = str(action["command_type"])
+	var options: Array[Dictionary] = []
+	var multi_select: bool = false
+	var max_selections: int = 1
+	match command_type:
+		"commit_maneuver_obstacle_order":
+			var ids: Array[String] = []
+			for raw: Variant in action["payload"]["obstacle_ids"]:
+				ids.append(str(raw))
+			for ordering: Array[String] in _permutations(ids):
+				options.append({"id":"|".join(ordering),
+					"label":" → ".join(ordering)})
+		"resolve_thruster_fissure", "resolve_debris_overlap", \
+		"resolve_ruptured_engine":
+			for zone: Variant in action.get("hull_zones",
+					ship.current_shields.keys()):
+				options.append({"id":str(zone), "label":str(zone).capitalize()})
+		"resolve_station_overlap":
+			options.append({"id":"decline", "label":"Decline"})
+			for raw_ref: Variant in action.get("faceup_refs", []):
+				var ref: String = str(raw_ref)
+				var card: DamageCard = ship.faceup_card_for_public_ref(ref)
+				options.append({"id":"faceup|%s" % ref,
+					"label":"Discard %s" % (card.title if card != null else ref)})
+			for ordinal: int in range(int(action.get("facedown_count", 0))):
+				options.append({"id":"facedown|%d" % ordinal,
+					"label":"Discard facedown card %d" % (ordinal + 1)})
+		"resolve_immediate_effect":
+			match str(action.get("choice", "")):
+				"projector_zone":
+					for zone: Variant in action["options"]:
+						options.append({"id":str(zone),"label":str(zone).capitalize()})
+				"defense_token_index":
+					for token: Variant in action["options"]:
+						options.append({"id":str(token),"label":"Defense token %d" % (int(token)+1)})
+				"shield_zones":
+					multi_select = true; max_selections = 2
+					for zone: Variant in action["options"]:
+						options.append({"id":str(zone),"label":str(zone).capitalize()})
+				"comm_noise":
+					if bool(action.get("speed_available", false)):
+						options.append({"id":"speed", "label":"Reduce speed by 1"})
+					if bool(action.get("dial_available", false)):
+						for replacement: int in range(4):
+							options.append({"id":"dial|%d" % replacement,
+								"label":"Replace dial: %s" % ImmediateEffectResolver._command_type_name(replacement)})
+	return {"card_title":_maneuver_choice_title(command_type),
+		"effect_text":"Resolve the current mandatory Maneuver consequence.",
+		"chooser":int(action["player_index"]), "options":options,
+		"multi_select":multi_select, "max_selections":max_selections,
+		"choice_type":ImmediateEffectResolver.CHOICE_SHIELD_FAILURE \
+				if multi_select else "maneuver_consequence"}
+
+
+func _on_maneuver_consequence_choice(selection: Dictionary) -> void:
+	if _pending_maneuver_action.is_empty():
+		return
+	var action: Dictionary = _pending_maneuver_action.duplicate(true)
+	var payload: Dictionary = (action["payload"] as Dictionary).duplicate(true)
+	var command_type: String = str(action["command_type"])
+	var selected: Array = selection.get("zones",
+			selection.get("ids", [])) as Array
+	var selected_id: String = str(selection.get("id",
+			selected[0] if not selected.is_empty() else ""))
+	match command_type:
+		"commit_maneuver_obstacle_order":
+			payload["obstacle_ids"] = selected_id.split("|", false)
+		"resolve_thruster_fissure", "resolve_debris_overlap", \
+		"resolve_ruptured_engine":
+			payload["hull_zone"] = selected_id
+		"resolve_station_overlap":
+			if selected_id == "decline":
+				payload["action"] = "decline"
+			elif selected_id.begins_with("faceup|"):
+				payload["action"] = "use_faceup"
+				payload["public_card_ref"] = selected_id.trim_prefix("faceup|")
+			elif selected_id.begins_with("facedown|"):
+				payload["action"] = "use_facedown"
+				payload["facedown_ordinal"] = int(selected_id.trim_prefix("facedown|"))
+		"resolve_immediate_effect":
+			match str(action.get("choice", "")):
+				"projector_zone": payload["projector_zone"] = selected_id
+				"defense_token_index": payload["defense_token_index"] = int(selected_id)
+				"shield_zones": payload["shield_zones"] = selected.duplicate()
+				"comm_noise":
+					if selected_id == "speed": payload["comm_noise_action"] = "speed"
+					elif selected_id.begins_with("dial|"):
+						payload["comm_noise_action"] = "dial"
+						payload["replacement_command"] = int(selected_id.trim_prefix("dial|"))
+	_close_maneuver_consequence_modal()
+	var command: GameCommand = GameCommand.deserialize({"type":command_type,
+		"player":int(action["player_index"]), "sequence":-1, "payload":payload})
+	var submitter: CommandSubmitter = GameManager.get_command_submitter()
+	if command != null and submitter != null:
+		submitter.submit(command)
+
+
+static func _permutations(values: Array[String]) -> Array[Array]:
+	if values.size() <= 1:
+		return [values.duplicate()]
+	var result: Array[Array] = []
+	for index: int in range(values.size()):
+		var rest: Array[String] = values.duplicate(); var head: String = rest.pop_at(index)
+		for tail: Array[String] in _permutations(rest):
+			var ordering: Array[String] = [head]; ordering.append_array(tail); result.append(ordering)
+	return result
+
+
+static func _maneuver_choice_title(command_type: String) -> String:
+	match command_type:
+		"commit_maneuver_obstacle_order": return "Obstacle Order"
+		"resolve_thruster_fissure": return "Thruster Fissure"
+		"resolve_debris_overlap": return "Debris Field"
+		"resolve_station_overlap": return "Station"
+		"resolve_ruptured_engine": return "Ruptured Engine"
+		"resolve_immediate_effect": return "Immediate Damage"
+	return "Maneuver Consequence"
 
 
 ## Called (one-shot) when the player resolves a token overflow discard.
@@ -1408,10 +1657,7 @@ func _on_maneuver_step_entered() -> void:
 	# Speed 0: no tool, ship stays in place, maneuver counts as executed.
 	if ship.current_speed == 0:
 		_log.info("Speed 0 — executing maneuver without tool.")
-		var token_result: Dictionary = _activation_ctx.ship_activation_state.mark_maneuver_executed()
-		_submit_resolver_spends(ship, token_result)
-		EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
-		show_end_activation_after_maneuver()
+		_complete_speed_zero_maneuver(ship)
 		return
 	_show_activation_maneuver_tool()
 	# Disable the simulation maneuver button while activation tool is active.
@@ -1432,6 +1678,60 @@ func _show_activation_maneuver_tool() -> void:
 			_update_maneuver_damage_hint):
 		scene.maneuver_preview_changed.connect(_update_maneuver_damage_hint)
 	_update_maneuver_damage_hint()
+
+
+## Completes a matched live maneuver interaction after accepted canonical
+## speed converges to 0. Identity and preview convergence are checked before
+## reusing the same speed-zero terminal path as maneuver-step entry.
+func _complete_live_speed_zero_maneuver(ship: ShipInstance,
+		activation_identity: String) -> void:
+	if not _live_speed_zero_preview_matches(ship, activation_identity):
+		return
+	_log.info("Accepted speed 0 — completing maneuver without movement.")
+	_complete_speed_zero_maneuver(ship)
+
+
+## A passive peer projects accepted speed 0 but never originates the author's
+## terminal command. Its disposable tool is removed while ordered results drive
+## the remaining activation presentation.
+func _invalidate_passive_speed_zero_tool(ship: ShipInstance,
+		activation_identity: String) -> void:
+	if not _live_speed_zero_preview_matches(ship, activation_identity):
+		return
+	_maneuver_tool_controller.dismiss(ship)
+
+
+func _live_speed_zero_preview_matches(ship: ShipInstance,
+		activation_identity: String) -> bool:
+	var scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	var activation_state: ShipActivationState = \
+			_activation_ctx.ship_activation_state
+	return scene != null and activation_state != null \
+			and activation_state.get_ship() == ship \
+			and scene.get_activation_ship() == ship \
+			and not activation_identity.is_empty() \
+			and scene.get_activation_identity() == activation_identity \
+			and ship.ship_activation_identity == activation_identity \
+			and ship.current_speed == 0 \
+			and scene.get_state().get_simulated_speed() == 0 \
+			and not scene.has_pending_speed_change()
+
+
+## Existing authoritative speed-zero activation behavior: no placement or
+## ExecuteManeuver payload is produced; the local activation advances to its
+## terminal projection after resolver spends are submitted.
+func _complete_speed_zero_maneuver(ship: ShipInstance) -> void:
+	var result: Dictionary = GameManager.submit_execute_maneuver(
+			ship, 0, [], 0.0, 0.0, 0.0, -1)
+	if result.is_empty():
+		_log.error("Speed-zero Maneuver commitment was rejected.")
+		return
+	_activation_ctx.ship_activation_state.mark_maneuver_executed()
+	if _maneuver_tool_controller.get_scene() != null:
+		if _dismiss_maneuver_tool_with_preview.is_valid():
+			_dismiss_maneuver_tool_with_preview.call()
+		else:
+			_maneuver_tool_controller.dismiss(ship)
 
 
 ## Refreshes the warning for damage-card effects caused by the previewed move.
@@ -1538,6 +1838,11 @@ func _on_execute_maneuver() -> void:
 		return
 	if _maneuver_tool_controller.get_scene() == null:
 		return
+	# BUG-043: this guard must precede token snap, overlap resolution,
+	# maneuver-executed mutation, resolver spends, opportunity consumption,
+	# and authoritative command construction/submission.
+	if not _maneuver_preview_ready_for_commit():
+		return
 	# Capture the pre-move transform so we can revert on command rejection.
 	# Without this, a host-side validation failure (e.g. yaw clicks exceeding
 	# the nav chart) would leave the host's visuals advanced while the
@@ -1545,17 +1850,7 @@ func _on_execute_maneuver() -> void:
 	var pre_move_xform: Transform2D = Transform2D(
 			_activation_ctx.activating_ship_token.global_rotation,
 			_activation_ctx.activating_ship_token.global_position)
-	var final_xform: Transform2D = _resolve_maneuver_overlaps_ex()
-	_activation_ctx.activating_ship_token.global_position = final_xform.origin
-	_activation_ctx.activating_ship_token.global_rotation = final_xform.get_rotation()
-	# Ship–squadron overlap resolution (OV-001–004).
-	var ship_size: Constants.ShipSize = _activation_ctx.activating_ship_token.get_ship_size()
-	var moved_ship_base: ShipBase = ShipBase.new(ship_size, final_xform)
-	var displaced: Array[SquadronToken] = _find_displaced_squadrons(
-			moved_ship_base)
-	var token_result: Dictionary = _activation_ctx.ship_activation_state.mark_maneuver_executed()
 	var maneuver_ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
-	_submit_resolver_spends(maneuver_ship, token_result)
 
 	# Record the maneuver via command for replay determinism.
 	var mt_scene_ref: ManeuverToolScene = _maneuver_tool_controller.get_scene()
@@ -1572,17 +1867,10 @@ func _on_execute_maneuver() -> void:
 		for i: int in range(mini(spd, all_clicks.size())):
 			active_clicks.append(all_clicks[i])
 		var bonus_joint: int = tool_st.get_yaw_bonus_joint()
-		var pa: Vector2 = GameScale.play_area_size_px
-		if pa.x > 0.0 and pa.y > 0.0:
-			var norm_x: float = final_xform.origin.x / pa.x
-			var norm_y: float = final_xform.origin.y / pa.y
-			var rot_deg: float = rad_to_deg(final_xform.get_rotation())
-			maneuver_submitted = true
-			maneuver_result = GameManager.submit_execute_maneuver(
-					maneuver_ship, spd, active_clicks,
-					norm_x, norm_y, rot_deg, bonus_joint,
-					_activation_ctx.last_maneuver_overlapped,
-					_activation_ctx.ship_activation_state.get_total_speed_change())
+		maneuver_submitted = true
+		maneuver_result = GameManager.submit_execute_maneuver(
+				maneuver_ship, spd, active_clicks, 0.0, 0.0, 0.0,
+				bonus_joint)
 	# If the command was rejected (empty Dictionary), revert the local
 	# visual snap so the host stays consistent with the authoritative
 	# GameState (and with any remote peer, which never received a
@@ -1603,30 +1891,57 @@ func _on_execute_maneuver() -> void:
 			_log.info("Maneuver tool re-shown for retry after validation failure.")
 		return
 
-	# RuleRegistry observers enqueue any maneuver damage follow-up commands.
-	# Rules Reference: "Ruptured Engine", "Damaged Controls", "Thruster Fissure".
+	_activation_ctx.ship_activation_state.mark_maneuver_executed()
 	_clear_maneuver_damage_hint()
-	EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 	_dismiss_maneuver_tool_with_preview.call()
-	if displaced.size() > 0:
-		# Phase L4: publish the authoritative displacement flow only.
-		# ModalRouter opens the modal from the projected
-		# SQUADRON_DISPLACEMENT / DISPLACEMENT_PLACE intent in every mode.
-		# Rules Reference: RRG "Overlapping", p.8 — the player who is
-		# NOT moving the ship places the overlapped squadrons, regardless
-		# of who owns them.
-		var displaced_instances: Array = []
-		for sq_token: SquadronToken in displaced:
-			var inst: SquadronInstance = sq_token.get_squadron_instance()
-			if inst == null:
-				continue
-			displaced_instances.append(inst)
-		var placing_player: int = 1 - maneuver_ship.owner_player
-		GameManager.submit_start_displacement(maneuver_ship,
-				placing_player, displaced_instances)
+	if bool(maneuver_ship.active_maneuver_execution_snapshot().get(
+			"final_transform_applied", false)):
+		_activation_ctx.activating_ship_token.global_position = \
+				maneuver_ship.get_pixel_position(GameScale.play_area_size_px)
+		_activation_ctx.activating_ship_token.global_rotation = \
+				deg_to_rad(maneuver_ship.rotation_deg)
+		EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 	else:
-		show_end_activation_after_maneuver()
-	_log.info("Ship snapped to final position.")
+		_activation_ctx.activating_ship_token.global_position = pre_move_xform.origin
+		_activation_ctx.activating_ship_token.global_rotation = pre_move_xform.get_rotation()
+	_log.info("Maneuver commitment accepted; consequences are authority-driven.")
+
+
+## Validates the transient maneuver preview before any commit-like effect.
+## A mismatch invalidates/refreshes presentation only; canonical state and the
+## open maneuver opportunity remain untouched.
+func _maneuver_preview_ready_for_commit() -> bool:
+	var activation_state: ShipActivationState = \
+			_activation_ctx.ship_activation_state
+	var scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	var ship: ShipInstance = activation_state.get_ship() \
+			if activation_state else null
+	var game_state: GameState = GameManager.current_game_state
+	if scene == null or ship == null or game_state == null:
+		return false
+	var ship_index: int = game_state.find_ship_index(ship)
+	var canonical_ship: ShipInstance = game_state.get_ship(
+			ship.owner_player, ship_index) if ship_index >= 0 else null
+	var activation_identity: String = scene.get_activation_identity()
+	var identities_match: bool = canonical_ship == ship \
+			and scene.get_activation_ship() == ship \
+			and not activation_identity.is_empty() \
+			and activation_identity == ship.ship_activation_identity
+	if not identities_match:
+		_log.info("Maneuver commit blocked: stale ship activation preview.")
+		_maneuver_tool_controller.dismiss(null)
+		return false
+	if scene.has_pending_speed_change():
+		_log.info("Maneuver commit blocked: SetSpeed acceptance pending.")
+		return false
+	var preview_speed: int = scene.get_state().get_simulated_speed()
+	if preview_speed != ship.current_speed:
+		_log.info("Maneuver commit blocked: preview speed %d != canonical %d." % [
+				preview_speed, ship.current_speed])
+		scene.refresh_matching_preview_from_canonical(
+				ship, activation_identity)
+		return false
+	return true
 
 
 ## Computes the final transform after ship–ship overlap resolution.

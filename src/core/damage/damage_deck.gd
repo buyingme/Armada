@@ -43,6 +43,19 @@ func set_rng(rng: GameRng) -> void:
 ## Card data is loaded from the JSON data file via AssetLoader.
 ## Rules Reference: SU-029 — the damage deck is shuffled and placed facedown.
 func initialize() -> void:
+	# Save 7 is now the only live authority representation. Physical identity
+	# is assigned at deck construction even for callers that use the historical
+	# initializer name.
+	_initialize_cards(true)
+
+
+## Dormant save-7 construction path. Physical identities are assigned in
+## construction order before the first shuffle and never regenerated.
+func initialize_for_save7() -> void:
+	_initialize_cards(true)
+
+
+func _initialize_cards(assign_physical_identities: bool) -> void:
 	_draw_pile.clear()
 	_discard_pile.clear()
 
@@ -52,11 +65,15 @@ func initialize() -> void:
 		return
 
 	var cards_array: Array = data["cards"]
+	var construction_ordinal: int = 0
 	for entry: Dictionary in cards_array:
 		var count: int = int(entry.get("count", 0))
 		for i: int in range(count):
 			var card: DamageCard = DamageCard.from_data(entry)
+			if assign_physical_identities:
+				card.physical_card_id = "damage:%d" % construction_ordinal
 			_draw_pile.append(card)
+			construction_ordinal += 1
 
 	if _draw_pile.size() != DECK_SIZE:
 		_log.warning("Damage deck has %d cards, expected %d" % [
@@ -107,6 +124,8 @@ func take_debug_draw_card_by_effect_id(effect_id: String) -> DamageCard:
 ## Adds a card to the discard pile.
 ## Used when damage cards are removed from a ship (e.g. by repair).
 func discard(card: DamageCard) -> void:
+	if card != null and not card.physical_card_id.is_empty():
+		card.flip_facedown()
 	_discard_pile.append(card)
 
 
@@ -173,6 +192,35 @@ func serialize() -> Dictionary:
 	}
 
 
+## Strict dormant save-7 deck shape.
+func serialize_for_save7() -> Dictionary:
+	var draw: Array[Dictionary] = []
+	for card: DamageCard in _draw_pile:
+		var data: Dictionary = card.serialize_for_save7("draw")
+		if data.is_empty():
+			return {}
+		draw.append(data)
+	var discard: Array[Dictionary] = []
+	for card: DamageCard in _discard_pile:
+		var data: Dictionary = card.serialize_for_save7("discard")
+		if data.is_empty():
+			return {}
+		discard.append(data)
+	return {"draw_pile": draw, "discard_pile": discard}
+
+
+## Read-only identity/location entries for the aggregate save-7 validator.
+func candidate_identity_locations() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for card: DamageCard in _draw_pile:
+		result.append({"physical_card_id": card.physical_card_id,
+			"location": "draw", "card": card})
+	for card: DamageCard in _discard_pile:
+		result.append({"physical_card_id": card.physical_card_id,
+			"location": "discard", "card": card})
+	return result
+
+
 ## Restores a DamageDeck from a serialized dictionary.
 ## Preserves exact card order (no shuffle).
 static func deserialize(data: Dictionary) -> DamageDeck:
@@ -183,4 +231,33 @@ static func deserialize(data: Dictionary) -> DamageDeck:
 	for card_data: Variant in data.get("discard_pile", []):
 		deck._discard_pile.append(DamageCard.deserialize(
 				card_data as Dictionary))
+	return deck
+
+
+static func deserialize_for_save7(data: Dictionary) -> DamageDeck:
+	if data.size() != 2 or not data.has("draw_pile") \
+			or not data.has("discard_pile") \
+			or not (data["draw_pile"] is Array) \
+			or not (data["discard_pile"] is Array):
+		return null
+	var deck: DamageDeck = DamageDeck.new()
+	var identities: Dictionary = {}
+	for raw: Variant in data["draw_pile"]:
+		if not (raw is Dictionary):
+			return null
+		var card: DamageCard = DamageCard.deserialize_for_save7(
+				raw as Dictionary, "draw")
+		if card == null or identities.has(card.physical_card_id):
+			return null
+		identities[card.physical_card_id] = true
+		deck._draw_pile.append(card)
+	for raw: Variant in data["discard_pile"]:
+		if not (raw is Dictionary):
+			return null
+		var card: DamageCard = DamageCard.deserialize_for_save7(
+				raw as Dictionary, "discard")
+		if card == null or identities.has(card.physical_card_id):
+			return null
+		identities[card.physical_card_id] = true
+		deck._discard_pile.append(card)
 	return deck

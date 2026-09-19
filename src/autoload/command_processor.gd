@@ -114,7 +114,25 @@ func _ready() -> void:
 	# Tier 3 — movement commands.
 	MoveSquadronCommand.register()
 	DeclineSquadronMoveCommand.register()
-	ExecuteManeuverCommand.register()
+	GameCommand.register_type("execute_maneuver", func(player: int,
+			payload: Dictionary) -> GameCommand:
+		return CandidateExecuteManeuverCommand.new(player, payload))
+	for registration: Dictionary in [
+		{"type":"apply_maneuver_transform","script":CandidateApplyManeuverTransformCommand},
+		{"type":"complete_maneuver","script":CandidateCompleteManeuverCommand},
+		{"type":"commit_maneuver_obstacle_order","script":CandidateCommitManeuverObstacleOrderCommand},
+		{"type":"resolve_ship_collision_damage","script":CandidateResolveShipCollisionDamageCommand},
+		{"type":"resolve_thruster_fissure","script":CandidateResolveThrusterFissureCommand},
+		{"type":"resolve_damaged_controls","script":CandidateResolveDamagedControlsCommand},
+		{"type":"resolve_asteroid_overlap","script":CandidateResolveAsteroidOverlapCommand},
+		{"type":"resolve_debris_overlap","script":CandidateResolveDebrisOverlapCommand},
+		{"type":"resolve_station_overlap","script":CandidateResolveStationOverlapCommand},
+		{"type":"resolve_ruptured_engine","script":CandidateResolveRupturedEngineCommand},
+	]:
+		var command_script: GDScript = registration["script"]
+		GameCommand.register_type(str(registration["type"]), func(player: int,
+				payload: Dictionary) -> GameCommand:
+			return command_script.new(player, payload))
 	# Tier 4 — game flow commands.
 	AdvancePhaseCommand.register()
 	StartRoundCommand.register()
@@ -124,11 +142,15 @@ func _ready() -> void:
 	StatusPhaseCleanupCommand.register()
 	DestroyUnitCommand.register()
 	# Tier 6 — damage resolution.
-	ResolveDamageCommand.register()
+	GameCommand.register_type("resolve_damage", func(player: int,
+			payload: Dictionary) -> GameCommand:
+		return CandidateResolveDamageCommand.new(player, payload))
 	# Tier 7 — repair actions.
 	RepairActionCommand.register()
 	# Tier 8 — immediate damage card effects.
-	ResolveImmediateEffectCommand.register()
+	GameCommand.register_type("resolve_immediate_effect", func(player: int,
+			payload: Dictionary) -> GameCommand:
+		return CandidateResolveImmediateEffectCommand.new(player, payload))
 	# Tier 9 — overlap, speed, persistent effects.
 	SetSpeedCommand.register()
 	OverlapDamageCommand.register()
@@ -141,7 +163,9 @@ func _ready() -> void:
 	GameCommand.register_type("debug_reposition", func(player: int,
 			payload: Dictionary) -> GameCommand:
 		return DEBUG_REPOSITION_COMMAND_SCRIPT.new(player, payload))
-	DebugDealDamageCommand.register()
+	GameCommand.register_type("debug_deal_damage", func(player: int,
+			payload: Dictionary) -> GameCommand:
+		return CandidateDebugDealDamageCommand.new(player, payload))
 	# Tier 12 — interaction-flow synchronisation (Phase I6b-3).
 	PublishAttackFlowCommand.register()
 	# Tier 13 — defender authority (Phase I6b-3 R2/R3/R4).
@@ -157,8 +181,12 @@ func _ready() -> void:
 	ConfirmAttackDiceCommand.register()
 	CounterChoiceCommand.register()
 	# Tier 14 — squadron-displacement authority (Phase I6b-4).
-	StartDisplacementCommand.register()
-	CommitDisplacementCommand.register()
+	GameCommand.register_type("start_displacement", func(player: int,
+			payload: Dictionary) -> GameCommand:
+		return CandidateStartDisplacementCommand.new(player, payload))
+	GameCommand.register_type("commit_displacement", func(player: int,
+			payload: Dictionary) -> GameCommand:
+		return CandidateCommitDisplacementCommand.new(player, payload))
 	# CAP-UPG-001 - Grand Moff Tarkin command-token choice.
 	TarkinChoiceCommand.register()
 	# CAP-ECM-001 - Electronic Countermeasures defense-token override.
@@ -171,7 +199,10 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	GameCommand._clear_registry_for_shutdown()
+	# Only the process-wide autoload owns the process-wide registry. Temporary
+	# processors used by focused verification must not erase live factories.
+	if get_node_or_null("/root/CommandProcessor") == self:
+		GameCommand._clear_registry_for_shutdown()
 
 
 ## Submits a command for validation and execution.
@@ -409,12 +440,14 @@ func _enqueue_post_success_continuation(game_state: GameState,
 		_declined_move_completion_continuation(
 				game_state, command, execution_mode)
 	var ship_phase_termination: GameCommand = \
-		_ship_phase_termination_continuation(
+			_ship_phase_termination_continuation(
 				game_state, command, result, execution_mode)
+	var maneuver: GameCommand = _maneuver_execution_continuation(
+			game_state, command, execution_mode)
 	var continuation_count: int = int(timing != null) + int(attack != null) \
 			+ int(commanded_squadron != null) \
 			+ int(declined_move_completion != null) \
-			+ int(ship_phase_termination != null)
+			+ int(ship_phase_termination != null) + int(maneuver != null)
 	if continuation_count > 1:
 		_log.warn("Conflicting post-success continuations after [%s]." %
 			command.command_type)
@@ -428,6 +461,44 @@ func _enqueue_post_success_continuation(game_state: GameState,
 		_observer_followups.append(declined_move_completion)
 	elif ship_phase_termination != null:
 		_observer_followups.append(ship_phase_termination)
+	elif maneuver != null:
+		_observer_followups.append(maneuver)
+
+
+## Purpose-specific ADR-006 re-evaluation. It creates no persisted route or
+## generic pending-work structure and never runs on passive/replay peers.
+func _maneuver_execution_continuation(game_state: GameState,
+		command: GameCommand, execution_mode: String) -> GameCommand:
+	if execution_mode != TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
+			or command == null or game_state == null \
+			or command.command_type not in [
+				"execute_maneuver", "apply_maneuver_transform",
+				"commit_displacement", "resolve_ship_collision_damage",
+				"resolve_thruster_fissure", "resolve_damaged_controls",
+				"commit_maneuver_obstacle_order", "resolve_asteroid_overlap",
+				"resolve_immediate_effect", "resolve_debris_overlap",
+				"resolve_station_overlap", "resolve_ruptured_engine",
+			]:
+		return null
+	var owner: int = int(command.payload.get("owner_player",
+			command.player_index))
+	var ship_index: int = int(command.payload.get("ship_index", -1))
+	var ship: ShipInstance = game_state.get_ship(owner, ship_index)
+	if ship == null or ship.is_destroyed() \
+			or not ship.has_active_maneuver_execution():
+		return null
+	var action: Dictionary = ManeuverExecutionEvaluator.next_action(
+			game_state, owner, ship_index)
+	if str(action.get("kind", "")) != "command":
+		return null
+	var command_type: String = str(action.get("command_type", ""))
+	var payload: Variant = action.get("payload")
+	var actor: Variant = action.get("player_index")
+	if command_type.is_empty() or not payload is Dictionary \
+			or typeof(actor) != TYPE_INT:
+		return null
+	return GameCommand._create_by_type(
+			command_type, int(actor), payload as Dictionary)
 
 
 ## Preserves the existing phase-transition owner when persistent damage ends

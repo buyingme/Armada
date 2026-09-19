@@ -981,7 +981,10 @@ func test_deserialize_round_trip_defense_tokens() -> void:
 func test_deserialize_round_trip_damage_cards() -> void:
 	var fd_card: DamageCard = DamageCard.create("Ship", "Facedown Hit")
 	var fu_card: DamageCard = DamageCard.create("Crew", "Critical Hit")
+	fd_card.physical_card_id = "damage:test:facedown-hit"
+	fu_card.physical_card_id = "damage:test:critical-hit"
 	fu_card.flip_faceup()
+	fu_card.public_card_ref = "faceup:test:critical-hit"
 	_instance.add_facedown_damage(fd_card)
 	_instance.add_faceup_damage(fu_card)
 	var restored: ShipInstance = ShipInstance.deserialize(

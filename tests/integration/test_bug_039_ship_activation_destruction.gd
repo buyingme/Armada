@@ -8,14 +8,20 @@ const CmdProcessor: GDScript = preload("res://src/autoload/command_processor.gd"
 
 var _saved_state: GameState = null
 var _saved_registry: Dictionary = {}
+var _processor: Node = null
 
 
 func before_each() -> void:
 	_saved_state = GameManager.current_game_state
 	_saved_registry = GameCommand._registry.duplicate()
+	_processor = CmdProcessor.new()
+	add_child(_processor)
 
 
 func after_each() -> void:
+	remove_child(_processor)
+	_processor.free()
+	_processor = null
 	GameManager.current_game_state = _saved_state
 	GameCommand._registry = _saved_registry
 
@@ -23,9 +29,7 @@ func after_each() -> void:
 func test_ruptured_engine_destruction_ends_active_activation_and_advances_phase() -> void:
 	var state: GameState = _state_with_active_ship_at_final_hull()
 	GameManager.current_game_state = state
-	var processor: Node = CmdProcessor.new()
-	add_child_autofree(processor)
-	var result: Dictionary = processor.submit(_lethal_damage_command(
+	var result: Dictionary = _processor.submit(_lethal_damage_command(
 			"ruptured_engine", 0))
 	var ship: ShipInstance = state.get_ship(0, 0)
 	assert_true(bool(result.get("destroyed", false)))
@@ -35,7 +39,7 @@ func test_ruptured_engine_destruction_ends_active_activation_and_advances_phase(
 			"Exceptional destruction must clear the active activation boundary.")
 	assert_eq(state.current_phase, Constants.GamePhase.SQUADRON,
 			"The existing recorded phase transition must converge when no ships remain.")
-	assert_eq(_history_types(processor), [
+	assert_eq(_history_types(_processor), [
 			"persistent_effect_damage", "destroy_unit", "advance_phase"],
 			"Cleanup must precede the existing phase transition.")
 
@@ -43,15 +47,13 @@ func test_ruptured_engine_destruction_ends_active_activation_and_advances_phase(
 func test_crew_panic_destruction_at_pre_reveal_boundary_advances_phase() -> void:
 	var state: GameState = _state_with_pre_reveal_ship_at_final_hull()
 	GameManager.current_game_state = state
-	var processor: Node = CmdProcessor.new()
-	add_child_autofree(processor)
-	var result: Dictionary = processor.submit(_lethal_damage_command(
+	var result: Dictionary = _processor.submit(_lethal_damage_command(
 			"crew_panic", 0))
 	assert_true(bool(result.get("destroyed", false)))
 	assert_true(bool(result.get("ship_phase_turn_terminated", false)))
 	assert_eq(state.current_phase, Constants.GamePhase.SQUADRON,
 			"Crew Panic destruction must not leave Ship Phase waiting for a dead ship.")
-	assert_eq(_history_types(processor), [
+	assert_eq(_history_types(_processor), [
 			"persistent_effect_damage", "destroy_unit", "advance_phase"])
 
 
@@ -59,9 +61,7 @@ func test_destruction_with_another_legal_ship_projects_next_controller() -> void
 	var state: GameState = _state_with_active_ship_at_final_hull()
 	_add_ship(state, 1, false)
 	GameManager.current_game_state = state
-	var processor: Node = CmdProcessor.new()
-	add_child_autofree(processor)
-	var result: Dictionary = processor.submit(_lethal_damage_command(
+	var result: Dictionary = _processor.submit(_lethal_damage_command(
 			"ruptured_engine", 0))
 	assert_true(bool(result.get("ship_phase_turn_terminated", false)))
 	assert_eq(state.current_phase, Constants.GamePhase.SHIP)
@@ -71,7 +71,7 @@ func test_destruction_with_another_legal_ship_projects_next_controller() -> void
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT)
 	assert_eq(state.interaction_flow.controller_player, 1,
 			"The surviving opponent must receive the next canonical Ship Phase choice.")
-	assert_eq(_history_types(processor), ["persistent_effect_damage", "destroy_unit"])
+	assert_eq(_history_types(_processor), ["persistent_effect_damage", "destroy_unit"])
 
 
 func _state_with_active_ship_at_final_hull() -> GameState:

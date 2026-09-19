@@ -80,4 +80,6 @@ func _add_faceup_damage(ship: ShipInstance) -> void:
 	card.effect_id = ThrustControlMalfunction.EFFECT_ID
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:thrust-control-malfunction"
+	card.public_card_ref = "faceup:test:thrust-control-malfunction"
 	ship.add_faceup_damage(card)

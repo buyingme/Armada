@@ -326,40 +326,19 @@ func test_setup_turn_prompt_obstacle_placement_keeps_setup_handoff_expected() ->
 			"Obstacle placement prompt should keep the generic setup phase text.")
 
 
-func test_bug_006_destroyed_save_records_are_not_active_board_tokens() -> void:
+func test_bug_006_save1_evidence_fails_closed_after_save7_cutover() -> void:
 	for filename: String in [
 		"NEWLearningScenario_HotSeat_R3_Ship.json",
 		"NEW_LearningScenario_Network_R3_Ship.json",
 	]:
-		var state: GameState = _load_bug_006_state(filename)
-		assert_not_null(state, "%s should deserialize." % filename)
-		if state == null:
-			continue
-		var expected_alive_squadrons: int = 0
-		var expected_destroyed_squadrons: int = 0
-		for player: PlayerState in state.player_states:
-			for squadron: SquadronInstance in player.squadrons:
-				if squadron.is_destroyed():
-					expected_destroyed_squadrons += 1
-				else:
-					expected_alive_squadrons += 1
-		var board: LoadedEntityBoardCapture = LoadedEntityBoardCapture.new()
-		add_child_autofree(board)
-		board.setup_capture()
-		for player: PlayerState in state.player_states:
-			board._spawn_loaded_tokens_for_player(player)
-		board.capture_spawned_instances()
-
-		assert_gt(expected_destroyed_squadrons, 0,
-				"BUG-006 evidence must contain a destroyed squadron.")
-		assert_eq(board.spawned_squadrons.size(), expected_alive_squadrons,
-				"Only surviving squadrons should reconstruct as board pieces.")
-		for squadron: SquadronInstance in board.spawned_squadrons:
-			assert_false(squadron.is_destroyed(),
-					"Active/selectable token projection must exclude destroyed records.")
-		assert_eq(_destroyed_squadron_count(state.serialize()),
-				expected_destroyed_squadrons,
-				"Canonical serialization must retain destroyed squadron records.")
+		var evidence: Dictionary = _load_bug_006_evidence(filename)
+		assert_false(evidence.is_empty(), "%s must remain readable evidence." % filename)
+		var header: Dictionary = evidence.get("header", {}) as Dictionary
+		assert_eq(int(header.get("save_format_version", -1)), 1,
+				"BUG-006 evidence is intentionally a pre-cutover save.")
+		assert_ne(int(header.get("save_format_version", -1)),
+				SaveGameMetadata.CURRENT_VERSION,
+				"Old incompatible evidence must fail closed; no save adapter is added.")
 
 
 func test_bug_007_destroyed_records_do_not_enter_live_spatial_occupancy() \
@@ -549,7 +528,7 @@ func test_host_damage_fallback_retires_loaded_squadron_from_active_attack() -> v
 			"The canonical projection must retire the peer board token too.")
 
 
-func _load_bug_006_state(filename: String) -> GameState:
+func _load_bug_006_evidence(filename: String) -> Dictionary:
 	for workflow: String in ["open", "in_progress", "verify", "closed"]:
 		var path: String = "res://docs/qa/bugs/%s/BUG-006/%s" % [
 				workflow, filename]
@@ -557,16 +536,8 @@ func _load_bug_006_state(filename: String) -> GameState:
 			continue
 		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 		if parsed is Dictionary:
-			var body: Dictionary = (parsed as Dictionary).get("state", {})
-			var state: GameState = GameState.new()
-			state.initialize()
-			state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
-			state.player_states.clear()
-			for player: Variant in body.get("player_states", []):
-				if player is Dictionary:
-					state.player_states.append(PlayerState.deserialize(player))
-			return state
-	return null
+			return parsed as Dictionary
+	return {}
 
 
 func _destroyed_squadron_count(serialized_state: Dictionary) -> int:

@@ -51,7 +51,7 @@ func test_protocol_version_is_positive() -> void:
 
 
 func test_protocol_version_is_bug_042_cutover_five() -> void:
-	assert_eq(NetworkManager.PROTOCOL_VERSION, 6)
+	assert_eq(NetworkManager.PROTOCOL_VERSION, 7)
 
 
 func test_heartbeat_interval_is_positive() -> void:

@@ -252,5 +252,7 @@ func _add_coolant_discharge(ship: ShipInstance) -> DamageCard:
 	card.effect_text = "You can only perform 1 attack against a ship each round."
 	card.timing = "persistent"
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:coolant-discharge"
+	card.public_card_ref = "faceup:test:coolant-discharge"
 	ship.add_faceup_damage(card)
 	return card

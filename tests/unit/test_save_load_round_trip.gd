@@ -60,6 +60,8 @@ func _make_blinded_gunners_card() -> DamageCard:
 	card.timing = "persistent"
 	card.effect_text = "While attacking, you cannot spend accuracy icons."
 	card.is_faceup = true
+	card.physical_card_id = "damage:test:blinded-gunners"
+	card.public_card_ref = "faceup:test:blinded-gunners"
 	return card
 
 
@@ -235,9 +237,10 @@ func test_debug_outcome_round_trip_preserves_public_transform_and_deck_order() -
 	var card: DamageCard = gs.damage_deck.take_debug_draw_card_by_effect_id(
 			"injured_crew")
 	assert_not_null(card)
-	card.is_faceup = true
+	card.flip_faceup()
+	card.public_card_ref = "faceup:test:debug-injured-crew"
 	ship.add_faceup_damage(card)
-	var expected_deck: Dictionary = gs.damage_deck.serialize()
+	var expected_deck: Dictionary = gs.damage_deck.serialize_for_save7()
 	assert_true(_manager.save_game(gs, TEST_SAVE))
 	var result: Dictionary = _manager.load_game(TEST_SAVE)
 	assert_true(bool(result.get("ok", false)))
@@ -247,7 +250,7 @@ func test_debug_outcome_round_trip_preserves_public_transform_and_deck_order() -
 	assert_eq(loaded_ship.pos_y, 0.21)
 	assert_eq(loaded_ship.rotation_deg, 135.0)
 	assert_eq(loaded_ship.faceup_damage[0].effect_id, "injured_crew")
-	assert_eq(loaded.damage_deck.serialize(), expected_deck)
+	assert_eq(loaded.damage_deck.serialize_for_save7(), expected_deck)
 
 
 func test_same_live_and_hot_seat_load_preserve_saved_next_ship_actor() -> void:

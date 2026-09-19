@@ -210,6 +210,26 @@ func get_original_speed() -> int:
 	return _original_speed
 
 
+## Captures only the transient Navigate speed-change working state.
+## Used to restore the same activation after a rejected SetSpeedCommand.
+func speed_change_snapshot() -> Dictionary:
+	return {
+		"total_speed_change": _total_speed_change,
+		"dial_speed_budget": _dial_speed_budget,
+		"token_speed_budget": _token_speed_budget,
+	}
+
+
+## Restores a snapshot produced by [method speed_change_snapshot].
+## This never mutates the canonical ShipInstance speed.
+func restore_speed_change_snapshot(snapshot: Dictionary) -> void:
+	_total_speed_change = int(snapshot.get("total_speed_change", 0))
+	_dial_speed_budget = int(snapshot.get(
+			"dial_speed_budget", _initial_dial_budget))
+	_token_speed_budget = int(snapshot.get(
+			"token_speed_budget", _initial_token_budget))
+
+
 ## Returns true if the speed change required only a token (no dial available).
 ## Used for the reddish highlight on the token (NAV-007).
 func is_token_only_spend() -> bool:

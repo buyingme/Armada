@@ -1457,13 +1457,10 @@ func submit_execute_maneuver(ship: ShipInstance, speed: int,
 	if not current_game_state:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
-	var cmd := ExecuteManeuverCommand.new(ship.owner_player, {
+	var cmd := CandidateExecuteManeuverCommand.new(ship.owner_player, {
 		"ship_index": ship_index, "speed": speed,
-		"yaw_clicks": yaw_clicks, "pos_x": norm_x, "pos_y": norm_y,
-		"rotation_deg": rotation_deg,
+		"yaw_clicks": yaw_clicks,
 		"yaw_bonus_joint": yaw_bonus_joint,
-		"did_overlap": did_overlap,
-		"speed_delta": speed_delta,
 		"ship_activation_identity": ship.ship_activation_identity})
 	return _submitter.submit(cmd)
 
@@ -1978,7 +1975,7 @@ func submit_resolve_ship_damage(_ship: ShipInstance, _hull_zone: String = "",
 	if not current_game_state:
 		return {}
 	var attack: CurrentAttackState = current_game_state.current_attack_state
-	var cmd := ResolveDamageCommand.new(attack.attacker_player, {
+	var cmd := CandidateResolveDamageCommand.new(attack.attacker_player, {
 		"attack_id": attack.attack_id,
 	})
 	return _submitter.submit(cmd)
@@ -1995,7 +1992,7 @@ func submit_resolve_squadron_damage(_squadron: SquadronInstance,
 	if not current_game_state:
 		return {}
 	var attack: CurrentAttackState = current_game_state.current_attack_state
-	var cmd := ResolveDamageCommand.new(attack.attacker_player, {
+	var cmd := CandidateResolveDamageCommand.new(attack.attacker_player, {
 		"attack_id": attack.attack_id,
 	})
 	return _submitter.submit(cmd)
@@ -2815,8 +2812,16 @@ func _handle_remote_command_effects(
 		"reveal_dial", "spend_dial":
 			_handle_remote_dial_change(cmd, result)
 		"set_speed":
-			pass # GameState mutated by execute(); no GM side effects.
+			var ship: ShipInstance = current_game_state.get_ship(
+					cmd.player_index, int(cmd.payload.get("ship_index", -1))) \
+					if current_game_state else null
+			if ship != null:
+				# Accepted ordered application is the canonical-to-presentation
+				# convergence boundary for Network speed changes.
+				EventBus.ship_speed_changed.emit(ship, ship.current_speed)
 		"execute_maneuver":
+			pass
+		"apply_maneuver_transform":
 			_handle_remote_execute_maneuver(cmd)
 		"end_activation":
 			_handle_remote_end_activation(cmd)

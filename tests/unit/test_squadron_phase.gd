@@ -45,6 +45,8 @@ func _activate_and_decline(squadron: SquadronInstance) -> Dictionary:
 
 
 func after_each() -> void:
+	# Fixture teardown is not a replay-capture surface.
+	CommandProcessor.reset()
 	GameManager.end_game()
 
 

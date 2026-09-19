@@ -1,6 +1,6 @@
 # Ship Maneuver obstacle contour evidence packet v3
 
-Status: **FINAL OWNER-REVIEW CANDIDATE — CONTOUR GATE REMAINS STOPPED**
+Status: **OWNER APPROVED — CANONICAL FOR WP3b AND WP4**
 
 Evidence version: `obstacle-alpha-mask-contour-evidence-v3`
 
@@ -80,5 +80,6 @@ generator, dataset, contact sheet, and individual overlays.
 > source-pixel-to-game-pixel or rendering-pixel identity convention. The STOP
 > FOR OWNER CONTOUR APPROVAL gate is passed for this exact version and hash.
 
-Until the Owner records that statement, the gate remains
-**STOP FOR OWNER CONTOUR APPROVAL** and no contour-gated implementation resumes.
+The Project Owner recorded this approval on 2026-09-16 for the exact version
+and hash above. The workbook's **STOP FOR OWNER CONTOUR APPROVAL** gate is
+passed; this evidence remains immutable implementation input.

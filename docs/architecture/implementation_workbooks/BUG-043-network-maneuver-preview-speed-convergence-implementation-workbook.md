@@ -1498,6 +1498,43 @@ to implementation before another Owner recording.
 
 ## 18. Contour hard STOP
 
+### 18.1 Owner-source re-evaluation (2026-09-16)
+
+The Owner has designated the obstacle PNGs and accompanying JSON under
+`Resources/Game_Components/obstacles/` as the authoritative footprint sources:
+every pixel with alpha greater than zero belongs to the footprint and a fully
+transparent pixel does not. Deterministic, lossless offline contour derivation
+from those unit pixel cells is therefore required; rectangular sprite bounds,
+the metadata's existing `SPRITE_BOUNDS_FACTOR`/oriented boxes, smoothing, hand
+tracing, and approximate polygons remain forbidden.
+
+The final Owner-review candidate evidence packet is
+`docs/architecture/evidence/ship-maneuver-obstacle-contours/contour-evidence-packet-v3.md`.
+It binds all six source PNGs and metadata files, the scale configuration, exact
+source-pixel, physical-mm, and canonical-world contours, visual overlays,
+version, and hashes. It supersedes the unapproved v1 and v2 review candidates.
+For each PNG it retains only the largest 8-connected `alpha > 0` component as
+the physical token region and excludes every disconnected alpha artifact
+before deriving dimensions or contours. The rule uses no size threshold or
+hand-authored geometry.
+
+Owner clarification establishes the source-image calibration as 720 native
+obstacle-PNG pixels per 305 mm. Canonical game/world geometry is derived by
+first converting source pixels to physical millimetres and then applying the
+existing `GameScale` calibration from `scale_config.json`. Under the current
+configuration the composed factor is numerically one canonical world unit per
+native source pixel because the two independently stated calibrations cancel;
+this is not a source-pixel-to-game-pixel or rendering-pixel identity convention.
+The Project Owner approved this packet on 2026-09-16 exactly as recorded:
+`obstacle-alpha-mask-contour-evidence-v3`, SHA-256
+`edd2c9597e75a4a092b7c3cc9fe8b899d421b02720a8731b1eb5e6578f505eb0`.
+The **STOP FOR OWNER CONTOUR APPROVAL** gate is passed only for that exact
+version/hash. Post-gate WP3b work may proceed without reopening geometry,
+source-image calibration, pivot, coordinate, winding, contact, or disconnected-
+artifact decisions.
+
+### 18.2 Acceptance requirements
+
 No canonical obstacle contour data or authoritative real-obstacle detection is
 accepted until the Owner approves one evidence packet covering every token:
 
@@ -1517,15 +1554,17 @@ accepted until the Owner approves one evidence packet covering every token:
 
 Before approval, work that **may continue** is WP1; WP-ID foundation and all six
 immediate slices; WP2; WP3a; WP3b's data types, pure algorithm, synthetic tests,
-and ship-collision Damaged Controls branch; and WP6 bookkeeping/direct test
-scaffolding that activates nothing.
+ship-collision Damaged Controls branch, and deterministic review-candidate
+contour/evidence generation from the Owner-designated sources; and WP6
+bookkeeping/direct test scaffolding that activates nothing.
 
-Work that **must stop** is asserting real contour vertices; replacing catalog
-geometry as gameplay authority; authoritative real-obstacle detection; the
-obstacle-only Damaged Controls branch; all WP4 package activation/convergence;
-WP5 entry/activation; any RCP Tested/Integrated recommendation dependent on real
-contours; WP6 live integration, compatibility cutover, Owner replay capture, and
-release convergence.
+Work that **must stop** is accepting or installing review-candidate vertices as
+canonical gameplay geometry; replacing catalog geometry as gameplay authority;
+authoritative real-obstacle detection; the obstacle-only Damaged Controls
+branch; all WP4 package activation/convergence; WP5 entry/activation; any RCP
+Tested/Integrated recommendation dependent on real contours; WP6 live
+integration, compatibility cutover, Owner replay capture, and release
+convergence.
 
 If official assets are insufficient, stop for an alternative authoritative
 source or physical measurement. Never substitute sprite bounds, an oriented

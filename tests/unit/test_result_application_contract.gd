@@ -21,7 +21,7 @@ func _envelope(application: Dictionary = {}) -> Dictionary:
 	return {
 		"protocol_version": NetworkManager.PROTOCOL_VERSION,
 		"application_contract": "fixture_result",
-		"application_contract_version": 1,
+		"application_contract_version": GameCommand.APPLICATION_CONTRACT_VERSION,
 		"viewer_player": 1,
 		"application_result": application,
 		"presentation_result": {},
@@ -55,7 +55,7 @@ func test_missing_application_result_is_not_empty_application_result() -> void:
 func test_wrong_binding_and_unknown_envelope_fields_fail_closed() -> void:
 	for patch: Dictionary in [
 		{"application_contract": "wrong"},
-		{"application_contract_version": 2},
+		{"application_contract_version": GameCommand.APPLICATION_CONTRACT_VERSION + 1},
 		{"viewer_player": 0},
 		{"protocol_version": NetworkManager.PROTOCOL_VERSION - 1},
 		{"unknown": true},

@@ -430,7 +430,10 @@ func _create_ship_with_dials(player: int, dial_count: int) -> ShipInstance:
 	ship.data_key = "test_ship"
 	ship.ship_data = ShipData.new()
 	ship.ship_data.ship_name = "Test Ship"
+	ship.pos_x = 0.35 + float(player) * 0.3
+	ship.pos_y = 0.5
 	ship.command_dial_stack = CommandDialStack.create(dial_count)
+	ship.command_tokens = CommandTokenManager.create(dial_count)
 	var cmds: Array = []
 	for _i: int in range(dial_count):
 		cmds.append(Constants.CommandType.NAVIGATE)

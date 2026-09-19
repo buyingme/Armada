@@ -75,6 +75,58 @@ func get_joint_clicks() -> Array[int]:
 	return _joint_clicks.duplicate()
 
 
+## Installs one already-validated candidate course for authority-side
+## derivation. This mutates only this disposable pure value.
+func configure_authoritative_course(candidate_speed: int,
+		yaw_clicks: Array, yaw_bonus_joint: int) -> bool:
+	if candidate_speed < 0 or candidate_speed > _max_speed \
+			or yaw_clicks.size() != candidate_speed \
+			or yaw_bonus_joint < -1 \
+			or yaw_bonus_joint >= candidate_speed:
+		return false
+	_simulated_speed = candidate_speed
+	_yaw_bonus_joint = yaw_bonus_joint
+	_joint_clicks = [0, 0, 0, 0]
+	for index: int in range(candidate_speed):
+		if typeof(yaw_clicks[index]) != TYPE_INT:
+			return false
+		var clicks: int = int(yaw_clicks[index])
+		var permitted: int = ManeuverCalculator.get_max_yaw(
+				_nav_chart, candidate_speed, index)
+		if index == yaw_bonus_joint and permitted < MAX_CLICKS_PER_JOINT:
+			permitted += 1
+		if absi(clicks) > mini(permitted, MAX_CLICKS_PER_JOINT):
+			return false
+		_joint_clicks[index] = clicks
+	return true
+
+
+## Pure model-space equivalent of the scene tool's attachment derivation.
+static func compute_attachment_from_ship_transform(
+		ship_transform: Transform2D, ship_size: Constants.ShipSize,
+		side: String) -> Dictionary:
+	if side not in ["left", "right"]:
+		return {}
+	var base_size: Vector2 = GameScale.get_base_size(ship_size)
+	var root_cfg: Dictionary = GameScale.maneuver_tool_config.get("root", {})
+	var entry: Vector2 = root_cfg.get(
+			"entry_intersection", Vector2.ZERO) as Vector2
+	var contact_key: String = "contact_right" if side == "left" \
+			else "contact_left"
+	var contact: Vector2 = root_cfg.get(contact_key, Vector2.ZERO) as Vector2
+	var corner_local: Vector2 = Vector2(
+			-base_size.x * 0.5, -base_size.y * 0.5)
+	if side == "right":
+		corner_local.x = base_size.x * 0.5
+	var entry_local: Vector2 = corner_local \
+			+ (entry - contact) * get_tool_scale()
+	return {
+		"position": ship_transform.origin \
+				+ entry_local.rotated(ship_transform.get_rotation()),
+		"rotation": ship_transform.get_rotation(),
+	}
+
+
 ## Resets all joints to straight (0 clicks).
 func reset_joints() -> void:
 	_joint_clicks = [0, 0, 0, 0]
@@ -311,6 +363,14 @@ func set_navigation_chart(nav_chart: Array) -> void:
 ## Requirements: MT-S-002, MT-S-003, AC-20, AC-21, AC-22.
 func set_simulated_speed(new_speed: int) -> void:
 	_simulated_speed = clampi(new_speed, 1, maxi(_max_speed, 1))
+	_clamp_joints_to_nav_chart()
+
+
+## Re-derives activation-mode preview speed from canonical ship state.
+## Unlike the standalone simulation tool, an activation can legally converge
+## to speed 0 before following the existing speed-zero maneuver path.
+func set_activation_preview_speed(new_speed: int) -> void:
+	_simulated_speed = clampi(new_speed, 0, maxi(_max_speed, 0))
 	_clamp_joints_to_nav_chart()
 
 

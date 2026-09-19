@@ -35,6 +35,39 @@ class AsyncSpeedSubmitter:
 		return command.execute(GameManager.current_game_state)
 
 
+class ConvergedHotSeatSubmitter:
+	extends CommandSubmitter
+
+	var _next_sequence: int = 200
+
+	func submit(command: GameCommand) -> Dictionary:
+		command.sequence = _next_sequence
+		_next_sequence += 1
+		var committed: Dictionary = command.execute(
+				GameManager.current_game_state)
+		if committed.is_empty() or command.command_type != "execute_maneuver":
+			return committed
+		var continuation_payload: Dictionary = {
+			"owner_player": int(committed["owner_player"]),
+			"ship_index": int(committed["ship_index"]),
+			"ship_activation_identity": committed["ship_activation_identity"],
+			"maneuver_execution_id": committed["maneuver_execution_id"],
+		}
+		var apply := CandidateApplyManeuverTransformCommand.new(
+				command.player_index, continuation_payload)
+		apply.sequence = _next_sequence
+		_next_sequence += 1
+		if apply.execute(GameManager.current_game_state).is_empty():
+			return {}
+		var complete := CandidateCompleteManeuverCommand.new(
+				command.player_index, continuation_payload)
+		complete.sequence = _next_sequence
+		_next_sequence += 1
+		return committed \
+				if not complete.execute(GameManager.current_game_state).is_empty() \
+				else {}
+
+
 var _saved_state: GameState = null
 var _saved_submitter: CommandSubmitter = null
 
@@ -318,6 +351,36 @@ func test_stale_preview_guard_runs_before_maneuver_commit_effects() -> void:
 			"Matching transient preview should re-derive from canonical speed")
 
 
+func test_hot_seat_converged_maneuver_projects_retired_canonical_transform() -> void:
+	var fixture: Dictionary = _fixture("activation:bug043:hot-seat")
+	var ship: ShipInstance = fixture["ship"] as ShipInstance
+	var token: ShipToken = fixture["token"] as ShipToken
+	var controller: ShipActivationController = fixture["controller"] \
+			as ShipActivationController
+	ship.pos_x = 0.5
+	ship.pos_y = 0.5
+	token.position = ship.get_pixel_position(GameScale.play_area_size_px)
+	var before_canonical := Vector2(ship.pos_x, ship.pos_y)
+	var before_projection: Vector2 = token.position
+	GameManager.set_command_submitter(ConvergedHotSeatSubmitter.new())
+
+	controller._on_execute_maneuver()
+
+	assert_ne(Vector2(ship.pos_x, ship.pos_y), before_canonical,
+			"A non-zero committed maneuver must change canonical position")
+	assert_false(ship.has_active_maneuver_execution(),
+			"The synchronous authority sequence must retire its execution")
+	assert_eq(ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_ne(token.position, before_projection,
+			"Hot-Seat projection must not be restored after record retirement")
+	assert_almost_eq(token.position.x,
+			ship.pos_x * GameScale.play_area_size_px.x, 0.001)
+	assert_almost_eq(token.position.y,
+			ship.pos_y * GameScale.play_area_size_px.y, 0.001)
+	assert_almost_eq(token.rotation, deg_to_rad(ship.rotation_deg), 0.00001)
+
+
 func test_reconstructed_live_tool_derives_canonical_speed_and_identity() -> void:
 	var fixture: Dictionary = _fixture("activation:bug043:rebuild")
 	var ship: ShipInstance = fixture["ship"] as ShipInstance
@@ -380,8 +443,11 @@ func _fixture(activation_identity: String, initial_speed: int = 2,
 	context.set_active(token, activation_state)
 	var controller := ShipActivationController.new()
 	add_child_autofree(controller)
+	var panel_mgr := UIPanelManager.new()
+	add_child_autofree(panel_mgr)
 	controller._activation_ctx = context
 	controller._maneuver_tool_controller = maneuver_controller
+	controller._panel_mgr = panel_mgr
 	controller._dismiss_maneuver_tool_with_preview = func() -> void:
 		maneuver_controller.dismiss(ship)
 	return {

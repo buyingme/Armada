@@ -102,14 +102,9 @@
 		},
 		{
 			"payload": {
-				"did_overlap": false,
-				"pos_x": 0.688999995478877,
-				"pos_y": 0.721175525806568,
-				"rotation_deg": 0.0,
 				"ship_activation_identity": "ship-activation:6",
 				"ship_index": 0,
 				"speed": 2,
-				"speed_delta": 0,
 				"yaw_bonus_joint": -1,
 				"yaw_clicks": [
 					0,
@@ -122,12 +117,34 @@
 		},
 		{
 			"payload": {
+				"maneuver_execution_id": "maneuver:10",
+				"owner_player": 0,
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 11,
+			"type": "apply_maneuver_transform"
+		},
+		{
+			"payload": {
+				"maneuver_execution_id": "maneuver:10",
+				"owner_player": 0,
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 12,
+			"type": "complete_maneuver"
+		},
+		{
+			"payload": {
 				"ship_activation_identity": "ship-activation:6",
 				"ship_index": 0,
 				"step_id": "activation_done"
 			},
 			"player": 0,
-			"sequence": 11,
+			"sequence": 13,
 			"type": "advance_activation_step"
 		},
 		{
@@ -136,8 +153,338 @@
 				"ship_index": 0
 			},
 			"player": 0,
-			"sequence": 12,
+			"sequence": 14,
 			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"action": "reveal",
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 15,
+			"type": "reveal_dial"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 16,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:16",
+				"ship_index": 0,
+				"step_id": "repair_step"
+			},
+			"player": 1,
+			"sequence": 17,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:16",
+				"ship_index": 0,
+				"step_id": "attack_step"
+			},
+			"player": 1,
+			"sequence": 18,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"declaration_context": "ship_attack",
+				"reason": "no_targets",
+				"ship_activation_identity": "ship-activation:16",
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 19,
+			"type": "skip_attack"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:16",
+				"ship_index": 0,
+				"speed": 2,
+				"yaw_bonus_joint": -1,
+				"yaw_clicks": [
+					0,
+					0
+				]
+			},
+			"player": 1,
+			"sequence": 20,
+			"type": "execute_maneuver"
+		},
+		{
+			"payload": {
+				"maneuver_execution_id": "maneuver:20",
+				"owner_player": 1,
+				"ship_activation_identity": "ship-activation:16",
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 21,
+			"type": "apply_maneuver_transform"
+		},
+		{
+			"payload": {
+				"maneuver_execution_id": "maneuver:20",
+				"owner_player": 1,
+				"ship_activation_identity": "ship-activation:16",
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 22,
+			"type": "complete_maneuver"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:16",
+				"ship_index": 0,
+				"step_id": "activation_done"
+			},
+			"player": 1,
+			"sequence": 23,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:16",
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 24,
+			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"action": "reveal",
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 25,
+			"type": "reveal_dial"
+		},
+		{
+			"payload": {
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 26,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:26",
+				"ship_index": 1,
+				"step_id": "repair_step"
+			},
+			"player": 0,
+			"sequence": 27,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:26",
+				"ship_index": 1,
+				"step_id": "attack_step"
+			},
+			"player": 0,
+			"sequence": 28,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"declaration_context": "ship_attack",
+				"reason": "no_targets",
+				"ship_activation_identity": "ship-activation:26",
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 29,
+			"type": "skip_attack"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:26",
+				"ship_index": 1,
+				"speed": 2,
+				"yaw_bonus_joint": -1,
+				"yaw_clicks": [
+					0,
+					0
+				]
+			},
+			"player": 0,
+			"sequence": 30,
+			"type": "execute_maneuver"
+		},
+		{
+			"payload": {
+				"maneuver_execution_id": "maneuver:30",
+				"owner_player": 0,
+				"ship_activation_identity": "ship-activation:26",
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 31,
+			"type": "apply_maneuver_transform"
+		},
+		{
+			"payload": {
+				"maneuver_execution_id": "maneuver:30",
+				"owner_player": 0,
+				"ship_activation_identity": "ship-activation:26",
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 32,
+			"type": "complete_maneuver"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:26",
+				"ship_index": 1,
+				"step_id": "activation_done"
+			},
+			"player": 0,
+			"sequence": 33,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:26",
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 34,
+			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"next_phase": 3
+			},
+			"player": 0,
+			"sequence": 35,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"squadron_index": 2
+			},
+			"player": 0,
+			"sequence": 36,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"activation_id": "squadron-activation:36",
+				"pos_x": 0.524319344979745,
+				"pos_y": 0.639616167986835,
+				"squadron_index": 2
+			},
+			"player": 0,
+			"sequence": 37,
+			"type": "move_squadron"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"activation_id": "squadron-activation:36",
+				"squadron_index": 2
+			},
+			"player": 0,
+			"sequence": 38,
+			"type": "complete_squadron_activation"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"squadron_index": 1
+			},
+			"player": 0,
+			"sequence": 39,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"activation_id": "squadron-activation:39",
+				"pos_x": 0.429749552408854,
+				"pos_y": 0.659792695222078,
+				"squadron_index": 1
+			},
+			"player": 0,
+			"sequence": 40,
+			"type": "move_squadron"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"activation_id": "squadron-activation:39",
+				"squadron_index": 1
+			},
+			"player": 0,
+			"sequence": 41,
+			"type": "complete_squadron_activation"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"squadron_index": 5
+			},
+			"player": 1,
+			"sequence": 42,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"activation_id": "squadron-activation:42",
+				"declaration_context": "squadron_phase",
+				"reason": "voluntary",
+				"squadron_index": 5
+			},
+			"player": 1,
+			"sequence": 43,
+			"type": "skip_attack"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"squadron_index": 4
+			},
+			"player": 1,
+			"sequence": 44,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"activation_id": "squadron-activation:44",
+				"pos_x": 0.603034803602431,
+				"pos_y": 0.314245379412616,
+				"squadron_index": 4
+			},
+			"player": 1,
+			"sequence": 45,
+			"type": "move_squadron"
+		},
+		{
+			"payload": {
+				"activation_context": "squadron_phase",
+				"activation_id": "squadron-activation:44",
+				"squadron_index": 4
+			},
+			"player": 1,
+			"sequence": 46,
+			"type": "complete_squadron_activation"
 		}
 	],
 	"header": {
@@ -146,24 +493,24 @@
 			0,
 			1
 		],
-		"format_version": 9,
+		"format_version": 10,
 		"godot_version": "4.5.1-stable (official)",
 		"initial_command_sequence": 0,
 		"initiative_player": 0,
 		"match_player_control_binding": {
 			"player_principal_ids": [
-				"mp-d97c6d16-d0f0-4d79-81e1-3c1f3982a470",
-				"mp-d97c6d16-d0f0-4d79-81e1-3c1f3982a470"
+				"mp-33aaeb53-4063-49b7-95e2-6a4676eefe9b",
+				"mp-33aaeb53-4063-49b7-95e2-6a4676eefe9b"
 			],
 			"principals": [
 				{
 					"kind": "HUMAN",
-					"principal_id": "mp-d97c6d16-d0f0-4d79-81e1-3c1f3982a470"
+					"principal_id": "mp-33aaeb53-4063-49b7-95e2-6a4676eefe9b"
 				}
 			]
 		},
-		"rng_seed": "-4172430464026010929",
+		"rng_seed": "3906214476326832644",
 		"scenario_id": "learning_scenario",
-		"timestamp": "2026-09-06T07:50:20"
+		"timestamp": "2026-09-19T17:15:39"
 	}
 }

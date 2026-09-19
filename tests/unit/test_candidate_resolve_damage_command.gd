@@ -7,9 +7,20 @@ const COMMAND: GDScript = preload(
 		"res://src/core/commands/candidate_resolve_damage_command.gd")
 
 var _state: GameState
+var _saved_game_state: GameState
+
+
+class PresentationAttackExecutor:
+	extends AttackExecutor
+
+	var projected_payload: Dictionary = {}
+
+	func _fsm_patch_payload(patch: Dictionary) -> void:
+		projected_payload.merge(patch, true)
 
 
 func before_each() -> void:
+	_saved_game_state = GameManager.current_game_state
 	_state = GameState.new()
 	_state.initialize()
 	_state.current_phase = Constants.GamePhase.SHIP
@@ -28,6 +39,10 @@ func before_each() -> void:
 	var defender: ShipInstance = _state.get_ship(1, 0)
 	defender.current_shields["FRONT"] = 0
 	_state.damage_deck = _deck("structural_damage", "immediate")
+
+
+func after_each() -> void:
+	GameManager.current_game_state = _saved_game_state
 
 
 func test_attack_faceup_assignment_establishes_exact_public_obligation() -> void:
@@ -156,6 +171,46 @@ func test_lethal_attack_faceup_assignment_terminates_obligation_and_keeps_damage
 	assert_true(defender.has_finalized_destruction())
 	assert_false(defender.has_active_immediate_resolution())
 	assert_eq(defender.get_total_damage(), defender.ship_data.hull)
+
+
+func test_v2_ship_damage_projects_canonical_shield_loss_and_feedback_event() -> void:
+	var defender: ShipInstance = _state.get_ship(1, 0)
+	defender.current_shields["FRONT"] = 2
+	GameManager.current_game_state = _state
+	var command: GameCommand = COMMAND.new(0, {"attack_id": "attack:70"})
+	command.sequence = 73
+	var result: Dictionary = command.execute(_state)
+	assert_false(result.is_empty())
+	assert_eq(defender.current_shields["FRONT"], 1,
+			"The v2 command must mutate canonical shields before projection")
+	assert_false(result.has("shield_absorbed"),
+			"Presentation must not widen the accepted v2 result schema")
+	var executor := PresentationAttackExecutor.new()
+	add_child_autofree(executor)
+	watch_signals(EventBus)
+
+	executor.apply_damage_result(result)
+
+	assert_signal_emitted_with_parameters(EventBus, "ship_shields_changed", [
+			defender, "FRONT", 1])
+	assert_eq(executor.projected_payload.get("final_damage"), 1,
+			"Presentation must use the canonical resolved outcome")
+	assert_eq(executor._applied_damage_attack_id, "attack:70")
+
+
+func test_remote_v2_ship_damage_projects_nested_shield_change() -> void:
+	var defender: ShipInstance = _state.get_ship(1, 0)
+	defender.current_shields["FRONT"] = 2
+	GameManager.current_game_state = _state
+	var command: GameCommand = COMMAND.new(0, {"attack_id": "attack:70"})
+	command.sequence = 74
+	var result: Dictionary = command.execute(_state)
+	watch_signals(EventBus)
+
+	GameManager._handle_remote_resolve_damage(command, result)
+
+	assert_signal_emitted_with_parameters(EventBus, "ship_shields_changed", [
+			defender, "FRONT", 1])
 
 
 func _deck(effect: String, timing: String) -> DamageDeck:

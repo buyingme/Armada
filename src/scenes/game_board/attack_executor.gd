@@ -3174,10 +3174,12 @@ func apply_damage_result(result: Dictionary) -> void:
 	if attack == null or attack.attack_id != attack_id \
 			or attack.stage != CurrentAttackState.STAGE_RESOLVED:
 		return
+	var presentation_result: Dictionary = \
+			_normalize_damage_presentation_result(result, attack)
 	_applied_damage_attack_id = attack_id
 	_sync_scene_from_current_attack()
-	var final_damage: int = int(result.get("final_damage",
-			result.get("hull_damage", 0)))
+	var final_damage: int = int(presentation_result.get("final_damage",
+			presentation_result.get("hull_damage", 0)))
 	# Phase I3c: publish final damage so UIProjector can render the
 	# damage summary on the defender's screen.
 	_fsm_patch_payload({"final_damage": final_damage})
@@ -3187,17 +3189,47 @@ func apply_damage_result(result: Dictionary) -> void:
 	if final_damage <= 0:
 		_resolve_zero_damage()
 		return
-	if str(result.get("target_type", "")) == "squadron":
-		_apply_squadron_damage_result(result)
+	if str(presentation_result.get("target_type", "")) == "squadron":
+		_apply_squadron_damage_result(presentation_result)
 		if _pending_counter_attacker != null:
 			return
 		_attack_exec_finalize_after_delay()
 		return
-	if str(result.get("target_type", "")) == "ship":
-		_continue_ship_damage_resolution(result)
+	if str(presentation_result.get("target_type", "")) == "ship":
+		_continue_ship_damage_resolution(presentation_result)
 		return
 	_log.error("No defender found for damage resolution!")
 	_attack_exec_finalize_attack()
+
+
+## Adapts the accepted resolve_damage v2 public application shape to the
+## existing presentation-only fields.  The wire/result schema remains exact;
+## all non-public outcome totals come from the already-resolved canonical
+## CurrentAttackState rather than being re-derived by presentation.
+func _normalize_damage_presentation_result(result: Dictionary,
+		attack: CurrentAttackState) -> Dictionary:
+	if not result.get("damage_application") is Dictionary:
+		return result
+	var application: Dictionary = result["damage_application"] as Dictionary
+	var outcome: Dictionary = attack.resolved_outcome
+	var projected: Dictionary = result.duplicate(true)
+	projected["target_type"] = str(result.get("target_kind", ""))
+	projected["final_damage"] = int(outcome.get("final_damage", 0))
+	projected["shield_absorbed"] = int(outcome.get("shield_absorbed", 0))
+	projected["cards_added"] = int(application.get("facedown_delta", 0)) \
+			+ (application.get("faceup_additions", []) as Array).size()
+	projected["destroyed"] = bool(application.get("destroyed", false))
+	var changes: Array = application.get("shield_changes", []) as Array
+	if not changes.is_empty() and changes[0] is Dictionary:
+		var change: Dictionary = changes[0] as Dictionary
+		projected["hull_zone"] = str(change.get("zone", ""))
+		projected["new_shields"] = int(change.get("new_shields", 0))
+	else:
+		projected["hull_zone"] = Constants.hull_zone_to_string(
+				int(outcome.get("affected_zone", -1)) as Constants.HullZone)
+		projected["new_shields"] = int(outcome.get(
+				"post_resolution_shields", 0))
+	return projected
 
 
 ## Zero-damage resolution path: show the "no damage" panel and offer Counter

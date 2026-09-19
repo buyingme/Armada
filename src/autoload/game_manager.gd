@@ -3255,18 +3255,34 @@ func _handle_remote_resolve_damage(
 	if ship == null:
 		return
 	EventBus.ship_defense_token_changed.emit(ship)
+	var application: Dictionary = result.get("damage_application", {}) \
+			as Dictionary
+	var shield_changes: Array = application.get("shield_changes", []) as Array \
+			if not application.is_empty() else []
+	var cards_added: int = int(application.get("facedown_delta", 0)) \
+			+ (application.get("faceup_additions", []) as Array).size() \
+			if not application.is_empty() else int(result.get("cards_added", 0))
+	var destroyed: bool = bool(application.get("destroyed", false)) \
+			if not application.is_empty() else bool(result.get("destroyed", false))
 	# Phase I6b-3 R2 follow-up: refresh shield/hull visuals on the
 	# client peer.  ResolveDamageCommand.execute() mutated the
 	# authoritative GameState on both peers, but only the host's
 	# AttackExecutor emits the ship_shields_changed / ship_hull_changed
 	# signals that ship_token listens to.  Mirror those signals here so
 	# the defender's shield pips and hull readout update on the client.
-	if int(result.get("shield_absorbed", 0)) > 0:
+	if not shield_changes.is_empty():
+		for raw_change: Variant in shield_changes:
+			if raw_change is Dictionary:
+				var change: Dictionary = raw_change as Dictionary
+				EventBus.ship_shields_changed.emit(ship,
+						str(change.get("zone", "")),
+						int(change.get("new_shields", 0)))
+	elif int(result.get("shield_absorbed", 0)) > 0:
 		var hull_zone: String = String(result.get("hull_zone", ""))
 		if hull_zone != "":
 			EventBus.ship_shields_changed.emit(ship, hull_zone,
 					int(result.get("new_shields", 0)))
-	if int(result.get("cards_added", 0)) > 0 and ship.ship_data:
+	if cards_added > 0 and ship.ship_data:
 		var new_hull: int = ship.ship_data.hull \
 				- ship.get_total_damage()
 		EventBus.ship_hull_changed.emit(ship, new_hull)
@@ -3283,7 +3299,7 @@ func _handle_remote_resolve_damage(
 				ship, ship.faceup_damage.duplicate(),
 				ship.get_facedown_damage_count(),
 				ship.ship_data.ship_name)
-	if result.get("destroyed", false):
+	if destroyed:
 		# The mirrored command already made ShipInstance destruction canonical.
 		# Board/card presentation retires from the hull projection above; do not
 		# pass a RefCounted instance through the token-typed semantic event.

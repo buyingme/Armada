@@ -35,6 +35,7 @@ func after_each() -> void:
 
 
 func test_live_authority_rederives_apply_and_complete_without_persisted_route() -> void:
+	var before := Vector2(_ship.pos_x, _ship.pos_y)
 	var command := CandidateExecuteManeuverCommand.new(0, {
 		"ship_index": 0,
 		"ship_activation_identity": "ship-activation:90",
@@ -54,6 +55,12 @@ func test_live_authority_rederives_apply_and_complete_without_persisted_route() 
 	assert_eq(types, [
 		"execute_maneuver", "apply_maneuver_transform", "complete_maneuver"])
 	assert_eq(_processor.get_pending_observer_followup_count(), 0)
+	assert_ne(Vector2(_ship.pos_x, _ship.pos_y), before,
+			"The derived apply command must mutate the canonical transform")
+	assert_almost_eq(_ship.pos_x, float(result["pos_x"]), 0.00001)
+	assert_almost_eq(_ship.pos_y, float(result["pos_y"]), 0.00001)
+	assert_almost_eq(_ship.rotation_deg,
+			float(result["rotation_deg"]), 0.00001)
 
 
 func test_player_decision_stops_rederivation_without_partial_activation() -> void:

@@ -1894,8 +1894,16 @@ func _on_execute_maneuver() -> void:
 	_activation_ctx.ship_activation_state.mark_maneuver_executed()
 	_clear_maneuver_damage_hint()
 	_dismiss_maneuver_tool_with_preview.call()
-	if bool(maneuver_ship.active_maneuver_execution_snapshot().get(
-			"final_transform_applied", false)):
+	var active_execution: Dictionary = \
+			maneuver_ship.active_maneuver_execution_snapshot()
+	# A synchronous Hot-Seat submission can apply the transform and then retire
+	# the execution before submit_execute_maneuver() returns.  An empty record
+	# therefore means the authority chain has converged, not that movement is
+	# still pending.  Only a live execution whose transform is unapplied keeps
+	# the token at the pre-Maneuver projection (Owner Decision 28).
+	var transform_is_pending: bool = not active_execution.is_empty() \
+			and not bool(active_execution.get("final_transform_applied", false))
+	if not transform_is_pending:
 		_activation_ctx.activating_ship_token.global_position = \
 				maneuver_ship.get_pixel_position(GameScale.play_area_size_px)
 		_activation_ctx.activating_ship_token.global_rotation = \

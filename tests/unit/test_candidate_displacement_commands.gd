@@ -5,15 +5,35 @@ const START: GDScript = preload(
 		"res://src/core/commands/candidate_start_displacement_command.gd")
 const COMMIT: GDScript = preload(
 		"res://src/core/commands/candidate_commit_displacement_command.gd")
+const PROCESSOR_SCRIPT: GDScript = preload(
+		"res://src/autoload/command_processor.gd")
+
+
+class ProcessorSubmitter:
+	extends CommandSubmitter
+
+	var processor: Node = null
+
+
+	func _init(p_processor: Node) -> void:
+		processor = p_processor
+
+
+	func submit(command: GameCommand) -> Dictionary:
+		return processor.submit(command)
 
 
 var _state: GameState
 var _ship: ShipInstance
 var _squadron: SquadronInstance
 var _identity: Dictionary = {"owner": 1, "squadron_index": 0}
+var _saved_state: GameState = null
+var _saved_submitter: CommandSubmitter = null
 
 
 func before_each() -> void:
+	_saved_state = GameManager.current_game_state
+	_saved_submitter = GameManager.get_command_submitter()
 	_state = GameState.new()
 	_state.initialize()
 	_state.current_phase = Constants.GamePhase.SHIP
@@ -35,6 +55,12 @@ func before_each() -> void:
 	}, {"kind": "none"}))
 	assert_false(_ship.apply_maneuver_final_transform(
 			"ship-activation:50", "maneuver:50").is_empty())
+	GameManager.current_game_state = _state
+
+
+func after_each() -> void:
+	GameManager.current_game_state = _saved_state
+	GameManager.set_command_submitter(_saved_submitter)
 
 
 func test_start_rederives_complete_set_and_nonmoving_controller() -> void:
@@ -108,6 +134,35 @@ func test_recovered_flow_and_contract_2_result_apply_same_complete_batch() -> vo
 	assert_almost_eq(recovered.get_squadron(1, 0).pos_x,
 			float(placement["pos_x"]), 0.00001)
 	assert_eq(start_result["controller_player"], 1)
+
+
+func test_game_manager_commit_preserves_identity_and_completes_maneuver() -> void:
+	assert_false(START.new(0, _start_payload()).execute(_state).is_empty())
+	var processor: Node = PROCESSOR_SCRIPT.new()
+	add_child_autofree(processor)
+	GameManager.set_command_submitter(ProcessorSubmitter.new(processor))
+	var point: Vector2 = _direct_point()
+	var placement: Dictionary = {
+		"owner": 1,
+		"squadron_index": 0,
+		"pos_x": point.x / GameScale.play_area_size_px.x,
+		"pos_y": point.y / GameScale.play_area_size_px.y,
+	}
+
+	var result: Dictionary = GameManager.submit_commit_displacement([placement])
+
+	assert_false(result.is_empty())
+	var history: Array[GameCommand] = processor.get_history()
+	assert_eq(history.size(), 2,
+			"Accepted displacement should derive exactly complete_maneuver.")
+	assert_eq(history[0].command_type, "commit_displacement")
+	assert_eq(history[0].payload, _commit_payload([placement], []),
+			"The UI submission boundary must preserve every Maneuver identity.")
+	assert_eq(history[1].command_type, "complete_maneuver")
+	assert_false(_ship.has_active_maneuver_execution(),
+			"Purpose-specific return must retire the execution record.")
+	assert_eq(_ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
 
 
 func _start_payload() -> Dictionary:

@@ -53,6 +53,8 @@ func submit_authoritative(command: GameCommand) -> Dictionary:
 
 
 func submit_replay(command: GameCommand) -> Dictionary:
+	if NetworkManager.stage_future_host_replay_dial(command):
+		return {"staged_replay_command": true}
 	var result: Dictionary = CommandProcessor.submit_replay_deferred_followups(
 			command)
 	if result.is_empty():

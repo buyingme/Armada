@@ -73,6 +73,22 @@ func test_debug_scenario_json_is_structurally_valid() -> void:
 			"Every debug token should resolve to a runtime placement")
 
 
+func test_debug_obstacle_json_normalizes_to_canonical_runtime_types() -> void:
+	var placements: Array[Dictionary] = LearningScenarioSetup.new(
+			"debug_scenario").get_obstacle_placements()
+	assert_eq(placements.size(), 3)
+	for placement: Dictionary in placements:
+		assert_eq(typeof(placement["placement_order"]), TYPE_INT,
+				"Canonical obstacle placement order must be an integer.")
+		assert_eq(typeof(placement["placing_player"]), TYPE_INT,
+				"Canonical obstacle actor must be an integer.")
+		for key: String in ["pos_x", "pos_y", "rotation_deg"]:
+			assert_eq(typeof(placement[key]), TYPE_FLOAT,
+					"Canonical obstacle geometry field %s must be a float." % key)
+		assert_eq(str(placement["obstacle_id"]),
+				"obstacle:%d" % int(placement["placement_order"]))
+
+
 func test_debug_scenario_fixed_round1_commands_are_valid_when_enabled() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
 	var data: Dictionary = _debug_scenario_data()

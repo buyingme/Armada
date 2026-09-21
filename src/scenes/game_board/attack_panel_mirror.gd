@@ -215,6 +215,42 @@ func show_resolved_result() -> void:
 		_panel.result_confirmed.connect(_on_result_confirmed)
 
 
+## Rebuilds the completed-result surface for the authenticated non-attacker
+## peer.  The caller derives acknowledgement authority from UIProjector; this
+## mirror only renders that projection and submits through the normal Network
+## command path.
+func present_completed_attack_result_projection(
+		inspection: Dictionary, acknowledge_actionable: bool) -> void:
+	if _panel == null or inspection.is_empty():
+		return
+	_is_open = true
+	_panel.show_completed_attack_result(not acknowledge_actionable)
+	_panel.show_dice_results(
+			inspection.get("dice_results", []) as Array[Dictionary])
+	_panel.show_damage_info(_completed_attack_result_summary(inspection))
+	if acknowledge_actionable:
+		_panel.show_result_confirmation()
+		if not _panel.result_confirmed.is_connected(_on_result_confirmed):
+			_panel.result_confirmed.connect(_on_result_confirmed)
+	else:
+		_panel.hide_confirm_button()
+		if _panel.result_confirmed.is_connected(_on_result_confirmed):
+			_panel.result_confirmed.disconnect(_on_result_confirmed)
+
+
+func _completed_attack_result_summary(inspection: Dictionary) -> String:
+	var outcome: Dictionary = inspection.get("outcome", {}) as Dictionary
+	if str(outcome.get("target_kind", "")) == "ship":
+		return "Resolved ship damage: %d shield, %d hull" % [
+			int(outcome.get("shield_absorbed", 0)),
+			int(outcome.get("hull_damage", 0)),
+		]
+	return "Resolved squadron damage: %d hull (remaining %d)" % [
+		int(outcome.get("actual_hull_damage", 0)),
+		int(outcome.get("post_resolution_hull", 0)),
+	]
+
+
 func _on_result_confirmed() -> void:
 	var inspection_id: String = _local_pending_inspection_id()
 	if inspection_id.is_empty():

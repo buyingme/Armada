@@ -10,6 +10,8 @@ class_name RollDiceCommand
 extends GameCommand
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
 	GameCommand.register_type("roll_dice", func(player: int,
@@ -67,6 +69,7 @@ func execute_with_application_result(game_state: GameState,
 	if replacement == null or not game_state.set_current_attack_state(replacement):
 		return {}
 	_record_ship_target_attack(game_state, attack)
+	_commit_attack_modify_flow(game_state, attack, results)
 	return {"attack_id": attack.attack_id, "dice_results": results}
 
 
@@ -120,7 +123,28 @@ func execute(game_state: GameState) -> Dictionary:
 		game_state.rng.set_state(rng_state)
 		return {}
 	_record_ship_target_attack(game_state, attack)
+	_commit_attack_modify_flow(game_state, attack, results)
 	return {"attack_id": attack.attack_id, "dice_results": results}
+
+
+## Commits the purpose-specific Roll -> Modify projection from the accepted
+## canonical roll. Live UI may already have advanced its transient FSM to
+## ROLL; replay and reconnect must not depend on that pre-submit presentation.
+func _commit_attack_modify_flow(game_state: GameState,
+		attack: CurrentAttackState, results: Array[Dictionary]) -> void:
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK:
+		return
+	var payload: Dictionary = flow.payload.duplicate(true)
+	payload["dice_results"] = results.duplicate(true)
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			game_state,
+			{"attacker_player": attack.attacker_player,
+				"defender_player": attack.defender_player},
+			Constants.Visibility.ALL,
+			payload)
 
 
 func _record_ship_target_attack(game_state: GameState,

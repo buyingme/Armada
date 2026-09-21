@@ -176,6 +176,33 @@ func test_roll_dice_execute_deterministic_with_rng() -> void:
 				"Dice face %d should be identical with same seed." % i)
 
 
+func test_replayed_roll_commits_same_attack_modify_flow_as_live() -> void:
+	_state.rng = GameRng.new(101)
+	_install_roll_attack({"RED": 2})
+	_state.interaction_flow = FlowSpec.make_interaction_flow(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DECLARE,
+			_state,
+			{"attacker_player": 0, "defender_player": 1},
+			Constants.Visibility.ALL,
+			{"attack_id": _attack_id()})
+	var replay_state: GameState = GameState.deserialize(_state.serialize())
+	var live := RollDiceCommand.new(0, {"attack_id": _attack_id()})
+	live.sequence = 100
+	var replay: GameCommand = GameCommand.deserialize(live.serialize())
+
+	var live_result: Dictionary = live.execute(_state)
+	var replay_result: Dictionary = replay.execute(replay_state)
+
+	assert_eq(replay_result, live_result)
+	assert_eq(_state.current_attack_state.stage,
+			CurrentAttackState.STAGE_ATTACK_MODIFY)
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_MODIFY)
+	assert_eq(replay_state.serialize(), _state.serialize(),
+			"Recorded roll must reconstruct the same canonical Modify state.")
+
+
 func test_roll_dice_serialize_roundtrip() -> void:
 	var cmd := RollDiceCommand.new(0, {
 		"dice_pool": {"red": 3},

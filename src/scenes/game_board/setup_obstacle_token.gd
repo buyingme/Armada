@@ -12,11 +12,13 @@ signal token_clicked(token: SetupObstacleToken)
 
 const OUTLINE_COLOUR: Color = Color(0.72, 0.88, 1.0, 0.7)
 const OUTLINE_WIDTH_PX: float = 2.0
-const TARGET_SIZE_FACTOR: float = 1.35
+const CONTOUR_CATALOG: GDScript = preload(
+		"res://src/core/geometry/obstacle_contour_catalog.gd")
 
 var _data_key: String = ""
 var _half_extents: Vector2 = Vector2.ONE * 24.0
 var _click_enabled: bool = true
+var _outline_visible: bool = true
 var _outline_colour: Color = OUTLINE_COLOUR
 var _sprite: Sprite2D = null
 
@@ -50,6 +52,12 @@ func set_click_enabled(enabled: bool) -> void:
 	_click_enabled = enabled
 
 
+## Shows setup legality framing only while obstacle placement is active.
+func set_outline_visible(visible_value: bool) -> void:
+	_outline_visible = visible_value
+	queue_redraw()
+
+
 ## Sets the preview outline colour used by setup legality feedback.
 func set_outline_colour(colour: Color) -> void:
 	_outline_colour = colour
@@ -81,6 +89,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _draw() -> void:
+	if not _outline_visible:
+		return
 	draw_rect(Rect2(-_half_extents, _half_extents * 2.0),
 			_outline_colour, false, OUTLINE_WIDTH_PX)
 
@@ -104,12 +114,20 @@ func _update_art() -> void:
 
 
 func _sprite_scale(texture: Texture2D) -> Vector2:
-	var longest_side: float = maxf(texture.get_width(), texture.get_height())
-	if longest_side <= 0.0:
-		return Vector2.ONE
-	var target_size: float = maxf(
-			GameScale.squadron_base_diameter_px * TARGET_SIZE_FACTOR, 56.0)
-	return Vector2.ONE * (target_size / longest_side)
+	var contour: ObstacleContour = CONTOUR_CATALOG.load_one(
+			_data_key) as ObstacleContour
+	if contour == null:
+		return Vector2.ZERO
+	# Approved v3 contours retain the original PNG canvas and image-centre
+	# pivot. Verify this exact source canvas before applying the dataset's
+	# source-pixel -> canonical-world calibration to presentation.
+	var expected_source_size: Vector2 = contour.local_origin * 2.0
+	var texture_size := Vector2(texture.get_width(), texture.get_height())
+	if not texture_size.is_equal_approx(expected_source_size):
+		return Vector2.ZERO
+	var scale: float = \
+			CONTOUR_CATALOG.CANONICAL_WORLD_UNITS_PER_NATIVE_SOURCE_PX_AT_CURRENT_SCALE
+	return Vector2.ONE * scale
 
 
 func _update_half_extents(texture: Texture2D) -> void:

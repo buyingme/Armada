@@ -73,8 +73,8 @@ var _activation_state: ShipActivationState = null
 ## Stable identity of the activation for which this transient tool was built.
 var _activation_identity: String = ""
 
-## One client-authored SetSpeed request awaiting authoritative acceptance.
-## This is transient presentation recovery state, never gameplay authority.
+## Retained only for rejecting obsolete/in-flight protocol-6 SetSpeed results.
+## Protocol 7 speed selection is transient until execute_maneuver commits it.
 var _pending_speed_change: Dictionary = {}
 
 ## Node2D overlay that draws yaw bonus "N" badges on joints.
@@ -709,6 +709,18 @@ func _try_apply_yaw_bonus_for(joint_index: int,
 	# Bonus is already on this joint — the click genuinely exceeds limits.
 	if current_bonus == joint_index:
 		return false
+	# Moving the bonus may clamp its previous joint. Prove the requested click
+	# can succeed before mutating either preview state. A rejected over-click
+	# must not silently change the selected course behind an unchanged ghost.
+	var click_delta: int = -1 if button == MOUSE_BUTTON_LEFT else 1
+	var selected_clicks: Array[int] = _state.get_joint_clicks()
+	if joint_index < 0 or joint_index >= selected_clicks.size():
+		return false
+	var prospective_max: int = mini(
+			_state.get_max_yaw(joint_index) + 1,
+			ManeuverToolState.MAX_CLICKS_PER_JOINT)
+	if absi(selected_clicks[joint_index] + click_delta) > prospective_max:
+		return false
 	# If the bonus is on a different joint, remove it first.
 	if current_bonus >= 0:
 		_activation_state.remove_yaw_bonus()
@@ -832,58 +844,20 @@ func _try_speed_button_click() -> bool:
 ## [param delta] — +1 or -1.
 func _handle_speed_change(delta: int) -> void:
 	if _activation_mode and _activation_state:
-		if has_pending_speed_change():
-			_log.info("SetSpeedCommand still awaiting authoritative result.")
-			return
-		var submitter: CommandSubmitter = GameManager.get_command_submitter()
-		if submitter is NetworkCommandSubmitter \
-				and (submitter as NetworkCommandSubmitter).is_awaiting_response():
-			# A replacement/reconstructed tool cannot create a new pending
-			# speed request while an older command still owns the Network gate.
-			_log.info("Network command result still pending; speed input blocked.")
-			return
-		var activation_snapshot: Dictionary = \
-				_activation_state.speed_change_snapshot()
 		var applied: bool = _activation_state.apply_speed_change(delta)
 		if applied:
-			# Submit command to mutate ShipInstance.current_speed.
-			var ship: ShipInstance = _activation_state.get_ship()
-			var game_state: GameState = GameManager.current_game_state
-			var ship_index: int = game_state.find_ship_index(ship) \
-					if game_state else -1
 			var target_speed: int = _activation_state.get_original_speed() \
 					+ _activation_state.get_total_speed_change()
-			var result: Dictionary = GameManager.submit_set_speed(
-					ship, target_speed)
-			if result.is_empty():
-				_activation_state.restore_speed_change_snapshot(
-						activation_snapshot)
-				_refresh_preview_from_canonical(ship)
-				_log.info("SetSpeedCommand rejected for speed %d." %
-						target_speed)
-				return
-			if bool(result.get("awaiting_remote", false)):
-				_pending_speed_change = {
-					"ship": ship,
-					"owner": ship.owner_player,
-					"ship_index": ship_index,
-					"activation_identity": _activation_identity,
-					"activation_snapshot": activation_snapshot,
-					"target_speed": target_speed,
-				}
-				_state.set_activation_preview_speed(target_speed)
-				_update_visual()
-				maneuver_preview_changed.emit()
-				EventBus.navigate_token_spend_preview.emit(
-						ship, _activation_state.is_using_token_for_speed())
-				_log.info(("SetSpeedCommand submitted for speed %d " \
-						+ "(awaiting authoritative result).") % target_speed)
-				return
-			# Synchronous host/local acceptance already mutated canonical speed.
-			_refresh_preview_from_canonical(ship)
-			_log.info("Activation speed %+d → %d" % [
-					delta, ship.current_speed])
-			EventBus.ship_speed_changed.emit(ship, ship.current_speed)
+			# Protocol 7 keeps selection presentation-only. execute_maneuver owns
+			# the atomic canonical speed mutation and Navigate source debit.
+			_state.set_activation_preview_speed(target_speed)
+			_update_visual()
+			maneuver_preview_changed.emit()
+			EventBus.navigate_token_spend_preview.emit(
+					_activation_state.get_ship(),
+					_activation_state.is_using_token_for_speed())
+			_log.info("Activation speed preview %+d → %d" % [
+					delta, target_speed])
 	else:
 		var old_speed: int = _state.get_simulated_speed()
 		_state.set_simulated_speed(old_speed + delta)

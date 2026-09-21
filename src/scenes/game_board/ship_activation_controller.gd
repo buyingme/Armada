@@ -185,9 +185,6 @@ func _connect_panel_signals() -> void:
 	if _squadron_phase_controller != null:
 		_squadron_phase_controller.squadron_command_done.connect(
 				_on_squadron_command_done)
-	if _displacement_controller != null:
-		_displacement_controller.displacement_completed.connect(
-				show_end_activation_after_maneuver)
 
 
 ## DialDragController signal callback.  Called when the player drops the
@@ -1320,8 +1317,13 @@ func _maneuver_choice_descriptor(action: Dictionary,
 						for replacement: int in range(4):
 							options.append({"id":"dial|%d" % replacement,
 								"label":"Replace dial: %s" % ImmediateEffectResolver._command_type_name(replacement)})
+	var effect_text: String = \
+			"Resolve the current mandatory Maneuver consequence."
+	if command_type == "resolve_debris_overlap":
+		effect_text = "Choose one hull zone to suffer the Debris Field's " \
+				+ "two damage points. Shields in that zone are lost first."
 	return {"card_title":_maneuver_choice_title(command_type),
-		"effect_text":"Resolve the current mandatory Maneuver consequence.",
+		"effect_text":effect_text,
 		"chooser":int(action["player_index"]), "options":options,
 		"multi_select":multi_select, "max_selections":max_selections,
 		"choice_type":ImmediateEffectResolver.CHOICE_SHIELD_FAILURE \
@@ -1547,9 +1549,41 @@ func _on_squadron_step_skipped() -> void:
 func _on_squadron_command_done() -> void:
 	_log.info("Squadron command done — advancing activation step.")
 	_squadron_phase_controller.dismiss_cmd_range_overlay()
+	if _resume_accepted_repair_return_after_squadron_command():
+		return
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step()
 	submit_activation_step("repair_step")
+
+
+## Reprojects the already-accepted purpose-specific return when the final
+## Squadron-command resource spend completes after CommandProcessor has
+## composed the enclosing ship activation back to Repair. No second semantic
+## transition is submitted: the canonical flow and consumed opportunity are
+## the proof that the exact return already occurred.
+func _resume_accepted_repair_return_after_squadron_command() -> bool:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or _activation_ctx.ship_activation_state == null:
+		return false
+	var flow: InteractionFlow = game_state.interaction_flow
+	var ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
+	if flow == null or ship == null \
+			or flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION \
+			or flow.step_id != Constants.InteractionStep.REPAIR_STEP \
+			or flow.controller_player != ship.owner_player \
+			or int(flow.payload.get("ship_index", -1)) \
+					!= _current_activating_ship_index(ship) \
+			or str(flow.payload.get("ship_activation_identity", "")) \
+					!= ship.ship_activation_identity \
+			or ship.squadron_command_opportunity_disposition \
+					!= ShipInstance.ACTIVATION_DISPOSITION_CONSUMED \
+			or game_state.get_active_squadron_activation() != null:
+		return false
+	sync_activation_step_from_flow(flow)
+	open_modal_from_interaction_state()
+	_log.info("Squadron command resource spend completed — restored accepted " \
+			+ "Repair return without a duplicate transition.")
+	return true
 
 
 ## Submits [SpendDialCommand] and/or [SpendTokenCommand] based on a
@@ -1939,15 +1973,12 @@ func _maneuver_preview_ready_for_commit() -> bool:
 		_log.info("Maneuver commit blocked: stale ship activation preview.")
 		_maneuver_tool_controller.dismiss(null)
 		return false
-	if scene.has_pending_speed_change():
-		_log.info("Maneuver commit blocked: SetSpeed acceptance pending.")
-		return false
 	var preview_speed: int = scene.get_state().get_simulated_speed()
-	if preview_speed != ship.current_speed:
-		_log.info("Maneuver commit blocked: preview speed %d != canonical %d." % [
-				preview_speed, ship.current_speed])
-		scene.refresh_matching_preview_from_canonical(
-				ship, activation_identity)
+	var selected_speed: int = activation_state.get_original_speed() \
+			+ activation_state.get_total_speed_change()
+	if preview_speed != selected_speed:
+		_log.info("Maneuver commit blocked: preview speed %d != selected %d." % [
+				preview_speed, selected_speed])
 		return false
 	return true
 
@@ -2000,8 +2031,8 @@ func _preview_maneuver_overlap_result() -> OverlapResolver.ShipShipResult:
 ## immediately after maneuver).
 ## Requirements: AC-5b-11, FLOW-002.
 ##
-## Public so [GameBoard._resume_after_remote_displacement] and the
-## [DisplacementController.displacement_completed] signal can call it.
+## Public so the accepted [code]complete_maneuver[/code] presentation route
+## can expose the final activation step after canonical Maneuver retirement.
 func show_end_activation_after_maneuver() -> void:
 	# Update state to reflect completion.
 	if _activation_ctx.ship_activation_state:

@@ -228,6 +228,12 @@ func _emit_candidate_damage_events(cmd: GameCommand,
 				int(application.get("ship_index", -1))) if state != null else null
 		if ship == null:
 			continue
+		for raw_change: Variant in application.get("shield_changes", []):
+			if raw_change is Dictionary:
+				var change: Dictionary = raw_change as Dictionary
+				EventBus.ship_shields_changed.emit(ship,
+						str(change.get("zone", "")),
+						int(change.get("new_shields", 0)))
 		if int(application.get("facedown_delta", 0)) > 0 \
 				or not (application.get("faceup_additions", []) as Array).is_empty():
 			EventBus.damage_card_dealt.emit(ship, null,

@@ -82,206 +82,95 @@ func after_each() -> void:
 	GameManager.set_command_submitter(_saved_submitter)
 
 
-func test_client_acceptance_converges_preview_and_blocks_rapid_resubmit() -> void:
+func test_speed_selection_stays_transient_until_maneuver_commit() -> void:
 	var fixture: Dictionary = _fixture("activation:bug043:1")
 	var ship: ShipInstance = fixture["ship"] as ShipInstance
 	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
-	var controller: ShipActivationController = fixture["controller"] \
-			as ShipActivationController
 	var submitter := AsyncSubmitter.new()
 	GameManager.set_command_submitter(submitter)
-	controller._connect_signals()
 
 	tool._handle_speed_change(-1)
-	assert_eq(submitter.submitted.size(), 1)
-	assert_eq(ship.current_speed, 2, "Awaiting result is not canonical success")
+	assert_eq(submitter.submitted.size(), 0,
+			"Preview selection must not submit pre-commit set_speed")
+	assert_eq(ship.current_speed, 2, "Preview must not mutate canonical speed")
 	assert_eq(tool.get_state().get_simulated_speed(), 1,
-			"Pending preview may show the requested target")
-	assert_true(tool.has_pending_speed_change())
-
-	tool._handle_speed_change(1)
-	assert_eq(submitter.submitted.size(), 1,
-			"Rapid follow-up must not enqueue against stale canonical speed")
-
-	ship.set_speed(1)
-	GameManager._handle_remote_command_effects(submitter.submitted[0], {})
+			"Preview represents the selected target")
 	assert_false(tool.has_pending_speed_change())
-	assert_eq(tool.get_state().get_simulated_speed(), 1,
-			"Accepted canonical speed must converge the preview")
 
 	tool._handle_speed_change(1)
-	assert_eq(submitter.submitted.size(), 2)
-	assert_eq(int(submitter.submitted[1].payload.get("new_speed", -1)), 2)
-	ship.set_speed(2)
-	GameManager._handle_remote_command_effects(submitter.submitted[1], {})
 	assert_eq(tool.get_state().get_simulated_speed(), 2,
-			"Accepted reversal must replace the prior preview speed")
-	assert_eq(tool.get_state().get_simulated_speed(), ship.current_speed,
-			"Subsequent maneuver payload source must equal canonical speed")
-	GameManager.submit_execute_maneuver(
-			ship, tool.get_state().get_simulated_speed(), [0, 0],
-			0.5, 0.5, 0.0, -1, false,
-			(fixture["activation_state"] as ShipActivationState) \
-					.get_total_speed_change())
-	assert_eq(submitter.submitted.size(), 3)
-	assert_eq(submitter.submitted[2].command_type, "execute_maneuver")
-	assert_eq(int(submitter.submitted[2].payload.get("speed", -1)), 2,
-			"The real maneuver payload must use accepted canonical speed")
+			"Reversing selection restores the original preview")
+	assert_eq(ship.current_speed, 2)
+	assert_eq(submitter.submitted.size(), 0)
 
 
-func test_accepted_speed_one_to_zero_enters_unified_maneuver_path() -> void:
+func test_speed_zero_is_committed_by_execute_maneuver_not_set_speed() -> void:
 	var fixture: Dictionary = _fixture("activation:bug043:zero", 1)
 	var ship: ShipInstance = fixture["ship"] as ShipInstance
 	var state: ShipActivationState = fixture["activation_state"] \
 			as ShipActivationState
 	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
-	var maneuver_controller: ManeuverToolController = \
-			fixture["maneuver_controller"] as ManeuverToolController
 	var controller: ShipActivationController = fixture["controller"] \
 			as ShipActivationController
-	var submitter := AsyncSpeedSubmitter.new()
+	var submitter := SyncSubmitter.new()
 	GameManager.set_command_submitter(submitter)
-	controller._connect_signals()
 	_advance_to_maneuver(state)
 
 	tool._handle_speed_change(-1)
 	assert_eq(ship.current_speed, 1,
-			"Pending speed zero is not canonical acceptance")
+			"Speed-zero selection remains transient before commit")
 	assert_eq(tool.get_state().get_simulated_speed(), 0,
-			"Pending activation preview may represent target speed zero")
+			"Preview may represent target speed zero")
 	controller._on_execute_maneuver()
-	assert_false(state.is_maneuver_executed(),
-			"A pending stale speed-one maneuver must not commit")
-	assert_eq(submitter.submitted.size(), 1)
-
-	ship.set_speed(0)
-	GameManager._handle_remote_command_effects(submitter.submitted[0], {})
-
 	assert_eq(ship.current_speed, 0)
-	assert_eq(tool.get_state().get_simulated_speed(), 0,
-			"Accepted canonical speed zero must converge transient state")
-	assert_false(tool.has_pending_speed_change())
-	assert_true(state.is_maneuver_executed(),
-			"Existing speed-zero path must complete the local maneuver")
-	assert_false(state.is_done(),
-			"Completion waits for the authoritative Maneuver result chain")
-	assert_null(maneuver_controller.get_scene(),
-			"The speed-one tool must be invalidated after speed-zero completion")
-	assert_eq(submitter.submitted.size(), 2)
-	assert_eq(submitter.submitted[1].command_type, "execute_maneuver")
-	assert_eq(int(submitter.submitted[1].payload.get("speed", -1)), 0)
+	assert_eq(submitter.submitted.size(), 1)
+	assert_eq(submitter.submitted[0].command_type, "execute_maneuver")
+	assert_eq(int(submitter.submitted[0].payload.get("speed", -1)), 0)
 	assert_true(ship.has_active_maneuver_execution(),
 			"The direct test submitter commits but does not synthesize follow-ups")
 
 
-func test_matching_rejection_restores_same_activation_transient_state() -> void:
-	var fixture: Dictionary = _fixture("activation:bug043:reject", 2, true)
+func test_token_only_speed_change_is_debited_atomically_at_commit() -> void:
+	var fixture: Dictionary = _fixture("activation:bug043:token", 2, true)
 	var ship: ShipInstance = fixture["ship"] as ShipInstance
-	var state: ShipActivationState = fixture["activation_state"] \
-			as ShipActivationState
 	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
-	var controller: ShipActivationController = fixture["controller"] \
-			as ShipActivationController
-	var submitter := AsyncSubmitter.new()
-	GameManager.set_command_submitter(submitter)
-	controller._connect_signals()
+	# Remove the revealed Navigate dial so the selected speed change is
+	# unambiguously token-funded, matching the CR90 evidence.
+	assert_false(ship.command_dial_stack.spend_revealed().is_empty())
+
+	tool._handle_speed_change(-1)
+	assert_eq(ship.current_speed, 2)
+	assert_true(ship.command_tokens.has_token(Constants.CommandType.NAVIGATE))
+	var command := CandidateExecuteManeuverCommand.new(0, {
+		"ship_index": 0,
+		"ship_activation_identity": ship.ship_activation_identity,
+		"speed": tool.get_state().get_simulated_speed(),
+		"yaw_clicks": [0],
+		"yaw_bonus_joint": -1,
+	})
+	var result: Dictionary = command.execute(GameManager.current_game_state)
+	assert_false(result.is_empty())
+	assert_true(bool(result.get("navigate_token_spent", false)))
+	assert_eq(ship.current_speed, 1)
+	assert_false(ship.command_tokens.has_token(Constants.CommandType.NAVIGATE),
+			"Accepted speed change must remove the canonical Navigate token")
+
+
+func test_accepted_explicit_token_spend_projects_canonical_removal() -> void:
+	var fixture: Dictionary = _fixture("activation:bug043:repair-spend")
+	var ship: ShipInstance = fixture["ship"] as ShipInstance
+	assert_true(ship.command_tokens.add_token(Constants.CommandType.REPAIR))
+	GameManager.set_command_submitter(SyncSubmitter.new())
 	watch_signals(EventBus)
 
-	tool._handle_speed_change(-1)
-	GameManager.network_command_rejected.emit(
-			submitter.submitted[0], "test rejection")
+	var result: Dictionary = GameManager.submit_spend_token(
+			ship, int(Constants.CommandType.REPAIR))
 
-	assert_eq(ship.current_speed, 2, "Rejection must not mutate canonical speed")
-	assert_eq(state.get_total_speed_change(), 0)
-	assert_eq(state.get_dial_speed_budget(), 1)
-	assert_eq(state.get_token_speed_budget(), 1)
-	assert_eq(tool.get_state().get_simulated_speed(), 2)
-	assert_false(tool.has_pending_speed_change())
+	assert_true(bool(result.get("spent", false)))
+	assert_false(ship.command_tokens.has_token(Constants.CommandType.REPAIR),
+			"Accepted spend must remove the canonical command token")
 	assert_signal_emitted_with_parameters(
-			EventBus, "ship_speed_changed", [ship, 2])
-	assert_signal_emitted_with_parameters(
-			EventBus, "navigate_token_spend_preview", [ship, false])
-	assert_true(controller._maneuver_preview_ready_for_commit(),
-			"Matching rejection must reopen commit eligibility")
-
-
-func test_stale_rejection_cannot_mutate_replacement_activation_tool() -> void:
-	var fixture: Dictionary = _fixture("activation:bug043:old")
-	var ship: ShipInstance = fixture["ship"] as ShipInstance
-	var old_tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
-	var maneuver_controller: ManeuverToolController = \
-			fixture["maneuver_controller"] as ManeuverToolController
-	var controller: ShipActivationController = fixture["controller"] \
-			as ShipActivationController
-	var submitter := AsyncSubmitter.new()
-	GameManager.set_command_submitter(submitter)
-	controller._connect_signals()
-	old_tool._handle_speed_change(-1)
-
-	ship.ship_activation_identity = "activation:bug043:new"
-	var replacement_state := ShipActivationState.create(ship)
-	var replacement_tool := _make_tool(ship, replacement_state)
-	maneuver_controller.add_child(replacement_tool)
-	maneuver_controller._scene = replacement_tool
-	var network_submitter := NetworkCommandSubmitter.new()
-	network_submitter._awaiting = true
-	network_submitter._in_flight_count = 1
-	GameManager.set_command_submitter(network_submitter)
-	ship.set_speed(1)
-	GameManager._handle_remote_command_effects(submitter.submitted[0], {})
-	assert_eq(replacement_tool.get_state().get_simulated_speed(), 2,
-			"Delayed acceptance must not refresh a replacement tool")
-	ship.set_speed(2)
-	GameManager.network_command_rejected.emit(
-			submitter.submitted[0], "delayed rejection")
-
-	assert_eq(replacement_state.get_total_speed_change(), 0)
-	assert_eq(replacement_tool.get_state().get_simulated_speed(), 2)
-	assert_false(replacement_tool.has_pending_speed_change())
-
-
-func test_host_synchronous_acceptance_uses_committed_canonical_speed() -> void:
-	var fixture: Dictionary = _fixture("activation:bug043:host")
-	var ship: ShipInstance = fixture["ship"] as ShipInstance
-	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
-	var submitter := SyncSubmitter.new()
-	GameManager.set_command_submitter(submitter)
-
-	tool._handle_speed_change(-1)
-
-	assert_eq(submitter.submitted.size(), 1)
-	assert_eq(ship.current_speed, 1)
-	assert_eq(tool.get_state().get_simulated_speed(), 1)
-	assert_false(tool.has_pending_speed_change())
-
-
-func test_host_synchronous_speed_zero_enters_unified_maneuver_path() -> void:
-	var fixture: Dictionary = _fixture("activation:bug043:host-zero", 1)
-	var ship: ShipInstance = fixture["ship"] as ShipInstance
-	var state: ShipActivationState = fixture["activation_state"] \
-			as ShipActivationState
-	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
-	var maneuver_controller: ManeuverToolController = \
-			fixture["maneuver_controller"] as ManeuverToolController
-	var controller: ShipActivationController = fixture["controller"] \
-			as ShipActivationController
-	var submitter := SyncSubmitter.new()
-	GameManager.set_command_submitter(submitter)
-	controller._connect_signals()
-	_advance_to_maneuver(state)
-
-	tool._handle_speed_change(-1)
-
-	assert_eq(ship.current_speed, 0)
-	assert_eq(tool.get_state().get_simulated_speed(), 0)
-	assert_true(state.is_maneuver_executed())
-	assert_false(state.is_done())
-	assert_null(maneuver_controller.get_scene())
-	assert_eq(submitter.submitted.size(), 2)
-	assert_eq(submitter.submitted[0].command_type, "set_speed")
-	assert_eq(submitter.submitted[1].command_type, "execute_maneuver")
-	assert_eq(int(submitter.submitted[1].payload.get("speed", -1)), 0)
-	assert_true(ship.has_active_maneuver_execution())
+			EventBus, "command_tokens_changed", [ship])
 
 
 func test_passive_matching_preview_refreshes_without_originating_command() -> void:
@@ -347,8 +236,8 @@ func test_stale_preview_guard_runs_before_maneuver_commit_effects() -> void:
 			"Canonical maneuver opportunity must remain open")
 	assert_eq(CommandProcessor.get_command_count(), before_history,
 			"No authoritative maneuver or side-effect command may submit")
-	assert_eq(tool.get_state().get_simulated_speed(), 2,
-			"Matching transient preview should re-derive from canonical speed")
+	assert_eq(tool.get_state().get_simulated_speed(), 1,
+			"A rejected inconsistent preview remains presentation-only")
 
 
 func test_hot_seat_converged_maneuver_projects_retired_canonical_transform() -> void:
@@ -379,6 +268,50 @@ func test_hot_seat_converged_maneuver_projects_retired_canonical_transform() -> 
 	assert_almost_eq(token.position.y,
 			ship.pos_y * GameScale.play_area_size_px.y, 0.001)
 	assert_almost_eq(token.rotation, deg_to_rad(ship.rotation_deg), 0.00001)
+
+
+func test_rejected_overclick_preserves_preview_and_authority_course() -> void:
+	var fixture: Dictionary = _fixture("activation:bug043:yaw-course")
+	var ship: ShipInstance = fixture["ship"] as ShipInstance
+	var activation_state: ShipActivationState = fixture["activation_state"] \
+			as ShipActivationState
+	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
+	ship.ship_data.navigation_chart = [[2], [1, 2], [0, 1, 2]]
+	tool.get_state().set_navigation_chart(ship.ship_data.navigation_chart)
+	assert_true(activation_state.apply_yaw_bonus(0))
+	assert_true(tool.get_state().set_yaw_bonus_joint(0))
+	assert_true(tool.get_state().click_joint_left(0))
+	assert_true(tool.get_state().click_joint_left(0))
+	assert_true(tool.get_state().click_joint_left(1))
+	assert_true(tool.get_state().click_joint_left(1))
+	var selected_clicks: Array[int] = tool.get_state().get_joint_clicks()
+
+	assert_false(tool._try_apply_yaw_bonus_for(1, MOUSE_BUTTON_LEFT),
+			"A third click cannot move the bonus by mutating a valid course.")
+	assert_eq(tool.get_state().get_joint_clicks(), selected_clicks)
+	assert_eq(tool.get_state().get_yaw_bonus_joint(), 0)
+	assert_eq(activation_state.get_yaw_bonus_joint(), 0)
+	var start_transform := Transform2D(
+			deg_to_rad(ship.rotation_deg),
+			ship.get_pixel_position(GameScale.play_area_size_px))
+	var side: String = tool.get_state().compute_ghost_side()
+	var attachment: Dictionary = \
+			ManeuverToolState.compute_attachment_from_ship_transform(
+					start_transform, ship.ship_data.ship_size, side)
+	var preview_transform: Transform2D = tool.get_state().compute_final_transform(
+			attachment["position"], attachment["rotation"], side)
+	var authority: Dictionary = ManeuverAuthority.derive(
+			GameManager.current_game_state, 0, 0, 2,
+			selected_clicks.slice(0, 2), 0)
+
+	assert_true(bool(authority.get("ok", false)))
+	var committed_transform: Transform2D = authority["final_transform"]
+	assert_almost_eq(committed_transform.origin.x,
+			preview_transform.origin.x, 0.00001)
+	assert_almost_eq(committed_transform.origin.y,
+			preview_transform.origin.y, 0.00001)
+	assert_almost_eq(committed_transform.get_rotation(),
+			preview_transform.get_rotation(), 0.00001)
 
 
 func test_reconstructed_live_tool_derives_canonical_speed_and_identity() -> void:

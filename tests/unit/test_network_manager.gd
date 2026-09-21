@@ -28,6 +28,7 @@ func _reset_network_fixture() -> void:
 	NetworkManager.peers.clear()
 	NetworkManager._last_heartbeat.clear()
 	NetworkManager._pending_game_config = {}
+	NetworkManager._staged_replay_dial_commands.clear()
 	NetworkManager._resume_attempt = {}
 	NetworkManager._post_publication_fresh_attempt_id = ""
 	NetworkManager._client_staged_resume = {}
@@ -404,6 +405,21 @@ func test_sync_gate_player_one_multiple_dials_reach_authority_expected() -> void
 	NetworkManager._sync_gate = previous_gate
 	GameManager.current_game_state = previous_state
 	GameManager.is_game_active = previous_active
+
+
+func test_network_replay_stages_future_dial_until_authority_sequence() -> void:
+	assert_true(NetworkManager.should_stage_sync_gated_replay_dial(
+			"assign_dials", 2, 1, true),
+			"A client replay dial may wait for the preceding host sequence.")
+	assert_false(NetworkManager.should_stage_sync_gated_replay_dial(
+			"assign_dials", 1, 1, true),
+			"The current authority sequence must execute, not stage.")
+	assert_false(NetworkManager.should_stage_sync_gated_replay_dial(
+			"assign_dials", 2, 1, false),
+			"Staging must remain unavailable outside the Command sync gate.")
+	assert_false(NetworkManager.should_stage_sync_gated_replay_dial(
+			"advance_phase", 2, 1, true),
+			"Replay lookahead must not stage unrelated command types.")
 
 
 func test_receive_setup_package_config_stores_pending_payload() -> void:

@@ -21,6 +21,9 @@ static func prepare_game_state(
 	var squadrons: Array[SquadronInstance] = setup.create_squadron_instances()
 	_seed_instance_positions(setup, ships, squadrons)
 	_register_instances(game_state, ships, squadrons)
+	var obstacles: Array[Dictionary] = setup.get_obstacle_placements()
+	if not obstacles.is_empty():
+		game_state.objectives["obstacles"] = obstacles
 	return {"ships": ships, "squadrons": squadrons}
 
 

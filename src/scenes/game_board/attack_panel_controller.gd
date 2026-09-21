@@ -70,6 +70,7 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 				if GameManager.current_game_state != null else null
 		if inspection == null or inspection.is_satisfied():
 			_attack_executor.deactivate_primary_presentation()
+			close_mirror()
 		_recover_satisfied_ship_attack_presentation()
 		return
 	if _is_post_attack_presentation_recovery_command(command):
@@ -274,8 +275,24 @@ func sync_completed_attack_result_projection(
 		return
 	if not acknowledge_actionable and not waiting:
 		return
+	if _completed_result_uses_network_mirror(inspection):
+		_attack_executor.deactivate_primary_presentation()
+		if _panel_mgr != null and _panel_mgr.attack_panel_mirror != null:
+			_panel_mgr.attack_panel_mirror \
+					.present_completed_attack_result_projection(
+							inspection, acknowledge_actionable)
+		return
+	close_mirror()
 	_attack_executor.present_completed_attack_result_projection(
 			inspection, acknowledge_actionable)
+
+
+func _completed_result_uses_network_mirror(inspection: Dictionary) -> bool:
+	var local: int = NetworkManager.get_local_player_index()
+	if local < 0:
+		return false
+	var attacker: Dictionary = inspection.get("attacker", {}) as Dictionary
+	return local != int(attacker.get("player", -1))
 
 
 func _owns_active_canonical_attack() -> bool:

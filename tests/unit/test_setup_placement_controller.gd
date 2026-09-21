@@ -103,6 +103,89 @@ func test_refresh_from_state_passive_peer_disables_obstacle_buttons_expected() -
 			"Passive peer prompt should identify the active placer by display name.")
 
 
+func test_gameplay_state_still_projects_canonical_obstacle_graphics() -> void:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	state.objectives = {
+		FleetSetupBootstrapper.KEY_OBSTACLES: [
+			_placed_obstacle("asteroid_1"),
+			_placed_obstacle("debris_1"),
+			_placed_obstacle("station"),
+		],
+	}
+	GameManager.current_game_state = state
+
+	_controller.initialize(_board, _token_container, TokenMover.new())
+	await get_tree().process_frame
+
+	assert_eq(_token_container.get_child_count(), 3,
+			"Gameplay should render every canonical obstacle placement.")
+	for raw_token: Node in _token_container.get_children():
+		var token: SetupObstacleToken = raw_token as SetupObstacleToken
+		assert_not_null(token)
+		assert_false(token._outline_visible,
+				"Gameplay obstacle art must not retain setup framing.")
+		assert_false(token._click_enabled,
+				"Gameplay obstacle art must not retain setup selection input.")
+		var contour: ObstacleContour = ObstacleContourCatalog.load_one(
+				token.get_data_key()) as ObstacleContour
+		var texture: Texture2D = token._sprite.texture
+		assert_not_null(contour)
+		assert_eq(contour.local_origin,
+				Vector2(texture.get_width(), texture.get_height()) * 0.5,
+				"Render pivot must equal the approved original-canvas pivot.")
+		assert_eq(token._sprite.position, Vector2.ZERO,
+				"Obstacle sprite must stay centred on its canonical placement.")
+		var source_point: Vector2 = contour.vertices[0]
+		var rendered_world: Vector2 = token.transform * (
+				(source_point - contour.local_origin) * token._sprite.scale)
+		var contour_scale: float = ObstacleContourCatalog.\
+				CANONICAL_WORLD_UNITS_PER_NATIVE_SOURCE_PX_AT_CURRENT_SCALE
+		var authority_world: Vector2 = Transform2D(
+				token.rotation, token.position) * (
+				(source_point - contour.local_origin) * contour_scale)
+		assert_almost_eq(rendered_world.x, authority_world.x, 0.0001,
+				"Rendered and authority contour X transforms must match.")
+		assert_almost_eq(rendered_world.y, authority_world.y, 0.0001,
+				"Rendered and authority contour Y transforms must match.")
+		if token.get_data_key() == "station":
+			assert_eq(token._sprite.scale, Vector2.ONE,
+					"Station art must preserve approved source-to-world scale.")
+			assert_eq(token.get_half_extents(), Vector2(105.5, 100.5),
+					"Station canvas must retain its original dimensions and pivot.")
+			assert_gt(token.get_half_extents().x * 2.0,
+					GameScale.squadron_base_diameter_px * 2.0,
+					"Station must render substantially larger than a Squadron base.")
+	assert_false(_modal().visible,
+			"Gameplay obstacle rendering must not reopen setup interaction UI.")
+
+
+func test_gameplay_obstacles_use_board_layer_below_gameplay_tokens() -> void:
+	var obstacle_container := Node2D.new()
+	obstacle_container.name = "ObstacleContainer"
+	_board.add_child(obstacle_container)
+	_board.move_child(obstacle_container, 0)
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	state.objectives = {
+		FleetSetupBootstrapper.KEY_OBSTACLES: [_placed_obstacle("station")],
+	}
+	GameManager.current_game_state = state
+
+	_controller.initialize(
+			_board, _token_container, TokenMover.new(), obstacle_container)
+	await get_tree().process_frame
+
+	assert_eq(obstacle_container.get_child_count(), 1,
+			"Canonical obstacle art should use the dedicated obstacle layer.")
+	assert_eq(_token_container.get_child_count(), 0,
+			"Obstacle art must not share the gameplay-token layer.")
+	assert_lt(obstacle_container.get_index(), _token_container.get_index(),
+			"Obstacle layer must draw before ships and Squadrons.")
+
+
 func test_try_handle_rotate_input_preview_rotates_obstacle_expected() -> void:
 	GameManager.current_game_state = _make_setup_state(0, [])
 

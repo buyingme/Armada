@@ -108,6 +108,73 @@ func get_squadron_placements() -> Array[TokenPlacement]:
 	return result
 
 
+## Returns canonical obstacle placements declared by a fixed scenario.
+## The dictionaries use the existing GameState objectives.obstacles schema.
+func get_obstacle_placements() -> Array[Dictionary]:
+	_ensure_loaded()
+	var result: Array[Dictionary] = []
+	var raw_obstacles: Variant = _data.get("obstacles", [])
+	if not raw_obstacles is Array:
+		return result
+	for raw_obstacle: Variant in raw_obstacles as Array:
+		if not raw_obstacle is Dictionary:
+			return []
+		var placement: Dictionary = _canonical_obstacle_placement(
+				raw_obstacle as Dictionary)
+		if placement.is_empty():
+			return []
+		result.append(placement)
+	return result
+
+
+## Converts JSON numeric values into the exact canonical obstacle-state schema.
+## Godot parses every JSON number as float, while placement identity and actor
+## fields are authoritative integers. Geometry fields remain floats.
+static func _canonical_obstacle_placement(raw: Dictionary) -> Dictionary:
+	var required: Array[String] = [
+		"obstacle_id", "data_key", "pos_x", "pos_y", "rotation_deg",
+		"placing_player", "placement_order", "last_maneuver_execution_id",
+	]
+	for key: String in required:
+		if not raw.has(key):
+			return {}
+	var placing_player: Variant = raw["placing_player"]
+	var placement_order: Variant = raw["placement_order"]
+	if not _is_integral_number(placing_player) \
+			or not _is_integral_number(placement_order):
+		return {}
+	for key: String in ["pos_x", "pos_y", "rotation_deg"]:
+		var value: Variant = raw[key]
+		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] \
+				or not is_finite(float(value)):
+			return {}
+	var order: int = int(placement_order)
+	var obstacle_id: String = str(raw["obstacle_id"])
+	var data_key: String = str(raw["data_key"])
+	if order < 0 or obstacle_id != "obstacle:%d" % order \
+			or data_key.is_empty() \
+			or typeof(raw["last_maneuver_execution_id"]) != TYPE_STRING:
+		return {}
+	return {
+		"obstacle_id": obstacle_id,
+		"data_key": data_key,
+		"pos_x": float(raw["pos_x"]),
+		"pos_y": float(raw["pos_y"]),
+		"rotation_deg": float(raw["rotation_deg"]),
+		"placing_player": int(placing_player),
+		"placement_order": order,
+		"last_maneuver_execution_id": str(
+				raw["last_maneuver_execution_id"]),
+	}
+
+
+static func _is_integral_number(value: Variant) -> bool:
+	if typeof(value) not in [TYPE_INT, TYPE_FLOAT] \
+			or not is_finite(float(value)):
+		return false
+	return float(value) == float(int(value))
+
+
 ## Returns the total number of tokens placed in the Learning Scenario.
 func get_token_count() -> int:
 	return get_all_placements().size()

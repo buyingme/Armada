@@ -93,6 +93,11 @@ func test_create_board_components_creates_tool_overlay_before_target_selector() 
 	assert_lt(board.creation_order.find("tool_overlay_controller"),
 			board.creation_order.find("target_selector"),
 			"ToolOverlayController should be created before TargetSelector wiring.")
+	assert_not_null(board._obstacle_container,
+			"GameBoard should create a dedicated obstacle presentation layer.")
+	assert_lt(board._obstacle_container.get_index(),
+			board._token_container.get_index(),
+			"Obstacles must draw below gameplay tokens in the board layer.")
 
 
 func test_create_target_selector_without_tool_overlay_uses_board_delegate() -> void:

@@ -12,6 +12,7 @@ const DATASET_PATH: String = \
 const DATASET_VERSION: String = "obstacle-alpha-mask-contour-evidence-v3"
 const DATASET_SHA256: String = \
 		"edd2c9597e75a4a092b7c3cc9fe8b899d421b02720a8731b1eb5e6578f505eb0"
+const CANONICAL_WORLD_UNITS_PER_NATIVE_SOURCE_PX_AT_CURRENT_SCALE: float = 1.0
 const CONTACT_POLICY: String = "positive_area"
 const UNITS: String = "canonical_world_units"
 const CONTOUR: GDScript = preload(
@@ -33,7 +34,8 @@ static func load_all() -> Dictionary:
 					!= "positive-area intersection is overlap; boundary-only contact is not overlap" \
 			or float(dataset.get(
 					"canonical_world_units_per_native_source_px_at_current_scale",
-					-1.0)) != 1.0 \
+					-1.0)) \
+					!= CANONICAL_WORLD_UNITS_PER_NATIVE_SOURCE_PX_AT_CURRENT_SCALE \
 			or not dataset.get("obstacles") is Array:
 		return {}
 	var result: Dictionary = {}

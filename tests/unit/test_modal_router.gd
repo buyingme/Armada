@@ -528,6 +528,31 @@ func test_route_command_result_displacement_opens_in_hot_seat() -> void:
 			"Projected displacement should resolve the listed squadron token.")
 
 
+func test_route_v2_displacement_uses_projected_controller_not_command_payload() -> void:
+	var displacement: StubDisplacementController = _create_displacement_controller()
+	var ship: ShipInstance = _create_ship(0)
+	var squadron: SquadronInstance = _create_squadron(1)
+	_create_tokens(ship, squadron)
+	_create_router(Callable(), null, displacement,
+			Callable(self , "_find_test_ship_token"),
+			Callable(self , "_find_test_squadron_token"))
+	GameManager.current_game_state = _state_with_displacement_flow(ship, squadron)
+	var command := CandidateStartDisplacementCommand.new(0, {
+		"owner_player": 0,
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:6",
+		"maneuver_execution_id": "maneuver:10",
+		"displaced_squadrons": _displacement_entries(),
+	})
+
+	_router.route_command_result(command, {})
+
+	assert_false(command.payload.has("controller_player"),
+			"The v2 authority command must not duplicate the derived controller.")
+	assert_eq(displacement.start_calls, 1,
+			"Canonical projected controller should open the displacement UI.")
+
+
 func test_route_command_result_displacement_network_non_controller_skips() -> void:
 	# Arrange
 	NetworkManager._local_player_index = 0

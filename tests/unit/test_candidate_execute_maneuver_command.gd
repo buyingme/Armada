@@ -59,6 +59,52 @@ func test_speed_change_atomically_spends_minimum_dial_source() -> void:
 	assert_eq(_ship.command_dial_stack.get_spent_history().size(), 1)
 
 
+func test_replayed_reveal_convert_then_speed_change_matches_live_state() -> void:
+	var live: GameState = _navigate_conversion_state()
+	var replay: GameState = _navigate_conversion_state()
+	var recorded: Array[GameCommand] = [
+		AssignDialCommand.new(0, {
+			"ship_index": 0,
+			"commands": [int(Constants.CommandType.NAVIGATE)],
+		}),
+		RevealDialCommand.new(0, {"ship_index": 0, "action": "reveal"}),
+		ConvertDialToTokenCommand.new(0, {"ship_index": 0}),
+	]
+	recorded[0].sequence = 1
+	recorded[1].sequence = 5
+	recorded[2].sequence = 6
+	for command: GameCommand in recorded:
+		assert_false(command.execute(live).is_empty())
+		var reconstructed: GameCommand = GameCommand.deserialize(
+				command.serialize())
+		assert_not_null(reconstructed)
+		assert_false(reconstructed.execute(replay).is_empty())
+	assert_true(live.get_ship(0, 0).open_maneuver_opportunity(
+			"ship-activation:6"))
+	assert_true(replay.get_ship(0, 0).open_maneuver_opportunity(
+			"ship-activation:6"))
+
+	var live_execute := CandidateExecuteManeuverCommand.new(0, {
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:6",
+		"speed": 3,
+		"yaw_clicks": [0, 0, 0],
+		"yaw_bonus_joint": -1,
+	})
+	live_execute.sequence = 10
+	var replay_execute: GameCommand = GameCommand.deserialize(
+			live_execute.serialize())
+	var live_result: Dictionary = live_execute.execute(live)
+	var replay_result: Dictionary = replay_execute.execute(replay)
+	assert_false(live_result.is_empty())
+	assert_eq(replay_result, live_result)
+	assert_true(bool(replay_result.get("navigate_token_spent", false)))
+	assert_false(replay.get_ship(0, 0).command_tokens.has_token(
+			Constants.CommandType.NAVIGATE))
+	assert_eq(replay.serialize(), live.serialize(),
+			"Live and replay canonical state must converge across conversion.")
+
+
 func test_speed_zero_uses_same_commitment_identity_and_path() -> void:
 	_reveal_navigate_dial()
 	var command: GameCommand = _command(12, 0, [], -1)
@@ -156,6 +202,20 @@ func _command(command_sequence: int, speed: int, yaw_clicks: Array,
 	})
 	command.sequence = command_sequence
 	return command
+
+
+func _navigate_conversion_state() -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	state.rng = GameRng.new(20260920)
+	var data: ShipData = _ship_data()
+	data.command_value = 1
+	var ship := ShipInstance.create_from_data("candidate", data, 2, 0)
+	ship.pos_x = 0.5
+	ship.pos_y = 0.75
+	state.get_player_state(0).ships.append(ship)
+	return state
 
 
 func _reveal_navigate_dial() -> void:

@@ -244,9 +244,8 @@ func is_token_only_spend() -> bool:
 ## returns to the original speed with full budget restored.
 ## Enforces speed bounds [0, max_speed] and total budget.
 ## Returns true if the change was applied.
-## The actual [code]ShipInstance.set_speed()[/code] mutation is performed
-## by [SetSpeedCommand] — the caller must submit the command after this
-## method returns true.
+## Canonical [code]ShipInstance.current_speed[/code] is unchanged here;
+## CandidateExecuteManeuverCommand commits it together with source spending.
 ## Rules Reference: NAV-002, NAV-003, NAV-004, NAV-005, NAV-008.
 func apply_speed_change(delta: int) -> bool:
 	if delta == 0:

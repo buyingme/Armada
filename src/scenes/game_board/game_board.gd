@@ -47,6 +47,10 @@ var _log: GameLogger = GameLogger.new("GameBoard")
 ## Extractable: pass via initialize() to controllers.
 var _camera: BoardCamera = null
 
+## Container for obstacle presentation. It is attached before gameplay tokens
+## so the board draws obstacles above the map and below ships/squadrons.
+var _obstacle_container: Node2D = null
+
 ## Container for all token nodes.
 ## SHARED — Created: _create_token_container(). Read: token spawning,
 ## get_ship_tokens(), get_squadron_tokens(), attack executor, displacement.
@@ -277,6 +281,15 @@ func _create_token_container() -> void:
 	_token_container = Node2D.new()
 	_token_container.name = "TokenContainer"
 	add_child(_token_container)
+
+
+## Creates the board-layer obstacle container before gameplay tokens.
+func _create_obstacle_container() -> void:
+	_obstacle_container = Node2D.new()
+	_obstacle_container.name = "ObstacleContainer"
+	add_child(_obstacle_container)
+
+
 ## Connects EventBus and DebugMode signals relevant to the board.
 func _connect_signals() -> void:
 	_connect_board_core_signals()
@@ -1266,6 +1279,7 @@ func _is_squadron_token_only(ship_token: Variant) -> bool:
 
 func _create_board_components() -> void:
 	_create_camera()
+	_create_obstacle_container()
 	_create_token_container()
 	_create_setup_placement_controller()
 	_create_debug_controller()
@@ -1293,7 +1307,8 @@ func _create_setup_placement_controller() -> void:
 	_setup_placement_controller.setup_turn_prompt_requested.connect(
 			_on_setup_turn_prompt_requested)
 	add_child(_setup_placement_controller)
-	_setup_placement_controller.initialize(self , _token_container, _token_mover)
+	_setup_placement_controller.initialize(
+			self, _token_container, _token_mover, _obstacle_container)
 
 
 func _bootstrap_or_load_board_state() -> void:

@@ -221,6 +221,19 @@ func test_sync_activation_step_from_flow_attack_targets_does_not_submit() -> voi
 			"Local activation state should remain at ATTACK when targets exist.")
 
 
+func test_displacement_presentation_completion_cannot_advance_activation() -> void:
+	var displacement: DisplacementController = DisplacementController.new()
+	add_child_autofree(displacement)
+	var ship: ShipInstance = _create_ship(0)
+	_start_activation_for_ship(ship, displacement)
+
+	displacement.displacement_completed.emit()
+	await get_tree().process_frame
+
+	assert_eq(_submitter.submitted_commands.size(), 0,
+			"Presentation completion must wait for canonical complete_maneuver.")
+
+
 func test_command_range_overlay_retires_from_accepted_step_on_each_peer() -> void:
 	var ship: ShipInstance = _create_ship(0)
 	_start_activation_for_ship(ship)
@@ -292,6 +305,69 @@ func test_pending_network_overlap_does_not_refresh_from_precommand_state() -> vo
 			"Pending client submission must wait for the accepted mirror result.")
 
 
+func test_debris_choice_explains_zone_damage_and_shield_priority() -> void:
+	var ship: ShipInstance = _create_ship(0)
+	var controller := ShipActivationController.new()
+	add_child_autofree(controller)
+	var descriptor: Dictionary = controller._maneuver_choice_descriptor({
+		"command_type": "resolve_debris_overlap",
+		"player_index": 0,
+		"hull_zones": ["front", "rear", "left", "right"],
+	}, ship)
+
+	assert_eq(descriptor.get("card_title", ""), "Debris Field")
+	assert_eq(descriptor.get("effect_text", ""),
+			"Choose one hull zone to suffer the Debris Field's two damage " \
+			+ "points. Shields in that zone are lost first.")
+	assert_eq((descriptor.get("options", []) as Array).size(), 4)
+
+
+func test_commanded_squadron_completion_resumes_accepted_repair_after_spend() \
+		-> void:
+	var ship: ShipInstance = _create_ship(0)
+	_start_activation_for_ship(ship)
+	var squadron_controller := SquadronPhaseController.new()
+	add_child_autofree(squadron_controller)
+	_controller._squadron_phase_controller = squadron_controller
+	_controller._has_repair_resources = func(_token: Variant) -> bool:
+		return true
+	assert_true(ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.SQUADRON], 1))
+	assert_false(ship.command_dial_stack.reveal_top().is_empty())
+	assert_true(ship.open_squadron_command_opportunity(
+			ship.ship_activation_identity))
+	assert_true(ship.commit_squadron_command_activation(
+			ship.ship_activation_identity))
+	var return_command := AdvanceActivationStepCommand.new(0, {
+		"ship_index": 0,
+		"step_id": "repair_step",
+		"ship_activation_identity": ship.ship_activation_identity,
+	})
+	assert_eq(return_command.validate(GameManager.current_game_state), "")
+	assert_false(return_command.execute(
+			GameManager.current_game_state).is_empty())
+	assert_eq(ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_eq(GameManager.current_game_state.interaction_flow.step_id,
+			Constants.InteractionStep.REPAIR_STEP)
+	var spend := SpendDialCommand.new(0, {"ship_index": 0, "mode": "spend"})
+	assert_eq(spend.validate(GameManager.current_game_state), "")
+	assert_true(bool(spend.execute(
+			GameManager.current_game_state).get("spent", false)))
+
+	# This callback follows the accepted final resource spend. The composed
+	# return above already owns Repair, so presentation must recover it without
+	# submitting a second advance_activation_step command.
+	_controller._on_squadron_command_done()
+
+	assert_eq(_submitter.submitted_commands.size(), 0,
+			"Accepted Squadron-to-Repair return must not be submitted twice.")
+	assert_eq(_activation_ctx.ship_activation_state.get_current_step(),
+			ShipActivationState.Step.REPAIR)
+	assert_true(_panel_mgr.activation_modal.is_open(),
+			"The existing Repair decision must become usable after the spend.")
+
+
 func _create_ship(owner_player: int) -> ShipInstance:
 	var data: ShipData = ShipData.new()
 	data.hull = 4
@@ -303,7 +379,8 @@ func _create_ship(owner_player: int) -> ShipInstance:
 	return ShipInstance.create_from_data("test_ship", data, 1, owner_player)
 
 
-func _start_activation_for_ship(ship: ShipInstance) -> void:
+func _start_activation_for_ship(ship: ShipInstance,
+		displacement_controller: DisplacementController = null) -> void:
 	assert_true(ship.establish_ship_activation(
 			"ship-activation:controller"))
 	GameManager.current_game_state = _game_state_with_ship(ship)
@@ -320,7 +397,7 @@ func _start_activation_for_ship(ship: ShipInstance) -> void:
 	add_child_autofree(_attack_executor)
 	_controller = ShipActivationController.new()
 	add_child_autofree(_controller)
-	_initialize_controller()
+	_initialize_controller(displacement_controller)
 
 
 func _game_state_with_ship(ship: ShipInstance) -> GameState:
@@ -360,7 +437,8 @@ func _attack_flow(controller_player: int, ship_index: int) -> InteractionFlow:
 			{"ship_index": ship_index})
 
 
-func _initialize_controller() -> void:
+func _initialize_controller(
+		displacement_controller: DisplacementController = null) -> void:
 	_controller.initialize(
 			_activation_ctx,
 			_panel_mgr,
@@ -369,7 +447,7 @@ func _initialize_controller() -> void:
 			null,
 			null,
 			null,
-			null,
+			displacement_controller,
 			Callable(),
 			Callable(self , "_has_no_repair_resources"),
 			Callable(self , "_has_no_squadron_resources"),

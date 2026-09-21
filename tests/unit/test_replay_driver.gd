@@ -38,6 +38,58 @@ func test_autoload_inert_when_no_replay_flag() -> void:
 			"pending_replay_seed must be 0 in normal sessions")
 
 
+func test_replay_scenario_is_explicit_reconstruction_input() -> void:
+	var previous: String = ReplayDriver.pending_replay_scenario_id
+	ReplayDriver.pending_replay_scenario_id = "debug_scenario"
+	assert_eq(ReplayDriver.get_pending_replay_scenario_id(), "debug_scenario",
+			"Replay bootstrap must retain the scenario recorded in its header.")
+	ReplayDriver.pending_replay_scenario_id = previous
+
+
+func test_network_sync_gate_dial_lookahead_selects_client_batch() -> void:
+	var commands: Array[Dictionary] = [
+		{"type": "assign_dials", "player": 0, "sequence": 1},
+		{"type": "assign_dials", "player": 0, "sequence": 2},
+		{"type": "assign_dials", "player": 1, "sequence": 3},
+		{"type": "assign_dials", "player": 1, "sequence": 4},
+		{"type": "advance_phase", "player": 0, "sequence": 5},
+	]
+
+	var lookahead: Array[Dictionary] = \
+			ReplayDriver.network_sync_gate_dial_lookahead(commands, 0, 1)
+
+	assert_eq(lookahead.size(), 2)
+	assert_eq(int(lookahead[0].get("sequence", -1)), 3)
+	assert_eq(int(lookahead[1].get("sequence", -1)), 4)
+
+
+func test_network_sync_gate_dial_lookahead_stays_with_first_local_run() -> void:
+	var commands: Array[Dictionary] = [
+		{"type": "assign_dials", "player": 0, "sequence": 1},
+		{"type": "assign_dials", "player": 1, "sequence": 2},
+		{"type": "assign_dials", "player": 0, "sequence": 3},
+		{"type": "assign_dials", "player": 1, "sequence": 4},
+	]
+
+	var lookahead: Array[Dictionary] = \
+			ReplayDriver.network_sync_gate_dial_lookahead(commands, 0, 1)
+
+	assert_eq(lookahead.size(), 1)
+	assert_eq(int(lookahead[0].get("sequence", -1)), 2)
+
+
+func test_network_sync_gate_dial_lookahead_rejects_non_gate_boundary() -> void:
+	var commands: Array[Dictionary] = [
+		{"type": "start_round", "player": 0, "sequence": 0},
+		{"type": "assign_dials", "player": 1, "sequence": 1},
+	]
+
+	assert_true(ReplayDriver.network_sync_gate_dial_lookahead(
+			commands, 0, 1).is_empty())
+	assert_true(ReplayDriver.network_sync_gate_dial_lookahead(
+			commands, 1, 1).is_empty())
+
+
 func test_replay_bootstrap_game_state_defaults_timing_window_inactive() -> void:
 	var state := GameState.new()
 	state.initialize()

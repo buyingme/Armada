@@ -1160,15 +1160,22 @@ func _handle_token_add_result(ship: ShipInstance,
 ## Emits [signal EventBus.command_tokens_changed] on success.
 ## [param ship] — the ship to spend the token from.
 ## [param token_type] — [Constants.CommandType] int value.
-func submit_spend_token(ship: ShipInstance, token_type: int) -> void:
+func submit_spend_token(ship: ShipInstance, token_type: int) -> Dictionary:
 	if not current_game_state:
-		return
+		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
+	if ship_index < 0:
+		return {}
+	var canonical_ship: ShipInstance = current_game_state.get_ship(
+			ship.owner_player, ship_index)
 	var cmd := SpendTokenCommand.new(ship.owner_player,
 			{"ship_index": ship_index, "token_type": token_type})
 	var result: Dictionary = _submitter.submit(cmd)
-	if not result.is_empty():
-		EventBus.command_tokens_changed.emit(ship)
+	if bool(result.get("spent", false)):
+		# Projection is always sourced from the canonical instance actually
+		# mutated by SpendTokenCommand, never from a resolver-held reference.
+		EventBus.command_tokens_changed.emit(canonical_ship)
+	return result
 
 
 ## Submits a [DiscardTokenCommand] to remove one token during overflow.
@@ -1419,9 +1426,9 @@ func submit_start_displacement(ship: ShipInstance,
 	return _submitter.submit(cmd)
 
 
-## Submits a [CommitDisplacementCommand] closing the squadron-displacement
-## flow.  Submitted by the controller peer once they confirm placements.
-## Phase I6b-4.
+## Submits the protocol-7 complete-batch displacement command. The active
+## canonical flow supplies the Maneuver identities needed for the
+## purpose-specific authority continuation after displacement.
 ##
 ## [param placements] — Array[Dictionary] of
 ##     [code]{ owner, squadron_index, pos_x, pos_y }[/code] entries.
@@ -1429,12 +1436,29 @@ func submit_commit_displacement(placements: Array) -> Dictionary:
 	if not current_game_state:
 		return {}
 	var flow: InteractionFlow = current_game_state.interaction_flow
-	var controller: int = flow.controller_player if flow != null else -1
-	if controller < 0:
+	if flow == null \
+			or flow.flow_type \
+					!= Constants.InteractionFlow.SQUADRON_DISPLACEMENT \
+			or flow.step_id != Constants.InteractionStep.DISPLACEMENT_PLACE:
 		_log.warn("submit_commit_displacement: no displacement flow active.")
 		return {}
-	var cmd := CommitDisplacementCommand.new(controller,
-			{"placements": placements})
+	var controller: int = flow.controller_player
+	var payload: Dictionary = flow.payload
+	if controller < 0 \
+			or typeof(payload.get("owner_player")) != TYPE_INT \
+			or typeof(payload.get("ship_index")) != TYPE_INT \
+			or typeof(payload.get("ship_activation_identity")) != TYPE_STRING \
+			or typeof(payload.get("maneuver_execution_id")) != TYPE_STRING:
+		_log.warn("submit_commit_displacement: invalid Maneuver identity.")
+		return {}
+	var cmd := CandidateCommitDisplacementCommand.new(controller, {
+		"owner_player": payload["owner_player"],
+		"ship_index": payload["ship_index"],
+		"ship_activation_identity": payload["ship_activation_identity"],
+		"maneuver_execution_id": payload["maneuver_execution_id"],
+		"placements": placements,
+		"excluded_squadrons": [],
+	})
 	return _submitter.submit(cmd)
 
 
@@ -2823,6 +2847,11 @@ func _handle_remote_command_effects(
 			pass
 		"apply_maneuver_transform":
 			_handle_remote_execute_maneuver(cmd)
+		"commit_maneuver_obstacle_order", "resolve_debris_overlap", \
+				"complete_maneuver":
+			# Candidate Maneuver presentation is projected from the accepted
+			# command result by CommandRouterAdapter on every peer.
+			pass
 		"end_activation":
 			_handle_remote_end_activation(cmd)
 		"activate_squadron":

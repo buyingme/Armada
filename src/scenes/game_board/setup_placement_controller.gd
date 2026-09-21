@@ -30,6 +30,7 @@ const SETUP_OBSTACLE_VALIDATOR_SCRIPT: GDScript = preload(
 var _board: Node2D = null
 var _setup_overlay = null
 var _token_container: Node2D = null
+var _obstacle_container: Node2D = null
 var _token_mover: TokenMover = null
 var _setup_layer: CanvasLayer = null
 var _modal = null
@@ -51,9 +52,12 @@ var _last_prompt_signature: String = ""
 ## Injects board dependencies and creates the setup overlay.
 func initialize(board: Node2D,
 		token_container: Node2D,
-		token_mover: TokenMover) -> void:
+		token_mover: TokenMover,
+		obstacle_container: Node2D = null) -> void:
 	_board = board
 	_token_container = token_container
+	_obstacle_container = obstacle_container \
+			if obstacle_container != null else token_container
 	_token_mover = token_mover
 	_build_ui()
 	_connect_signals()
@@ -65,13 +69,16 @@ func refresh_from_state() -> void:
 	var intent: UIProjector.UIIntent = _current_setup_intent()
 	_sync_modal_visibility(intent)
 	_sync_overlay(intent)
+	# Obstacles remain board presentation after setup. Their canonical owner is
+	# GameState.objectives; setup interactivity is still gated below.
+	_sync_obstacles_from_state()
+	_set_obstacle_setup_presentation(_is_setup_intent(intent))
 	if not _is_setup_intent(intent):
 		_cancel_obstacle_preview(false)
 		_restore_selected_ship_speed()
 		_clear_selection()
 		_last_prompt_signature = ""
 		return
-	_sync_obstacles_from_state()
 	_sync_deployment_visibility(intent)
 	_sync_preview_state(intent)
 	_emit_setup_turn_prompt_if_needed(intent)
@@ -238,11 +245,20 @@ func _sync_obstacles_from_state() -> void:
 	_remove_stale_obstacles(seen)
 
 
+func _set_obstacle_setup_presentation(setup_active: bool) -> void:
+	for raw_token: Variant in _obstacle_tokens.values():
+		var token: SetupObstacleToken = raw_token as SetupObstacleToken
+		if token == null:
+			continue
+		token.set_click_enabled(setup_active)
+		token.set_outline_visible(setup_active)
+
+
 func _sync_obstacle_token(data_key: String, obstacle: Dictionary) -> void:
 	var token: Variant = _obstacle_tokens.get(data_key, null)
 	if token == null:
 		token = SETUP_OBSTACLE_TOKEN_SCRIPT.new()
-		_token_container.add_child(token)
+		_obstacle_container.add_child(token)
 		token.token_clicked.connect(_on_obstacle_token_clicked)
 		_obstacle_tokens[data_key] = token
 		token.setup(data_key,
@@ -269,7 +285,10 @@ func _remove_stale_obstacles(seen: Dictionary) -> void:
 
 func _state_obstacles() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	var raw: Variant = GameManager.current_game_state.objectives.get(
+	var state: GameState = GameManager.current_game_state
+	if state == null:
+		return result
+	var raw: Variant = state.objectives.get(
 			FleetSetupBootstrapper.KEY_OBSTACLES, [])
 	if not raw is Array:
 		return result
@@ -821,7 +840,7 @@ func _begin_obstacle_preview(obstacle_key: String) -> void:
 	_clear_selection()
 	_pending_obstacle_key = obstacle_key
 	_preview_obstacle_token = SETUP_OBSTACLE_TOKEN_SCRIPT.new()
-	_token_container.add_child(_preview_obstacle_token)
+	_obstacle_container.add_child(_preview_obstacle_token)
 	_preview_obstacle_token.token_clicked.connect(_on_obstacle_token_clicked)
 	_preview_obstacle_token.setup(obstacle_key, 0.5, 0.5, 0.0)
 	_preview_obstacle_token.set_click_enabled(false)

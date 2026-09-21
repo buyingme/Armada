@@ -189,6 +189,12 @@ var _host_match_principal_id: String = ""
 ## Transient — not serialized.
 var _sync_gate: CommandSyncGate = CommandSyncGate.new()
 
+## Replay-only transport staging for a future AssignDialCommand that reaches
+## authority before the immediately preceding host replay command. The command
+## remains unexecuted and unobserved until CommandProcessor's exact sequence
+## cursor reaches it; normal Network command admission never uses this buffer.
+var _staged_replay_dial_commands: Dictionary = {}
+
 ## ENet port the local instance is currently listening on (server) or
 ## connected to (client).  0 when disconnected.  Transient.
 var _active_port: int = 0
@@ -1653,6 +1659,33 @@ func _submit_replay_command_to_server(data: Dictionary) -> void:
 	if cmd == null:
 		_log.warn("Failed to deserialize replay command from peer %d." % sender_id)
 		return
+	var expected_sequence: int = CommandProcessor.get_next_sequence()
+	if should_stage_sync_gated_replay_dial(cmd.command_type, cmd.sequence,
+			expected_sequence, _sync_gate.is_active()):
+		if _staged_replay_dial_commands.has(cmd.sequence):
+			_send_command_rejection(sender_id, data,
+					"Duplicate staged replay command sequence.")
+			return
+		_staged_replay_dial_commands[cmd.sequence] = {
+			"data": data.duplicate(true),
+			"sender_id": sender_id,
+			"remote_authored": true,
+		}
+		_log.info("Staged replay dial command seq=%d until authority reaches it." %
+				cmd.sequence)
+		return
+	_execute_replay_command_from_peer(data, sender_id)
+	_drain_staged_replay_dial_commands()
+
+
+## Applies one replay command only once it is the authority cursor's current
+## command. This is the existing replay RPC execution path factored so staged
+## Command Phase input re-enters the same validation/result pipeline.
+func _execute_replay_command_from_peer(data: Dictionary, sender_id: int) -> bool:
+	var cmd: GameCommand = GameCommand.deserialize(data)
+	if cmd == null:
+		_log.warn("Failed to deserialize replay command from peer %d." % sender_id)
+		return false
 	_begin_rejection_capture(cmd)
 	var result: Dictionary = CommandProcessor.submit_replay_deferred_followups(cmd)
 	var rejection_reason: String = _end_rejection_capture()
@@ -1660,7 +1693,7 @@ func _submit_replay_command_to_server(data: Dictionary) -> void:
 		_log.info("Replay command [%s] from peer %d rejected by validation." % [
 				cmd.command_type, sender_id])
 		_send_command_rejection(sender_id, data, rejection_reason)
-		return
+		return false
 	var cmd_data: Dictionary = cmd.serialize()
 	if _sync_gate.is_active() and cmd.command_type == "assign_dials":
 		_sync_gate.hold(cmd_data, result, true)
@@ -1671,9 +1704,64 @@ func _submit_replay_command_to_server(data: Dictionary) -> void:
 				_distribute_command_result_data(entry["command_data"],
 						entry["result"], true)
 			_drain_server_observer_followups()
-		return
+		return true
 	_distribute_command_result(cmd, result, true)
 	_drain_server_observer_followups()
+	return true
+
+
+## Drains only the staged command matching the authority's exact next cursor.
+## Validation, sync-gate ownership, and ordered result release remain unchanged.
+func _drain_staged_replay_dial_commands() -> void:
+	while _staged_replay_dial_commands.has(CommandProcessor.get_next_sequence()):
+		var sequence: int = CommandProcessor.get_next_sequence()
+		var entry: Dictionary = _staged_replay_dial_commands[sequence] as Dictionary
+		_staged_replay_dial_commands.erase(sequence)
+		if bool(entry.get("remote_authored", false)):
+			if not _execute_replay_command_from_peer(
+					entry.get("data", {}) as Dictionary,
+					int(entry.get("sender_id", -1))):
+				return
+		else:
+			var command: GameCommand = GameCommand.deserialize(
+					entry.get("data", {}) as Dictionary)
+			if command == null:
+				return
+			var result: Dictionary = \
+					CommandProcessor.submit_replay_deferred_followups(command)
+			if result.is_empty():
+				return
+			handle_host_command(command, result)
+
+
+## Pure classification used by focused replay-ordering verification.
+static func should_stage_sync_gated_replay_dial(command_type: String,
+		sequence: int, expected_sequence: int, gate_active: bool) -> bool:
+	return gate_active \
+			and command_type == "assign_dials" \
+			and sequence > expected_sequence
+
+
+## Stages a host-owned replay dial that lookahead reaches before the preceding
+## client replay command. It is accepted only by the active CLI replay harness
+## and re-enters the normal authoritative processor at its exact sequence.
+func stage_future_host_replay_dial(command: GameCommand) -> bool:
+	if role != Role.SERVER \
+			or not ReplayDriver.is_network_replay_bootstrap_active() \
+			or command == null \
+			or not should_stage_sync_gated_replay_dial(command.command_type,
+					command.sequence, CommandProcessor.get_next_sequence(),
+					_sync_gate.is_active()) \
+			or _staged_replay_dial_commands.has(command.sequence):
+		return false
+	_staged_replay_dial_commands[command.sequence] = {
+		"data": command.serialize(),
+		"sender_id": 1,
+		"remote_authored": false,
+	}
+	_log.info("Staged host replay dial command seq=%d until authority reaches it." %
+			command.sequence)
+	return true
 
 
 ## Server → All: broadcasts an executed command and its result.
@@ -1925,6 +2013,10 @@ func handle_host_command(command: GameCommand, result: Dictionary) -> void:
 			_sync_gate.mark_ready(command.player_index)
 			_log.info("Player %d dials complete (host) — held in sync gate." %
 					command.player_index)
+		# A replay client may have reached the following recorded dial while
+		# this host command was still in flight. Execute it now, at its exact
+		# authority sequence, through the ordinary replay validation path.
+		_drain_staged_replay_dial_commands()
 		if _sync_gate.is_open():
 			_log.info("Sync gate open — broadcasting %d held dial commands." %
 					_sync_gate.get_held_count())
@@ -1944,12 +2036,14 @@ func handle_host_command(command: GameCommand, result: Dictionary) -> void:
 ## Activates the Command Phase sync gate.
 ## Called by [GameManager] at the start of the Command Phase in network mode.
 func activate_sync_gate() -> void:
+	_staged_replay_dial_commands.clear()
 	_sync_gate.activate()
 	_log.info("Sync gate activated for Command Phase.")
 
 
 ## Deactivates the Command Phase sync gate.
 func deactivate_sync_gate() -> void:
+	_staged_replay_dial_commands.clear()
 	_sync_gate.deactivate()
 
 
@@ -2028,6 +2122,7 @@ func _cleanup() -> void:
 		_heartbeat_timer.queue_free()
 		_heartbeat_timer = null
 	_sync_gate.deactivate()
+	_staged_replay_dial_commands.clear()
 	peers.clear()
 	_last_heartbeat.clear()
 	_local_player_index = -1

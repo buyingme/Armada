@@ -38,7 +38,7 @@ func _assert_fresh_and_reconnect(shared: String) -> bool:
 			var record := _load_record(path)
 			if record.is_empty():
 				return false
-			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 6 \
+			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 7 \
 					or not bool(record.get("admission", false)) \
 					or int(record.get("canonical_installs", 0)) != 1 \
 					or int(record.get("board_releases", 0)) != 1 \

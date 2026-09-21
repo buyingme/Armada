@@ -160,7 +160,8 @@ func _on_camera_ready() -> void:
 
 
 ## Called when the camera returns to the active player after displacement.
-## Fires [signal displacement_completed] so GameBoard can resume.
+## The signal is presentation-only; canonical activation progress is resumed
+## exclusively by the authority's purpose-specific Maneuver continuation.
 func _on_camera_returned() -> void:
 	displacement_completed.emit()
 
@@ -319,8 +320,8 @@ func _submit_displaced_positions() -> void:
 		GameManager.submit_commit_displacement(placements)
 
 
-## Finishes the displacement flow: removes modal, flips camera back,
-## and ends the activation (triggering normal turn transition + banner).
+## Finishes displacement presentation: removes the modal and flips the camera
+## back. Canonical Maneuver and activation completion are command-owned.
 func _finish_displacement() -> void:
 	_displacement_moving = false
 	# Re-enable input on displaced squadron tokens and reset tint.
@@ -332,19 +333,9 @@ func _finish_displacement() -> void:
 	_remove_displacement_modal()
 	TooltipManager.hide_tooltip()
 	_log.info("All displaced squadrons placed.")
-	# Phase I6b-4d / Phase K5: in network play the controller peer never
-	# rotated to the opponent in [method start], so there is nothing to
-	# rotate back.  Also DO NOT emit [signal displacement_completed] —
-	# the legacy connection
-	# [code]displacement_completed -> _show_end_activation_after_maneuver[/code]
-	# would submit an [code]advance_activation_step[/code] for the
-	# *active maneuvering* player from the *controller* peer, which the
-	# server correctly rejects (peer mismatch).  In network mode the
-	# maneuvering peer's [code]_resume_after_remote_displacement[/code]
-	# (driven by the [code]commit_displacement[/code] broadcast) handles
-	# the End-Activation resume.  Discriminated on the
-	# [code]NetworkManager.get_local_player_index()[/code] axis per
-	# [docs/refactoring_phase_k_plan.md] §3.1b.
+	# In network play the controller peer never rotated to the opponent in
+	# [method start], so there is nothing to rotate back. The authority's
+	# complete_maneuver result exposes End Activation on the owning peer.
 	if NetworkManager.get_local_player_index() >= 0:
 		return
 	var active: int = GameManager.get_active_player()

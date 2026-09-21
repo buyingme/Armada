@@ -77,6 +77,10 @@ var pending_replay_seed: int = 0
 ## Validated replay-header binding, consumed by the next match bootstrap.
 var pending_replay_binding: Dictionary = {}
 
+## Scenario named by the accepted replay-10 header. This is reconstruction
+## input, not a fallback to the currently selected/default scenario.
+var pending_replay_scenario_id: String = ""
+
 ## Loaded replay payload.  Null until [method _ready] succeeds.
 var _replay: GameReplay = null
 
@@ -97,6 +101,11 @@ var _connect_target: String = ""
 ## Whether the host has already triggered [method LobbyManager.request_start_game]
 ## (one-shot — repeated lobby-updated signals are ignored after).
 var _host_started: bool = false
+
+## Recorded local dial commands submitted ahead of the observation cursor to
+## open the Command Phase sync gate.  Their later cursor positions wait for
+## the authoritative ordered echo instead of submitting a duplicate.
+var _pre_submitted_dial_sequences: Dictionary = {}
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("ReplayDriver")
@@ -126,6 +135,17 @@ func _ready() -> void:
 	pending_replay_seed = int(_replay.header.get("rng_seed", 0))
 	pending_replay_binding = (_replay.header.get(
 			"match_player_control_binding", {}) as Dictionary).duplicate(true)
+	pending_replay_scenario_id = str(
+			_replay.header.get("scenario_id", "")).strip_edges()
+	if pending_replay_scenario_id.is_empty():
+		_log.error("ReplayDriver: replay header scenario_id is missing.")
+		_quit(EXIT_LOAD_FAIL)
+		return
+	if not is_network_session():
+		# MainMenu's replay bypass enters GameBoard without a user scenario
+		# selection. Install the recorded scenario before board bootstrap so
+		# setup automation cannot run for a different scenario.
+		GameManager.set_next_scenario_id(pending_replay_scenario_id)
 	LoggingMode.enabled = true
 	BaselineTrace.output_path_override = _baseline_output
 	BaselineTrace._maybe_enable()
@@ -197,6 +217,10 @@ func get_pending_replay_binding() -> Dictionary:
 	return pending_replay_binding.duplicate(true)
 
 
+func get_pending_replay_scenario_id() -> String:
+	return pending_replay_scenario_id
+
+
 func consume_pending_replay_binding() -> Dictionary:
 	var binding: Dictionary = pending_replay_binding.duplicate(true)
 	pending_replay_binding = {}
@@ -243,6 +267,7 @@ func _flag_value(args: PackedStringArray, flag: String) -> String:
 ## the step loop on the next idle frame so the game-board scene has
 ## a chance to finish wiring its controllers before commands arrive.
 func _on_game_started() -> void:
+	_pre_submitted_dial_sequences.clear()
 	var initial_sequence: int = int(_replay.header.get(
 			"initial_command_sequence", -1))
 	if initial_sequence < 0 \
@@ -337,11 +362,17 @@ func _submit_local_step(cmd_data: Dictionary,
 		snapshot: int,
 		is_local: bool) -> bool:
 	if not is_local:
+		if not _submit_sync_gate_dial_lookahead(snapshot):
+			return false
 		return true
 	# Give the running auto-flow / inbound RPC one extra frame to
 	# fire so we don't double-submit a prefix command.
 	await get_tree().process_frame
 	if _observed_count > snapshot:
+		return true
+	var recorded_sequence: int = int(cmd_data.get("sequence", -1))
+	if _pre_submitted_dial_sequences.has(recorded_sequence):
+		_pre_submitted_dial_sequences.erase(recorded_sequence)
 		return true
 	var cmd: GameCommand = GameCommand.deserialize(cmd_data)
 	if cmd == null:
@@ -350,6 +381,64 @@ func _submit_local_step(cmd_data: Dictionary,
 		return false
 	GameManager.get_command_submitter().submit_replay(cmd)
 	return true
+
+
+## Breaks only the replay-observation deadlock created by CommandSyncGate:
+## remote dial results are intentionally withheld until the other principal's
+## complete dial batch arrives, so that peer must submit its immediately
+## following recorded local batch before observing the held remote echo.
+## Commands still travel through the normal replay Network submitter and are
+## validated/ordered by authority; this helper never opens or bypasses the gate.
+func _submit_sync_gate_dial_lookahead(snapshot: int) -> bool:
+	if not PlayMode.is_network() or _replay == null:
+		return true
+	var local: int = NetworkManager.get_local_player_index()
+	var batch: Array[Dictionary] = network_sync_gate_dial_lookahead(
+			_replay.commands, snapshot, local)
+	var submitter: CommandSubmitter = GameManager.get_command_submitter()
+	if batch.is_empty() or submitter == null:
+		return true
+	for command_data: Dictionary in batch:
+		var sequence: int = int(command_data.get("sequence", -1))
+		if _pre_submitted_dial_sequences.has(sequence):
+			continue
+		var command: GameCommand = GameCommand.deserialize(command_data)
+		if command == null:
+			_log.error("ReplayDriver: dial lookahead deserialize failed: %s" %
+					command_data)
+			_quit(EXIT_DESERIALIZE_FAIL)
+			return false
+		_pre_submitted_dial_sequences[sequence] = true
+		submitter.submit_replay(command)
+		_log.info(("ReplayDriver: pre-submitted sync-gated dial command seq=%d "
+				+ "for local player %d.") % [sequence, local])
+	return true
+
+
+## Returns the one contiguous local dial-assignment run immediately following
+## the held remote prefix at [param cursor].  It never crosses another player
+## after the local run starts or any non-dial command.
+static func network_sync_gate_dial_lookahead(
+		commands: Array[Dictionary], cursor: int,
+		local_player: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if local_player < 0 or cursor < 0 or cursor >= commands.size():
+		return result
+	var current: Dictionary = commands[cursor]
+	if str(current.get("type", "")) != "assign_dials" \
+			or int(current.get("player", -1)) == local_player:
+		return result
+	var local_run_started: bool = false
+	for index: int in range(cursor + 1, commands.size()):
+		var candidate: Dictionary = commands[index]
+		if str(candidate.get("type", "")) != "assign_dials":
+			break
+		if int(candidate.get("player", -1)) == local_player:
+			local_run_started = true
+			result.append(candidate.duplicate(true))
+		elif local_run_started:
+			break
+	return result
 
 
 func _wait_for_step_advance(cmd_data: Dictionary,

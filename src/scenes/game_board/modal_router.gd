@@ -317,10 +317,8 @@ func _drive_displacement_modal(intent: UIProjector.UIIntent,
 	match command.command_type:
 		"start_displacement":
 			if _is_displacement_place_intent(intent):
-				_open_displacement_modal_from_command(command)
-		"commit_displacement":
-			if _is_network_peer():
-				call_deferred("_resume_after_remote_displacement")
+				_open_displacement_modal_from_command(
+						command, intent.controller_player)
 
 
 func _is_displacement_place_intent(intent: UIProjector.UIIntent) -> bool:
@@ -459,11 +457,11 @@ func _open_activation_modal_from_intent() -> void:
 	_ship_activation_controller.open_modal_from_interaction_state()
 
 
-func _open_displacement_modal_from_command(command: GameCommand) -> void:
+func _open_displacement_modal_from_command(command: GameCommand,
+		controller: int) -> void:
 	if _displacement_controller == null:
 		return
 	var payload: Dictionary = command.payload
-	var controller: int = int(payload.get("controller_player", -1))
 	if controller < 0 or not _can_act_as(controller):
 		return
 	var game_state: GameState = GameManager.current_game_state
@@ -516,16 +514,6 @@ func _resolve_displaced_squadron_tokens(
 		if token != null:
 			displaced_tokens.append(token)
 	return displaced_tokens
-
-
-func _resume_after_remote_displacement() -> void:
-	if _local_viewer(GameManager.current_game_state) \
-			!= GameManager.get_active_player():
-		return
-	if _activation_ctx == null \
-			or _activation_ctx.ship_activation_state == null:
-		return
-	_ship_activation_controller.show_end_activation_after_maneuver()
 
 
 func _local_viewer(game_state: GameState) -> int:

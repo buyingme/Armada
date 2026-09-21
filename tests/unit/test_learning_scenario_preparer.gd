@@ -104,6 +104,38 @@ func test_prepare_debug_scenario_preserves_runtime_upgrades_through_player_state
 						"Restored runtime upgrade should preserve scenario source identity")
 
 
+func test_prepare_debug_scenario_installs_manual_maneuver_assets() -> void:
+	var game_state: GameState = _create_game_state()
+	var prepared: Dictionary = LearningScenarioPreparer.prepare_game_state(
+			LearningScenarioSetup.new("debug_scenario"), game_state)
+	assert_eq((prepared["ships"] as Array[ShipInstance]).size(), 2)
+	assert_eq((prepared["squadrons"] as Array[SquadronInstance]).size(), 2)
+	var obstacles: Array = game_state.objectives.get("obstacles", []) as Array
+	assert_eq(obstacles.size(), 3)
+	assert_eq(str((obstacles[0] as Dictionary).get("data_key", "")), "asteroid_1")
+	assert_eq(str((obstacles[1] as Dictionary).get("data_key", "")), "debris_1")
+	assert_eq(str((obstacles[2] as Dictionary).get("data_key", "")), "station")
+
+
+func test_recorded_vsd_final_transform_overlaps_debug_debris_authoritatively() -> void:
+	var game_state: GameState = _create_game_state()
+	LearningScenarioPreparer.prepare_game_state(
+			LearningScenarioSetup.new("debug_scenario"), game_state)
+	var ship: ShipInstance = game_state.get_ship(1, 0)
+	# Replay 20260920_101508, Maneuver sequence 112 canonical final transform.
+	ship.pos_x = 0.584758400917053
+	ship.pos_y = 0.411227494478226
+	ship.rotation_deg = 135.000000341623
+
+	var overlaps: Array[Dictionary] = \
+			ObstacleOverlapAuthority.overlapping_obstacles(game_state, 1, 0)
+
+	assert_eq(overlaps.size(), 1,
+			"Recorded VSD final base should positively overlap one obstacle.")
+	assert_eq(str(overlaps[0]["obstacle_id"]), "obstacle:1")
+	assert_eq(str(overlaps[0]["data_key"]), "debris_1")
+
+
 func test_synthetic_tarkin_runtime_upgrade_prompts_at_ship_phase() -> void:
 	var game_state: GameState = _create_game_state()
 	var setup: LearningScenarioSetup = _setup_from_tokens([

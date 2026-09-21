@@ -674,20 +674,22 @@ func test_network_host_remaining_result_acknowledges_once_and_tears_down_project
 
 func test_network_client_remaining_result_acknowledges_after_host_first() \
 		-> void:
-	var state: GameState = _pending_two_human_result_state()
+	var state: GameState = _resolved_two_human_attack_state()
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.SERVER
 	NetworkManager._local_player_index = 0
 	assert_true(GameManager.start_new_game_from_state(
 			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 73))
+	assert_false(CommandProcessor.submit_deferred_followups(
+			CompleteAttackCommand.new(0, {
+				"attack_id": state.current_attack_state.attack_id,
+			})).is_empty())
 	var inspection: CompletedAttackInspection = state.completed_attack_inspection
 	assert_not_null(inspection)
 	var host_ack := AcknowledgeAttackResultCommand.new(0, {
 		"inspection_id": inspection.inspection_id(),
 	})
-	host_ack.sequence = 73
-	assert_false(CommandProcessor.submit_mirror(
-			host_ack, _mirror_envelope(host_ack), 0).is_empty())
+	assert_false(CommandProcessor.submit_deferred_followups(host_ack).is_empty())
 	assert_false(state.completed_attack_inspection.is_satisfied())
 	assert_true(state.completed_attack_inspection.has_received(
 			state.principal_id_for_player(0)))
@@ -696,27 +698,71 @@ func test_network_client_remaining_result_acknowledges_after_host_first() \
 
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
-	GameManager.set_command_submitter(LocalCommandSubmitter.new(
-			state.principal_id_for_player(1)))
+	var network_submitter := NetworkCommandSubmitter.new()
+	# Keep the real Network submitter in its ordered queue path so the test can
+	# inspect the exact serialized envelope without opening a socket.
+	network_submitter._awaiting = true
+	network_submitter._in_flight_count = 1
+	network_submitter._awaiting_command_type = "host_result_in_flight"
+	GameManager.set_command_submitter(network_submitter)
 	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
 	add_child_autofree(board)
-	var panel: AttackSimPanel = board._target_selector.get_panel()
+	var mirror: AttackPanelMirror = board._panel_mgr.attack_panel_mirror
+	var panel: AttackSimPanel = mirror.get_panel()
+	# Reproduce the live boundary: the defender mirror still displays the
+	# just-completed attack when the durable inspection projection arrives.
+	mirror.close()
+	mirror.apply_flow({
+		"attacker_kind": "ship",
+		"attacker_name": "CR90 Corvette A",
+		"defender_name": "Victory II-class Star Destroyer",
+		"dice_results": [_hit_die()],
+	}, Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE)
+	assert_false(panel.is_awaiting_result_confirmation())
+	board._command_router_adapter.reconstruct_presentation()
 
 	assert_not_null(panel)
+	assert_true(mirror.is_open(),
+			"The non-attacker Network peer must own the completed-result surface.")
 	assert_true(panel.is_awaiting_result_confirmation(),
 			"The client must receive the result action after host-first acknowledgement.")
 	assert_eq(panel._confirm_button.text, "Acknowledge Result")
 	var commands_before: int = _command_count(
 			CommandProcessor.get_history(), AcknowledgeAttackResultCommand.TYPE)
 	panel._on_confirm_pressed()
+
+	assert_eq(network_submitter._pending_payloads.size(), 1,
+			"The mirror action must enter the real Network command queue.")
+	var command_data: Dictionary = network_submitter._pending_payloads[0]
+	assert_eq(command_data.get("type"), AcknowledgeAttackResultCommand.TYPE)
+	assert_eq(int(command_data.get("player", -1)), 1)
+	var client_command: GameCommand = GameCommand.deserialize(command_data)
+	assert_not_null(client_command)
+	var client_principal: String = state.principal_id_for_player(1)
+	assert_true(state.principal_controls_player(
+			client_principal, client_command.player_index),
+			"The Network envelope must preserve the authenticated client principal's player.")
+	assert_false(state.completed_attack_inspection.is_satisfied(),
+			"Client projection/submission must not optimistically acknowledge.")
+
+	# Apply the captured envelope at the authority boundary after the same
+	# principal-to-player admission check used by NetworkManager.
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager._local_player_index = 0
+	var client_result: Dictionary = CommandProcessor.submit_deferred_followups(
+			client_command)
+	NetworkManager._drain_server_observer_followups()
 	await get_tree().process_frame
 
+	assert_eq(client_result.get("principal_id"), client_principal)
 	assert_eq(_command_count(CommandProcessor.get_history(),
 			AcknowledgeAttackResultCommand.TYPE), commands_before + 1)
+	assert_null(state.completed_attack_inspection,
+			"The final required acknowledgement must retire the inspection once.")
 	assert_false(panel.visible)
 	assert_false(panel.is_awaiting_result_confirmation())
 	assert_false(board._attack_executor.is_active())
-	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"), 0,
+	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"), 1,
 			"Acknowledgement must not recreate or repeat attack completion.")
 
 
@@ -732,9 +778,11 @@ func test_network_waiting_peer_reconstructs_non_actionable_result_surface() -> v
 			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 74))
 	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
 	add_child_autofree(board)
-	var panel: AttackSimPanel = board._target_selector.get_panel()
+	var mirror: AttackPanelMirror = board._panel_mgr.attack_panel_mirror
+	var panel: AttackSimPanel = mirror.get_panel()
 
 	assert_not_null(panel)
+	assert_true(mirror.is_open())
 	assert_true(panel.visible)
 	assert_false(panel.is_awaiting_result_confirmation(),
 			"An already-acknowledged principal may inspect but must not acknowledge again.")
@@ -3459,6 +3507,25 @@ func _satisfied_inactive_normal_ship_state(no_legal_target: bool) -> GameState:
 
 
 func _pending_two_human_result_state() -> GameState:
+	var state: GameState = _resolved_two_human_attack_state()
+	var attacker: ShipInstance = state.get_ship(0, 0)
+	var attack: CurrentAttackState = state.current_attack_state
+	var inspection: CompletedAttackInspection = \
+			CompletedAttackInspection.create_from_attack(
+					attack, attack.resolved_outcome,
+					state.get_distinct_controlling_principal_ids(
+							MatchPlayerControlBinding.KIND_HUMAN))
+	assert_not_null(inspection)
+	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
+	assert_true(state.install_completed_attack_inspection(inspection))
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			attacker.owner_player, Constants.Visibility.ALL, {"stale": true})
+	return state
+
+
+func _resolved_two_human_attack_state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
 	assert_true(state.install_match_player_control_binding(
@@ -3479,15 +3546,6 @@ func _pending_two_human_result_state() -> GameState:
 	var defender: ShipInstance = state.get_ship(1, 0)
 	defender.pos_x = 0.95
 	defender.pos_y = 0.05
-	var attack: CurrentAttackState = state.current_attack_state
-	var inspection: CompletedAttackInspection = \
-			CompletedAttackInspection.create_from_attack(
-					attack, attack.resolved_outcome,
-					state.get_distinct_controlling_principal_ids(
-							MatchPlayerControlBinding.KIND_HUMAN))
-	assert_not_null(inspection)
-	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
-	assert_true(state.install_completed_attack_inspection(inspection))
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,

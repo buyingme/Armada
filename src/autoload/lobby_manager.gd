@@ -583,6 +583,9 @@ func update_scenario(scenario_id: String) -> void:
 
 
 func _selected_scenario_id() -> String:
+	if ReplayDriver.is_network_replay_bootstrap_active():
+		return LobbyState.normalize_scenario_id(
+				ReplayDriver.get_pending_replay_scenario_id())
 	if current_lobby == null:
 		return LobbyState.SCENARIO_LEARNING_ID
 	return LobbyState.normalize_scenario_id(current_lobby.scenario)

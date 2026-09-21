@@ -42,8 +42,53 @@
                     "source_assignment_id": "electronic_countermeasures-defensive_retrofit-0"
                 }
             ]
+        },
+        {
+            "key": "tie_fighter_squadron",
+            "pos_x": 0.47,
+            "pos_y": 0.25,
+            "rotation_deg": 180.0,
+            "type": "squadron"
+        },
+        {
+            "key": "x_wing_squadron",
+            "pos_x": 0.53,
+            "pos_y": 0.75,
+            "rotation_deg": 0.0,
+            "type": "squadron"
         }
-
+    ],
+    "obstacles": [
+        {
+            "obstacle_id": "obstacle:0",
+            "data_key": "asteroid_1",
+            "pos_x": 0.5,
+            "pos_y": 0.65,
+            "rotation_deg": 0.0,
+            "placing_player": 0,
+            "placement_order": 0,
+            "last_maneuver_execution_id": ""
+        },
+        {
+            "obstacle_id": "obstacle:1",
+            "data_key": "debris_1",
+            "pos_x": 0.5,
+            "pos_y": 0.35,
+            "rotation_deg": 0.0,
+            "placing_player": 1,
+            "placement_order": 1,
+            "last_maneuver_execution_id": ""
+        },
+        {
+            "obstacle_id": "obstacle:2",
+            "data_key": "station",
+            "pos_x": 0.5,
+            "pos_y": 0.5,
+            "rotation_deg": 0.0,
+            "placing_player": 0,
+            "placement_order": 2,
+            "last_maneuver_execution_id": ""
+        }
     ],
     "use_fixed_round1_commands": false
 }

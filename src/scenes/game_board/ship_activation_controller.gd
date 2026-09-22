@@ -975,74 +975,10 @@ func _can_act_as(player: int) -> bool:
 func _connect_signals() -> void:
 	# Activation lifecycle.
 	EventBus.activation_ended.connect(_on_board_activation_ended)
-	if not EventBus.ship_speed_changed.is_connected(
-			_on_accepted_ship_speed_changed):
-		EventBus.ship_speed_changed.connect(_on_accepted_ship_speed_changed)
-	if not GameManager.network_command_rejected.is_connected(
-			_on_network_speed_command_rejected):
-		GameManager.network_command_rejected.connect(
-				_on_network_speed_command_rejected)
 	# Network passive-peer modal mirroring (C7/C8).
 	if not EventBus.ship_activated_remotely.is_connected(
 			_on_remote_ship_activated):
 		EventBus.ship_activated_remotely.connect(_on_remote_ship_activated)
-
-
-## Converges only the matching pending activation preview after canonical
-## SetSpeed acceptance. Ship identity and activation identity are both required.
-func _on_accepted_ship_speed_changed(
-		ship: RefCounted, new_speed: int) -> void:
-	if not ship is ShipInstance or _maneuver_tool_controller == null:
-		return
-	var scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
-	if scene == null:
-		return
-	var ship_instance := ship as ShipInstance
-	var activation_identity: String = ship_instance.ship_activation_identity
-	var preview_refreshed: bool = false
-	var authored_pending: bool = scene.has_pending_speed_change()
-	if authored_pending:
-		preview_refreshed = scene.accept_pending_speed_change(
-				ship_instance, activation_identity, new_speed)
-	else:
-		var submitter: CommandSubmitter = GameManager.get_command_submitter()
-		if submitter is NetworkCommandSubmitter \
-				and (submitter as NetworkCommandSubmitter).is_awaiting_response():
-			# An authoring peer with no matching pending record has replaced its
-			# activation/tool; the delayed local result must not look passive.
-			return
-		# Passive peers do not own the accepted submission, but their matching
-		# observer preview is still transient presentation derived from canonical.
-		preview_refreshed = scene.refresh_matching_preview_from_canonical(
-				ship_instance, activation_identity)
-	if preview_refreshed and new_speed == 0:
-		var active_submitter: CommandSubmitter = \
-				GameManager.get_command_submitter()
-		if authored_pending or not active_submitter is NetworkCommandSubmitter:
-			_complete_live_speed_zero_maneuver(
-					ship_instance, activation_identity)
-		else:
-			_invalidate_passive_speed_zero_tool(
-					ship_instance, activation_identity)
-
-
-## Purpose-specific recovery owner for a rejected SetSpeed request.
-## A delayed rejection cannot touch a replacement activation/tool identity.
-func _on_network_speed_command_rejected(
-		command: GameCommand, _reason: String) -> void:
-	if command == null or command.command_type != "set_speed" \
-			or _maneuver_tool_controller == null \
-			or GameManager.current_game_state == null:
-		return
-	var scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
-	if scene == null or not scene.has_pending_speed_change():
-		return
-	var ship: ShipInstance = GameManager.current_game_state.get_ship(
-			command.player_index, int(command.payload.get("ship_index", -1)))
-	if ship == null:
-		return
-	scene.reject_pending_speed_change(
-			command, ship, ship.ship_activation_identity)
 
 
 ## Opens the activation modal as a read-only observer on the passive peer.
@@ -1714,46 +1650,8 @@ func _show_activation_maneuver_tool() -> void:
 	_update_maneuver_damage_hint()
 
 
-## Completes a matched live maneuver interaction after accepted canonical
-## speed converges to 0. Identity and preview convergence are checked before
-## reusing the same speed-zero terminal path as maneuver-step entry.
-func _complete_live_speed_zero_maneuver(ship: ShipInstance,
-		activation_identity: String) -> void:
-	if not _live_speed_zero_preview_matches(ship, activation_identity):
-		return
-	_log.info("Accepted speed 0 — completing maneuver without movement.")
-	_complete_speed_zero_maneuver(ship)
-
-
-## A passive peer projects accepted speed 0 but never originates the author's
-## terminal command. Its disposable tool is removed while ordered results drive
-## the remaining activation presentation.
-func _invalidate_passive_speed_zero_tool(ship: ShipInstance,
-		activation_identity: String) -> void:
-	if not _live_speed_zero_preview_matches(ship, activation_identity):
-		return
-	_maneuver_tool_controller.dismiss(ship)
-
-
-func _live_speed_zero_preview_matches(ship: ShipInstance,
-		activation_identity: String) -> bool:
-	var scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
-	var activation_state: ShipActivationState = \
-			_activation_ctx.ship_activation_state
-	return scene != null and activation_state != null \
-			and activation_state.get_ship() == ship \
-			and scene.get_activation_ship() == ship \
-			and not activation_identity.is_empty() \
-			and scene.get_activation_identity() == activation_identity \
-			and ship.ship_activation_identity == activation_identity \
-			and ship.current_speed == 0 \
-			and scene.get_state().get_simulated_speed() == 0 \
-			and not scene.has_pending_speed_change()
-
-
-## Existing authoritative speed-zero activation behavior: no placement or
-## ExecuteManeuver payload is produced; the local activation advances to its
-## terminal projection after resolver spends are submitted.
+## Commits legal speed zero through the same authoritative intent-only
+## execute_maneuver path as every positive speed.
 func _complete_speed_zero_maneuver(ship: ShipInstance) -> void:
 	var result: Dictionary = GameManager.submit_execute_maneuver(
 			ship, 0, [], 0.0, 0.0, 0.0, -1)

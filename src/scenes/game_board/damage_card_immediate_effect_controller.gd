@@ -20,18 +20,28 @@ func initialize(camera: BoardCamera, handoff_overlay: HandoffOverlay) -> void:
 
 func react_to_debug_damage_result(_command: GameCommand, result: Dictionary) -> void:
 	var state: GameState = GameManager.current_game_state
-	if state == null:
+	if state == null or not result.get("damage_application") is Dictionary:
 		return
 	var owner: int = int(result.get("owner_player", -1))
 	var ship_index: int = int(result.get("ship_index", -1))
-	var card_index: int = int(result.get("card_index", -1))
-	var effect_id: String = str(result.get("effect_id", ""))
 	var ship: ShipInstance = state.get_ship(owner, ship_index)
-	if ship == null or card_index < 0 or card_index >= ship.faceup_damage.size():
+	var damage: Dictionary = result["damage_application"] as Dictionary
+	var additions: Array = damage.get("faceup_additions", []) as Array
+	if ship == null or str(result.get("debug_application_id", "")).is_empty() \
+			or additions.size() != 1 or not additions[0] is Dictionary:
 		return
-	var card: DamageCard = ship.faceup_damage[card_index]
-	if card == null or card.effect_id != effect_id \
-			or not ImmediateEffectResolver.is_immediate(card):
+	var addition: Dictionary = additions[0] as Dictionary
+	var public_ref: String = str(addition.get("public_card_ref", ""))
+	var card: DamageCard = ship.faceup_card_for_public_ref(public_ref)
+	var record: Dictionary = ship.active_immediate_resolution_snapshot()
+	if card == null or not ImmediateEffectResolver.is_immediate(card) \
+			or str(addition.get("immediate_obligation", "")) != "open" \
+			or str(addition.get("effect_id", "")) != card.effect_id \
+			or str(record.get("public_card_ref", "")) != public_ref \
+			or str(record.get("immediate_resolution_id", "")) \
+					!= str(addition.get("immediate_resolution_id", "")) \
+			or str(record.get("debug_application_id", "")) \
+					!= str(result["debug_application_id"]):
 		return
 	var resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
 	var choice_info: Dictionary = resolver.get_required_choice(card, ship)

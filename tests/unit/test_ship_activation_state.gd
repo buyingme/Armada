@@ -258,20 +258,6 @@ func test_speed_change_swing_direction() -> void:
 	assert_eq(state.get_total_speed_change(), -1, "Total change should be -1")
 
 
-func test_speed_change_snapshot_restores_rejected_transient_delta_and_budgets() -> void:
-	var ship: ShipInstance = _make_ship(2, true, true, 4)
-	var state: ShipActivationState = ShipActivationState.create(ship)
-	var before: Dictionary = state.speed_change_snapshot()
-	assert_true(state.apply_speed_change(-1), "Pending change should apply")
-	state.restore_speed_change_snapshot(before)
-	assert_eq(state.get_total_speed_change(), 0,
-			"Rejected change should restore the prior transient delta")
-	assert_eq(state.get_dial_speed_budget(), 1,
-			"Rejected change should restore dial budget")
-	assert_eq(state.get_token_speed_budget(), 1,
-			"Rejected change should restore token budget")
-
-
 func test_combined_dial_token_allows_two_changes() -> void:
 	var ship: ShipInstance = _make_ship(2, true, true, 4)
 	var state: ShipActivationState = ShipActivationState.create(ship)

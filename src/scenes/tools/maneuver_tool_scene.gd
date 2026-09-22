@@ -75,7 +75,6 @@ var _activation_identity: String = ""
 
 ## Retained only for rejecting obsolete/in-flight protocol-6 SetSpeed results.
 ## Protocol 7 speed selection is transient until execute_maneuver commits it.
-var _pending_speed_change: Dictionary = {}
 
 ## Node2D overlay that draws yaw bonus "N" badges on joints.
 ## Requirements: NAV-006, EXE-005.
@@ -156,77 +155,6 @@ func get_activation_ship() -> ShipInstance:
 ## Returns the activation identity captured when this tool was built.
 func get_activation_identity() -> String:
 	return _activation_identity
-
-
-## Returns true while this exact ship activation awaits SetSpeed acceptance.
-func has_pending_speed_change() -> bool:
-	return not _pending_speed_change.is_empty()
-
-
-## Applies an accepted canonical speed to the matching transient preview.
-## Both ship and activation identity must match the pending request.
-func accept_pending_speed_change(ship: ShipInstance,
-		activation_identity: String, accepted_speed: int) -> bool:
-	if not _pending_matches(ship, activation_identity):
-		return false
-	if int(_pending_speed_change.get("target_speed", -1)) != accepted_speed:
-		return false
-	_pending_speed_change.clear()
-	_refresh_preview_from_canonical(ship)
-	return true
-
-
-## Restores transient Navigate/preview state after rejection of the matching
-## SetSpeed command. Canonical ShipInstance.current_speed is never changed.
-func reject_pending_speed_change(command: GameCommand,
-		ship: ShipInstance, activation_identity: String) -> bool:
-	if command == null or command.command_type != "set_speed" \
-			or not _pending_matches(ship, activation_identity):
-		return false
-	if command.player_index != int(_pending_speed_change.get("owner", -1)) \
-			or int(command.payload.get("ship_index", -1)) \
-			!= int(_pending_speed_change.get("ship_index", -1)):
-		return false
-	var snapshot: Dictionary = _pending_speed_change.get(
-			"activation_snapshot", {}) as Dictionary
-	_pending_speed_change.clear()
-	_activation_state.restore_speed_change_snapshot(snapshot)
-	_refresh_preview_from_canonical(ship)
-	EventBus.ship_speed_changed.emit(ship, ship.current_speed)
-	return true
-
-
-## Re-derives a matching live preview from canonical speed without resolving a
-## pending request. Used by the pre-commit stale-preview guard.
-func refresh_matching_preview_from_canonical(ship: ShipInstance,
-		activation_identity: String) -> bool:
-	if ship == null or ship != get_activation_ship() \
-			or activation_identity.is_empty() \
-			or activation_identity != _activation_identity \
-			or ship.ship_activation_identity != activation_identity:
-		return false
-	_refresh_preview_from_canonical(ship)
-	return true
-
-
-func _pending_matches(ship: ShipInstance,
-		activation_identity: String) -> bool:
-	return ship != null \
-			and not _pending_speed_change.is_empty() \
-			and _pending_speed_change.get("ship") == ship \
-			and activation_identity == _activation_identity \
-			and activation_identity == str(_pending_speed_change.get(
-					"activation_identity", "")) \
-			and ship.ship_activation_identity == activation_identity
-
-
-func _refresh_preview_from_canonical(ship: ShipInstance) -> void:
-	_refresh_navigation_chart_for_ship(ship)
-	_state.set_activation_preview_speed(ship.current_speed)
-	_update_visual()
-	maneuver_preview_changed.emit()
-	EventBus.navigate_token_spend_preview.emit(
-			ship, _activation_state.is_using_token_for_speed())
 
 
 ## Refreshes the visual representation after state changes.

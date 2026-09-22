@@ -1,5 +1,5 @@
-## Focused BUG-043 regressions for Network SetSpeed acceptance/rejection and
-## pre-commit maneuver-preview convergence.
+## Focused BUG-043 regressions for intent-only Maneuver commitment and
+## transient pre-commit preview behavior.
 extends GutTest
 
 
@@ -20,18 +20,6 @@ class SyncSubmitter:
 
 	func submit(command: GameCommand) -> Dictionary:
 		submitted.append(command)
-		return command.execute(GameManager.current_game_state)
-
-
-class AsyncSpeedSubmitter:
-	extends CommandSubmitter
-
-	var submitted: Array[GameCommand] = []
-
-	func submit(command: GameCommand) -> Dictionary:
-		submitted.append(command)
-		if command.command_type == "set_speed":
-			return {"awaiting_remote": true}
 		return command.execute(GameManager.current_game_state)
 
 
@@ -95,7 +83,6 @@ func test_speed_selection_stays_transient_until_maneuver_commit() -> void:
 	assert_eq(ship.current_speed, 2, "Preview must not mutate canonical speed")
 	assert_eq(tool.get_state().get_simulated_speed(), 1,
 			"Preview represents the selected target")
-	assert_false(tool.has_pending_speed_change())
 
 	tool._handle_speed_change(1)
 	assert_eq(tool.get_state().get_simulated_speed(), 2,
@@ -171,46 +158,6 @@ func test_accepted_explicit_token_spend_projects_canonical_removal() -> void:
 			"Accepted spend must remove the canonical command token")
 	assert_signal_emitted_with_parameters(
 			EventBus, "command_tokens_changed", [ship])
-
-
-func test_passive_matching_preview_refreshes_without_originating_command() -> void:
-	var fixture: Dictionary = _fixture("activation:bug043:passive")
-	var ship: ShipInstance = fixture["ship"] as ShipInstance
-	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
-	var controller: ShipActivationController = fixture["controller"] \
-			as ShipActivationController
-	var submitter := AsyncSubmitter.new()
-	GameManager.set_command_submitter(submitter)
-	controller._connect_signals()
-	ship.set_speed(1)
-
-	EventBus.ship_speed_changed.emit(ship, ship.current_speed)
-
-	assert_eq(tool.get_state().get_simulated_speed(), 1)
-	assert_eq(submitter.submitted.size(), 0,
-			"Passive convergence must not originate a SetSpeed command")
-
-
-func test_passive_speed_zero_invalidates_tool_without_originating_terminal_command() -> void:
-	var fixture: Dictionary = _fixture("activation:bug043:passive-zero", 1)
-	var ship: ShipInstance = fixture["ship"] as ShipInstance
-	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
-	var maneuver_controller: ManeuverToolController = \
-			fixture["maneuver_controller"] as ManeuverToolController
-	var controller: ShipActivationController = fixture["controller"] \
-			as ShipActivationController
-	var submitter := NetworkCommandSubmitter.new()
-	GameManager.set_command_submitter(submitter)
-	controller._connect_signals()
-	ship.set_speed(0)
-
-	EventBus.ship_speed_changed.emit(ship, ship.current_speed)
-
-	assert_eq(tool.get_state().get_simulated_speed(), 0)
-	assert_null(maneuver_controller.get_scene(),
-			"Passive speed-zero preview should be invalidated")
-	assert_false(submitter.is_awaiting_response(),
-			"Passive convergence must not originate terminal commands")
 
 
 func test_stale_preview_guard_runs_before_maneuver_commit_effects() -> void:
@@ -334,6 +281,20 @@ func test_reconstructed_live_tool_derives_canonical_speed_and_identity() -> void
 			ship.ship_activation_identity)
 	assert_true(controller._maneuver_preview_ready_for_commit(),
 			"A reconstructed matching tool must be eligible from canonical state")
+
+
+func test_maneuver_production_surfaces_have_no_legacy_set_speed_path() -> void:
+	for path: String in [
+		"res://src/scenes/tools/maneuver_tool_scene.gd",
+		"res://src/scenes/game_board/ship_activation_controller.gd",
+		"res://src/core/state/ship_activation_state.gd",
+	]:
+		var source: String = FileAccess.get_file_as_string(path)
+		assert_false(source.contains("pending_speed_change"), path)
+		assert_false(source.contains("speed_change_snapshot"), path)
+		assert_false(source.contains("_on_accepted_ship_speed_changed"), path)
+		assert_false(source.contains("_complete_live_speed_zero_maneuver"), path)
+		assert_false(source.contains("command_type != \"set_speed\""), path)
 
 
 func _fixture(activation_identity: String, initial_speed: int = 2,

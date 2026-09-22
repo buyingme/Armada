@@ -2096,35 +2096,65 @@ func submit_repair_facedown_hull(ship: ShipInstance,
 	return _submitter.submit(cmd)
 
 
-## Submits a [ResolveImmediateEffectCommand] for a faceup damage card.
-## Player choices are passed in [param choice].  Structural Damage's ordinary
-## deck draw is owned by ResolveImmediateEffectCommand.
+## Submits the application-contract-v2 immediate-effect command for the exact
+## active public occurrence. Presentation choices are translated into the
+## accepted command union; no array index or caller-owned continuation crosses
+## the command boundary.
 ## [param ship] — the ShipInstance that received the card.
 ## [param card] — the faceup DamageCard to resolve.
 ## [param choice] — player selection dictionary (may be empty).
 func submit_resolve_immediate_effect(ship: ShipInstance,
 		card: DamageCard, choice: Dictionary = {}) -> Dictionary:
-	if not current_game_state:
+	if current_game_state == null or ship == null or card == null:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
-	var card_idx: int = ship.faceup_damage.find(card)
+	var record: Dictionary = ship.active_immediate_resolution_snapshot()
+	if ship_index < 0 or record.is_empty() \
+			or str(record.get("public_card_ref", "")) != card.public_card_ref:
+		return {}
 	var pl: Dictionary = {
 		"owner_player": ship.owner_player,
 		"ship_index": ship_index,
-		"card_index": card_idx,
-		"choice": choice,
+		"public_card_ref": record["public_card_ref"],
+		"immediate_resolution_id": record["immediate_resolution_id"],
+		"enclosing_kind": record["enclosing_kind"],
 	}
-	# Network: route authority through the **submitting peer** so the
-	# server's peer/player check accepts the command regardless of who
-	# is the chooser (attacker vs defender, debug tool, etc.).  The
-	# payload's [code]owner_player[/code] still identifies the ship.
-	var submitter_player: int = ship.owner_player
-	if PlayMode.is_network():
-		var local_idx: int = NetworkManager.get_local_player_index()
-		if local_idx >= 0:
-			submitter_player = local_idx
-	var cmd := ResolveImmediateEffectCommand.new(
-			submitter_player, pl)
+	match str(record["enclosing_kind"]):
+		"attack":
+			pl["attack_id"] = record["attack_id"]
+		"maneuver":
+			for key: String in [
+				"ship_activation_identity", "maneuver_execution_id",
+				"maneuver_source_kind", "maneuver_source_id",
+			]:
+				pl[key] = record[key]
+		"debug":
+			pl["debug_application_id"] = record["debug_application_id"]
+		_:
+			return {}
+	match str(record["effect_id"]):
+		"projector_misaligned":
+			var projector_id: String = str(choice.get("id", ""))
+			if not projector_id.is_empty():
+				pl["projector_zone"] = projector_id.trim_prefix("zone_")
+		"injured_crew":
+			var token_id: String = str(choice.get("id", ""))
+			if not token_id.is_empty():
+				pl["defense_token_index"] = int(
+						token_id.trim_prefix("discard_defense_"))
+		"shield_failure":
+			pl["shield_zones"] = (choice.get("zones", []) as Array).duplicate()
+		"comm_noise":
+			var action_id: String = str(choice.get("id", ""))
+			if action_id == "reduce_speed":
+				pl["comm_noise_action"] = "speed"
+			elif action_id.begins_with("change_dial_"):
+				pl["comm_noise_action"] = "dial"
+				pl["replacement_command"] = int(
+						action_id.trim_prefix("change_dial_"))
+	var actor: int = int(record["actor_player"])
+	var cmd := CandidateResolveImmediateEffectCommand.new(
+			ship.owner_player if actor == -1 else actor, pl)
 	return _submitter.submit(cmd)
 
 

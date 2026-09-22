@@ -57,6 +57,8 @@ func test_rederives_each_still_faceup_copy_then_completes() -> void:
 
 
 func test_speed_survival_faceup_and_obstacle_order_are_rederived() -> void:
+	_ship.current_speed = 0
+	assert_ne(_command("faceup:source:0", "front").validate(_state), "")
 	_ship.current_speed = 1
 	assert_ne(_command("faceup:source:0", "front").validate(_state), "")
 	_ship.current_speed = 2
@@ -69,6 +71,64 @@ func test_speed_survival_faceup_and_obstacle_order_are_rederived() -> void:
 
 	_ship.mark_destroyed()
 	assert_ne(_command("faceup:source:1", "front").validate(_state), "")
+
+
+func test_lethal_hull_point_converges_on_passive_peer_and_cleans_execution() -> void:
+	var second: DamageCard = _ship.faceup_card_for_public_ref(
+			"faceup:source:1")
+	_ship.faceup_damage.erase(second)
+	_ship.ship_data.hull = 2
+	_ship.current_shields["front"] = 0
+	var authority_command: GameCommand = _command("faceup:source:0", "front")
+	var result: Dictionary = authority_command.execute(_state)
+	assert_true(bool(result["damage_application"]["destroyed"]))
+	assert_false(_ship.has_active_maneuver_execution())
+
+	var passive := GameState.new()
+	passive.initialize()
+	passive.current_phase = Constants.GamePhase.SHIP
+	passive.damage_deck = null
+	passive.rng = null
+	var mirror := ShipInstance.create_from_data(
+			"ruptured", _ship_data(), 2, 0)
+	mirror.ship_data.hull = 2
+	mirror.roster_entry_id = "ruptured-ship"
+	mirror.current_speed = 2
+	mirror.current_shields["front"] = 0
+	var public_source := DamageCard.create("Ship", "Ruptured Engine")
+	public_source.effect_id = "ruptured_engine"
+	public_source.timing = "persistent"
+	public_source.is_faceup = true
+	public_source.public_card_ref = "faceup:source:0"
+	mirror.add_faceup_damage(public_source)
+	passive.get_player_state(0).ships.append(mirror)
+	passive.passive_damage_ledger = PassiveDamageLedger.deserialize({
+		"schema_version": 1,
+		"draw_count": 2,
+		"discard_pile": [],
+		"facedown_counts": {"0:ruptured-ship": 0},
+	}, ["0:ruptured-ship"])
+	assert_true(mirror.bind_passive_damage_ledger(
+			passive.passive_damage_ledger, "0:ruptured-ship"))
+	assert_true(mirror.establish_ship_activation(ACTIVATION_ID))
+	assert_true(mirror.open_maneuver_opportunity(ACTIVATION_ID))
+	assert_true(mirror.commit_maneuver_execution(
+			ACTIVATION_ID, EXECUTION_ID, false, {
+				"yaw_clicks": [0], "yaw_bonus_joint": -1,
+				"pos_x": 0.4, "pos_y": 0.4, "rotation_deg": 0.0,
+			}, {"kind": "none"}))
+	assert_false(mirror.apply_maneuver_final_transform(
+			ACTIVATION_ID, EXECUTION_ID).is_empty())
+	var passive_command: GameCommand = COMMAND.new(
+			0, authority_command.payload.duplicate(true))
+	var projected: Dictionary = passive_command.project_application_result(
+			result, 1)
+	assert_eq(passive_command.execute_with_application_result(
+			passive, projected), projected)
+	assert_true(mirror.is_destroyed())
+	assert_eq(mirror.get_facedown_damage_count(), 1)
+	assert_eq(passive.passive_damage_ledger.draw_count, 1)
+	assert_false(mirror.has_active_maneuver_execution())
 
 
 func _command(public_ref: String, zone: String) -> GameCommand:

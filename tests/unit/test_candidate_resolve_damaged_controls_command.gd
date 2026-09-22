@@ -3,6 +3,8 @@ extends GutTest
 
 const COMMAND: GDScript = preload(
 		"res://src/core/commands/candidate_resolve_damaged_controls_command.gd")
+const EVALUATOR: GDScript = preload(
+		"res://src/core/movement/maneuver_execution_evaluator.gd")
 
 
 var _state: GameState
@@ -119,6 +121,106 @@ func test_passive_ship_branch_applies_aggregate_damage_without_physical_id() -> 
 	assert_eq(mirror.get_facedown_damage_count(), 1)
 	assert_eq(source.physical_card_id, "")
 	assert_eq(source.last_damaged_controls_execution_id, "maneuver:40")
+
+
+func test_obstacle_only_speed_zero_branch_resolves_each_copy_once() -> void:
+	var fixture: Dictionary = _obstacle_fixture()
+	var state: GameState = fixture["state"]
+	var ship: ShipInstance = fixture["ship"]
+	var first: Dictionary = fixture["payload"]
+	var second_source := DamageCard.create("Ship", "Damaged Controls")
+	second_source.physical_card_id = "damage:source:second"
+	second_source.effect_id = "damaged_controls"
+	second_source.timing = "persistent"
+	second_source.is_faceup = true
+	second_source.public_card_ref = "faceup:39:1"
+	ship.add_faceup_damage(second_source)
+	assert_eq(ship.current_speed, 0)
+	var first_command: GameCommand = COMMAND.new(0, first)
+	assert_eq(first_command.validate(state), "")
+	assert_false(first_command.execute(state).is_empty())
+	var next: Dictionary = EVALUATOR.next_action(state, 0, 0)
+	assert_eq(next["command_type"], "resolve_damaged_controls")
+	assert_eq(next["payload"]["public_card_ref"], "faceup:39:1")
+	assert_false(COMMAND.new(0, next["payload"]).execute(state).is_empty())
+	assert_eq(ship.get_facedown_damage_count(), 2)
+	assert_eq(EVALUATOR.next_action(state, 0, 0)["command_type"],
+			"commit_maneuver_obstacle_order")
+
+
+func test_ship_plus_obstacle_does_not_resolve_same_copy_twice() -> void:
+	_state.objectives["obstacles"] = [_obstacle_placement()]
+	var command: GameCommand = COMMAND.new(0, _payload)
+	assert_false(command.execute(_state).is_empty())
+	var next: Dictionary = EVALUATOR.next_action(_state, 0, 0)
+	assert_eq(next["command_type"], "commit_maneuver_obstacle_order")
+	assert_ne(next["command_type"], "resolve_damaged_controls")
+
+
+func test_obstacle_guard_round_trip_prevents_duplicate_after_recovery() -> void:
+	var fixture: Dictionary = _obstacle_fixture()
+	var state: GameState = fixture["state"]
+	var ship: ShipInstance = fixture["ship"]
+	var command: GameCommand = COMMAND.new(0, fixture["payload"])
+	assert_false(command.execute(state).is_empty())
+	var restored: ShipInstance = ShipInstance.deserialize(
+			ship.serialize(), ship.ship_data)
+	assert_not_null(restored)
+	assert_eq((restored.faceup_damage[0] as DamageCard)
+			.last_damaged_controls_execution_id, "maneuver:40")
+	state.get_player_state(0).ships[0] = restored
+	assert_ne(COMMAND.new(0, fixture["payload"]).validate(state), "")
+
+
+func _obstacle_fixture() -> Dictionary:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	state.objectives["obstacles"] = [_obstacle_placement()]
+	var ship := ShipInstance.create_from_data("moving", _ship_data(8), 0, 0)
+	ship.roster_entry_id = "moving"
+	ship.pos_x = 0.5
+	ship.pos_y = 0.5
+	state.get_player_state(0).ships.append(ship)
+	assert_true(ship.establish_ship_activation("ship-activation:40"))
+	assert_true(ship.open_maneuver_opportunity("ship-activation:40"))
+	assert_true(ship.commit_maneuver_execution(
+			"ship-activation:40", "maneuver:40", false, {
+				"yaw_clicks": [], "yaw_bonus_joint": -1,
+				"pos_x": 0.5, "pos_y": 0.5, "rotation_deg": 0.0,
+			}, {"kind": "none"}))
+	assert_false(ship.apply_maneuver_final_transform(
+			"ship-activation:40", "maneuver:40").is_empty())
+	var source := DamageCard.create("Ship", "Damaged Controls")
+	source.physical_card_id = "damage:source"
+	source.effect_id = "damaged_controls"
+	source.timing = "persistent"
+	source.is_faceup = true
+	source.public_card_ref = "faceup:39:0"
+	ship.add_faceup_damage(source)
+	state.damage_deck = _deck(3)
+	return {"state": state, "ship": ship, "payload": {
+		"owner_player": 0,
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:40",
+		"maneuver_execution_id": "maneuver:40",
+		"public_card_ref": "faceup:39:0",
+		"overlap_kind": "obstacle",
+		"obstacle_id": "obstacle:0",
+	}}
+
+
+func _obstacle_placement() -> Dictionary:
+	return {
+		"obstacle_id": "obstacle:0",
+		"data_key": "asteroid_1",
+		"pos_x": 0.5,
+		"pos_y": 0.5,
+		"rotation_deg": 0.0,
+		"placing_player": 0,
+		"placement_order": 0,
+		"last_maneuver_execution_id": "",
+	}
 
 
 func _deck(count: int) -> DamageDeck:

@@ -40,6 +40,7 @@ var _panel_mgr: UIPanelManager = null
 var _ship_token: ShipToken = null
 var _submitter: RecordingSubmitter = null
 var _saved_active_player: int = 0
+var _saved_command_registry: Dictionary = {}
 var _saved_game_state: GameState = null
 var _saved_local_player_index: int = -1
 var _saved_submitter: CommandSubmitter = null
@@ -47,6 +48,8 @@ var _saved_submitter: CommandSubmitter = null
 
 func before_each() -> void:
 	_saved_active_player = GameManager.active_player
+	_saved_command_registry = GameCommand._registry.duplicate()
+	_register_candidate_route_types()
 	_saved_game_state = GameManager.current_game_state
 	_saved_local_player_index = NetworkManager._local_player_index
 	_saved_submitter = GameManager.get_command_submitter()
@@ -57,6 +60,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	GameCommand._registry = _saved_command_registry
 	GameManager.set_command_submitter(_saved_submitter)
 	GameManager.current_game_state = _saved_game_state
 	GameManager.active_player = _saved_active_player
@@ -67,6 +71,28 @@ func after_each() -> void:
 	_ship_token = null
 	_attack_executor = null
 	_submitter = null
+
+
+func _register_candidate_route_types() -> void:
+	GameCommand.register_type("commit_maneuver_obstacle_order",
+			func(player: int, payload: Dictionary) -> GameCommand:
+				return CandidateCommitManeuverObstacleOrderCommand.new(
+						player, payload))
+	GameCommand.register_type("resolve_thruster_fissure",
+			func(player: int, payload: Dictionary) -> GameCommand:
+				return CandidateResolveThrusterFissureCommand.new(player, payload))
+	GameCommand.register_type("resolve_debris_overlap",
+			func(player: int, payload: Dictionary) -> GameCommand:
+				return CandidateResolveDebrisOverlapCommand.new(player, payload))
+	GameCommand.register_type("resolve_station_overlap",
+			func(player: int, payload: Dictionary) -> GameCommand:
+				return CandidateResolveStationOverlapCommand.new(player, payload))
+	GameCommand.register_type("resolve_ruptured_engine",
+			func(player: int, payload: Dictionary) -> GameCommand:
+				return CandidateResolveRupturedEngineCommand.new(player, payload))
+	GameCommand.register_type("resolve_immediate_effect",
+			func(player: int, payload: Dictionary) -> GameCommand:
+				return CandidateResolveImmediateEffectCommand.new(player, payload))
 
 
 func test_sync_activation_step_from_flow_unavailable_repair_submits_attack_step() -> void:
@@ -320,6 +346,75 @@ func test_debris_choice_explains_zone_damage_and_shield_priority() -> void:
 			"Choose one hull zone to suffer the Debris Field's two damage " \
 			+ "points. Shields in that zone are lost first.")
 	assert_eq((descriptor.get("options", []) as Array).size(), 4)
+
+
+func test_maneuver_consequence_route_dispatches_exact_candidate_payloads() -> void:
+	var controller := ShipActivationController.new()
+	add_child_autofree(controller)
+	var base: Dictionary = {
+		"owner_player": 0,
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:evidence",
+		"maneuver_execution_id": "maneuver:evidence",
+	}
+	var cases: Array[Dictionary] = [
+		{"type": "commit_maneuver_obstacle_order",
+			"action": {"payload": base.merged({"obstacle_ids": ["a", "b"]})},
+			"selection": {"id": "b|a"},
+			"expected": {"obstacle_ids": ["b", "a"]}},
+		{"type": "resolve_thruster_fissure",
+			"action": {"payload": base.merged({"public_card_ref": "faceup:t"})},
+			"selection": {"id": "front"},
+			"expected": {"hull_zone": "front"}},
+		{"type": "resolve_debris_overlap",
+			"action": {"payload": base.merged({"obstacle_id": "debris"})},
+			"selection": {"id": "rear"},
+			"expected": {"hull_zone": "rear"}},
+		{"type": "resolve_station_overlap",
+			"action": {"payload": base.merged({"obstacle_id": "station"})},
+			"selection": {"id": "facedown|1"},
+			"expected": {"action": "use_facedown", "facedown_ordinal": 1}},
+		{"type": "resolve_ruptured_engine",
+			"action": {"payload": base.merged({"public_card_ref": "faceup:r"})},
+			"selection": {"id": "left"},
+			"expected": {"hull_zone": "left"}},
+		{"type": "resolve_immediate_effect", "choice": "shield_zones",
+			"action": {"payload": base.merged({
+				"public_card_ref": "faceup:s",
+				"immediate_resolution_id": "immediate:s",
+				"enclosing_kind": "maneuver",
+				"maneuver_source_kind": "asteroid",
+				"maneuver_source_id": "asteroid",
+			})},
+			"selection": {"zones": ["front", "right"]},
+			"expected": {"shield_zones": ["front", "right"]}},
+		{"type": "resolve_immediate_effect", "choice": "comm_noise",
+			"action": {"payload": base.merged({
+				"public_card_ref": "faceup:c",
+				"immediate_resolution_id": "immediate:c",
+				"enclosing_kind": "maneuver",
+				"maneuver_source_kind": "asteroid",
+				"maneuver_source_id": "asteroid",
+			})},
+			"selection": {"id": "dial|2"},
+			"expected": {"comm_noise_action": "dial", "replacement_command": 2}},
+	]
+	for evidence: Dictionary in cases:
+		var action: Dictionary = (evidence["action"] as Dictionary).duplicate(true)
+		action["command_type"] = evidence["type"]
+		action["player_index"] = 0
+		if evidence.has("choice"):
+			action["choice"] = evidence["choice"]
+		controller._pending_maneuver_action = action
+		controller._on_maneuver_consequence_choice(evidence["selection"])
+		var command: GameCommand = _submitter.submitted_commands.back()
+		assert_eq(command.command_type, evidence["type"])
+		for key: String in evidence["expected"]:
+			var actual: Variant = Array(command.payload[key]) \
+					if command.payload[key] is PackedStringArray \
+					else command.payload[key]
+			assert_eq(actual, evidence["expected"][key],
+					"%s.%s" % [evidence["type"], key])
 
 
 func test_commanded_squadron_completion_resumes_accepted_repair_after_spend() \

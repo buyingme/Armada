@@ -112,6 +112,25 @@ func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 			"Restored blocked execution should not add command tokens.")
 
 
+func test_repairing_source_card_restores_command_token_gain() -> void:
+	var ship: ShipInstance = _state.get_ship(OWNER_PLAYER, SHIP_INDEX)
+	_add_life_support_failure(ship)
+	assert_true(_token_gain_blocked(ship))
+	var repair := RepairActionCommand.new(OWNER_PLAYER, {
+		"action_type": "repair_hull",
+		"owner_player": OWNER_PLAYER,
+		"ship_index": SHIP_INDEX,
+		"damage_face": "faceup",
+		"card_index": 0,
+	})
+	assert_false(repair.execute(_state).is_empty())
+	assert_false(_token_gain_blocked(ship),
+			"Removing the persistent source must remove its blocker.")
+	var result: Dictionary = _make_convert_command(true).execute(_state)
+	assert_true(result.get("token_added", false))
+	assert_eq(ship.command_tokens.get_token_count(), 1)
+
+
 func _validator_count(step_id: Constants.InteractionStep) -> int:
 	return RuleRegistry.validators_for(
 			Constants.InteractionFlow.SHIP_ACTIVATION,

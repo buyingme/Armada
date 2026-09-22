@@ -39,6 +39,21 @@ func test_structural_draws_extra_then_flips_or_completes_when_exhausted() -> voi
 	assert_false(_ship.has_active_immediate_resolution())
 
 
+func test_structural_reshuffles_discard_without_synthesizing_damage() -> void:
+	_assign("structural_damage", "immediate")
+	var recycled: DamageCard = _card(
+			"damage:recycled", "ordinary", "persistent")
+	_state.damage_deck = DamageDeck.deserialize_for_save7({
+		"draw_pile": [],
+		"discard_pile": [recycled.serialize_for_save7("discard")],
+	})
+	var result: Dictionary = _resolve({})
+	assert_true(bool(result["effect_result"]["additional_card_dealt"]))
+	assert_eq(result["damage_application"]["facedown_delta"], 2)
+	assert_eq(_ship.facedown_damage.size(), 2)
+	assert_eq(_state.damage_deck.get_total_count(), 0)
+
+
 func test_projector_unique_is_automatic_and_positive_tie_requires_owner() -> void:
 	_assign("projector_misaligned", "immediate")
 	var result: Dictionary = _resolve({})
@@ -53,6 +68,22 @@ func test_projector_unique_is_automatic_and_positive_tie_requires_owner() -> voi
 	assert_eq(command.validate(_state), "")
 	result = command.execute(_state)
 	assert_eq(result["effect_result"], {"zone": "left", "shields_lost": 2})
+
+
+func test_projector_zero_all_zone_tie_and_pending_revalidation() -> void:
+	_ship.current_shields = {"front": 0, "left": 0, "right": 0, "rear": 0}
+	_assign("projector_misaligned", "immediate")
+	var result: Dictionary = _resolve({})
+	assert_eq(result["effect_result"], {"zone": "", "shields_lost": 0})
+
+	_reset_ship()
+	_ship.current_shields = {"front": 1, "left": 1, "right": 1, "rear": 1}
+	_assign("projector_misaligned", "immediate")
+	var tied: GameCommand = _command({"projector_zone": "left"})
+	assert_eq(tied.validate(_state), "")
+	_ship.current_shields["right"] = 2
+	assert_ne(tied.validate(_state), "")
+	assert_eq(tied.execute(_state), {})
 
 
 func test_life_support_clears_tokens_but_retains_faceup_persistent_source() -> void:
@@ -89,6 +120,15 @@ func test_injured_zero_and_one_are_automatic_multiple_is_owner_choice() -> void:
 	assert_eq(result["effect_result"], {"defense_token_index": 1})
 
 
+func test_injured_pending_choice_revalidates_token_state() -> void:
+	_assign("injured_crew", "immediate")
+	var command: GameCommand = _command({"defense_token_index": 1})
+	assert_eq(command.validate(_state), "")
+	_ship.defense_tokens[1]["state"] = Constants.DefenseTokenState.DISCARDED
+	assert_ne(command.validate(_state), "")
+	assert_eq(command.execute(_state), {})
+
+
 func test_shield_failure_opponent_selects_zero_to_two_distinct_zones() -> void:
 	_assign("shield_failure", "immediate")
 	var wrong: GameCommand = _command({"shield_zones": ["left"]})
@@ -99,6 +139,17 @@ func test_shield_failure_opponent_selects_zero_to_two_distinct_zones() -> void:
 			{"shield_zones": ["left", "rear"]})
 	assert_eq(_ship.current_shields["left"], 0)
 	assert_eq(_ship.current_shields["rear"], 0)
+
+
+func test_shield_failure_accepts_zero_one_and_zero_shield_zone() -> void:
+	for zones: Array in [[], ["front"], ["left"]]:
+		_reset_ship()
+		if zones == ["left"]:
+			_ship.current_shields["left"] = 0
+		_assign("shield_failure", "immediate")
+		var result: Dictionary = _resolve({"shield_zones": zones})
+		assert_eq(result["effect_result"]["shield_zones"], zones)
+		assert_false(_ship.has_active_immediate_resolution())
 
 
 func test_comm_noise_all_four_availability_branches() -> void:
@@ -127,6 +178,20 @@ func test_comm_noise_all_four_availability_branches() -> void:
 	_assign("comm_noise", "immediate")
 	result = _resolve({"comm_noise_action": "none"})
 	assert_eq(result["effect_result"], {"comm_noise_action": "none"})
+
+
+func test_comm_noise_accepts_every_replacement_command_value() -> void:
+	for replacement: int in range(4):
+		_reset_ship()
+		_ship.current_speed = 0
+		_add_hidden_dial()
+		_assign("comm_noise", "immediate")
+		var result: Dictionary = _resolve({
+			"comm_noise_action": "dial",
+			"replacement_command": replacement,
+		})
+		assert_eq(result["effect_result"]["replacement_command"], replacement)
+		assert_false(_ship.has_active_immediate_resolution())
 
 
 func test_stale_duplicate_unknown_or_extra_fields_reject_without_mutation() -> void:

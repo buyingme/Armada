@@ -5,6 +5,8 @@ const OVERLAP: GDScript = preload(
 		"res://src/core/geometry/obstacle_overlap_authority.gd")
 const CONTOUR: GDScript = preload(
 		"res://src/core/geometry/obstacle_contour.gd")
+const CATALOG: GDScript = preload(
+		"res://src/core/geometry/obstacle_contour_catalog.gd")
 
 
 func test_synthetic_overlap_rotation_touch_and_deterministic_order() -> void:
@@ -47,6 +49,25 @@ func test_schema_rejects_wrong_winding_and_round_trips_synthetic_data() -> void:
 	assert_eq(CONTOUR.from_dictionary(serialized).serialize(), serialized)
 	serialized["winding"] = CONTOUR.WINDING_COUNTERCLOCKWISE
 	assert_null(CONTOUR.from_dictionary(serialized))
+
+
+func test_all_approved_contours_overlap_at_representative_rotations() -> void:
+	var contours: Dictionary = CATALOG.load_all()
+	assert_eq(contours.keys().size(), 6)
+	var ship := ShipBase.new(Constants.ShipSize.SMALL,
+			Transform2D(0.0, Vector2(500.0, 500.0)))
+	for key: String in [
+		"asteroid_1", "asteroid_2", "asteroid_3",
+		"debris_1", "debris_2", "station",
+	]:
+		for rotation: float in [0.0, 37.0, 123.0]:
+			assert_true(OVERLAP.has_positive_overlap(
+					ship, contours[key], Transform2D(
+							deg_to_rad(rotation), Vector2(500.0, 500.0)),
+					0.00001), "%s at %s degrees" % [key, rotation])
+		assert_false(OVERLAP.has_positive_overlap(
+				ship, contours[key], Transform2D(
+						0.0, Vector2(1500.0, 1500.0)), 0.00001), key)
 
 
 func _square() -> RefCounted:

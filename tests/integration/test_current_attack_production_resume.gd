@@ -2303,6 +2303,12 @@ func test_commanded_move_no_target_waits_for_skip_and_preserves_capacity() \
 	var modal: SquadronActivationModal = controller.get_modal()
 	var first: SquadronInstance = state.get_squadron(0, 0)
 	var first_token: SquadronToken = modal.get_selected_token()
+	var engagement_cache_before_move: Array[bool] = []
+	for player_state: PlayerState in state.player_states:
+		for raw_squadron: Variant in player_state.squadrons:
+			var cached_squadron := raw_squadron as SquadronInstance
+			cached_squadron.is_engaged = true
+			engagement_cache_before_move.append(cached_squadron.is_engaged)
 	var observed: Dictionary = {}
 	CommandProcessor.command_executed.connect(
 			func(command: GameCommand, _result: Dictionary) -> void:
@@ -2321,12 +2327,19 @@ func test_commanded_move_no_target_waits_for_skip_and_preserves_capacity() \
 	modal._on_move_pressed()
 	first_token.global_position += Vector2(-300.0, -100.0)
 	controller._commit_squadron_placement(first_token)
+	var engagement_cache_after_move: Array[bool] = []
+	for player_state: PlayerState in state.player_states:
+		for raw_squadron: Variant in player_state.squadrons:
+			engagement_cache_after_move.append(
+					(raw_squadron as SquadronInstance).is_engaged)
 
 	assert_eq(observed.get("complete_error", ""),
 			"Squadron still has an available action.",
 			"Move alone must not make CompleteSquadronActivation legal.")
 	assert_true(bool(observed.get("dial_still_revealed", false)),
 			"The command dial must remain until canonical command completion.")
+	assert_eq(engagement_cache_after_move, engagement_cache_before_move,
+			"Accepted movement must not mutate the serialized engagement cache.")
 	assert_eq(first.move_action_disposition,
 			SquadronInstance.MOVE_ACTION_COMMITTED)
 	assert_true(TargetingListBuilder.authoritative_squadron_target_entries(
@@ -2402,9 +2415,23 @@ func test_commanded_squadron_completion_reopens_existing_opportunity() -> void:
 	assert_eq(state.interaction_flow.step_id, Constants.InteractionStep.SQUADRON_STEP)
 	assert_true(board._squadron_phase_controller.is_command_mode())
 	var second_token: SquadronToken = _board_squadron_token(board, second)
+	var engagement_cache_before_selection: Array[bool] = []
+	for player_state: PlayerState in state.player_states:
+		for raw_squadron: Variant in player_state.squadrons:
+			var cached_squadron := raw_squadron as SquadronInstance
+			cached_squadron.is_engaged = true
+			engagement_cache_before_selection.append(cached_squadron.is_engaged)
 	assert_true(board._squadron_phase_controller.try_handle_squadron_click(
 			second_token),
 			"The remaining capacity must be projected as the same open command.")
+	var engagement_cache_after_selection: Array[bool] = []
+	for player_state: PlayerState in state.player_states:
+		for raw_squadron: Variant in player_state.squadrons:
+			engagement_cache_after_selection.append(
+					(raw_squadron as SquadronInstance).is_engaged)
+	assert_eq(engagement_cache_after_selection,
+			engagement_cache_before_selection,
+			"Squadron selection must not mutate the serialized engagement cache.")
 	second_token.global_position += Vector2(450.0, -100.0)
 	var second_instance: SquadronInstance = second_token.get_squadron_instance()
 	assert_true(second_instance.has_activation_action_state(),

@@ -165,6 +165,31 @@ func test_is_engaged_false_when_alone() -> void:
 			"Should not be engaged when alone")
 
 
+func test_legality_derivation_ignores_serialized_engagement_cache() -> void:
+	var sq_a: SquadronInstance = _make_squadron(0)
+	var sq_b: SquadronInstance = _make_squadron(1)
+	sq_a.is_engaged = true
+	var alone: Array[Dictionary] = [_entry(sq_a, Vector2.ZERO)]
+	assert_false(EngagementResolver.is_engaged(
+			sq_a, Vector2.ZERO, alone),
+			"Fresh engagement must ignore a stale true serialized cache.")
+	assert_true(EngagementResolver.can_squadron_move(
+			sq_a, Vector2.ZERO, alone),
+			"Fresh movement legality must ignore a stale true cache.")
+
+	sq_a.is_engaged = false
+	var close_enemy: Array[Dictionary] = [
+		_entry(sq_a, Vector2.ZERO),
+		_entry(sq_b, _close_pos()),
+	]
+	assert_true(EngagementResolver.is_engaged(
+			sq_a, Vector2.ZERO, close_enemy),
+			"Fresh engagement must ignore a stale false serialized cache.")
+	assert_false(EngagementResolver.can_squadron_move(
+			sq_a, Vector2.ZERO, close_enemy),
+			"Fresh movement legality must ignore a stale false cache.")
+
+
 # ===========================================================================
 # update_engagement_flags
 # ===========================================================================

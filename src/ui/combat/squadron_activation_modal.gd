@@ -492,11 +492,14 @@ func close_modal() -> void:
 
 ## Sets which actions are available for the currently selected squadron.
 ## Called by game_board after [method _on_squadron_selected_in_modal].
-## [param can_move] — false if engaged or speed 0.
+## [param can_move] — false if engagement or another rule prohibits movement.
 ## [param has_targets] — false if no enemies in range.
-func set_action_availability(can_move: bool, has_targets: bool) -> void:
+## [param must_attack_engaged] — true when fresh engagement requires an attack.
+func set_action_availability(can_move: bool, has_targets: bool,
+		must_attack_engaged: bool) -> void:
 	_can_move = can_move
 	_has_targets = has_targets
+	_is_engaged = must_attack_engaged
 	if _state == State.ACTION_CHOICE:
 		_update_action_buttons()
 
@@ -683,7 +686,10 @@ func _apply_squadron_selection(token: SquadronToken,
 		instance: SquadronInstance) -> void:
 	_selected_token = token
 	_selected_instance = instance
-	_is_engaged = instance.is_engaged
+	# Engagement is derived by the controller from current board facts and
+	# supplied through set_action_availability(). The serialized legacy cache is
+	# deliberately not a presentation authority.
+	_is_engaged = false
 	_has_rogue = instance.squadron_data != null \
 			and instance.squadron_data.has_keyword("Rogue")
 	# In command mode, ALL squadrons can move and attack (CM-021).

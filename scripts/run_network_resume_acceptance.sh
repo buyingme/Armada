@@ -25,12 +25,15 @@ trap cleanup EXIT INT TERM
 GODOT_BIN="${GODOT_BIN:-godot}"
 RUN_SECTION_D_ONLY=false
 RUN_BUG031_ONLY=false
+RUN_COMMANDED_ONLY=false
 if [[ "${1:-}" == "--section-d-only" ]]; then
   RUN_SECTION_D_ONLY=true
 elif [[ "${1:-}" == "--bug-031-only" ]]; then
   RUN_BUG031_ONLY=true
+elif [[ "${1:-}" == "--commanded-squadron-only" ]]; then
+  RUN_COMMANDED_ONLY=true
 elif [[ $# -ne 0 ]]; then
-  echo "Usage: $0 [--section-d-only|--bug-031-only]" >&2
+  echo "Usage: $0 [--section-d-only|--bug-031-only|--commanded-squadron-only]" >&2
   exit 2
 fi
 wait_for_child() {
@@ -220,12 +223,14 @@ run_reconnect() {
   wait_for_child "$reconnect" "clean reconnect endpoint"
   wait_for_child "$host" "reconnect host"
 }
-if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false ]]; then
+if [[ "$RUN_COMMANDED_ONLY" == true ]]; then
+  run_commanded_squadron $((27500 + ($$ % 400)))
+elif [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false ]]; then
   run_mapping 0 $((26000 + ($$ % 1000)))
   run_mapping 1 $((27000 + ($$ % 1000)))
   run_commanded_squadron $((27500 + ($$ % 400)))
 fi
-if [[ "$RUN_SECTION_D_ONLY" == false ]]; then
+if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_COMMANDED_ONLY" == false ]]; then
   run_bug031_scenario commanded_decline \
     "BUG-031 commanded Move decline" $((27700 + ($$ % 120)))
   run_bug031_scenario commanded_activation_gate \
@@ -233,11 +238,12 @@ if [[ "$RUN_SECTION_D_ONLY" == false ]]; then
   run_bug031_scenario commanded_activation_reject \
     "BUG-031 activation rejection recovery" $((27880 + ($$ % 20)))
 fi
-if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false ]]; then
+if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false \
+    && "$RUN_COMMANDED_ONLY" == false ]]; then
   run_ship_end_activation $((27900 + ($$ % 80)))
   run_reconnect $((28000 + ($$ % 1000)))
 fi
-if [[ "$RUN_BUG031_ONLY" == false ]]; then
+if [[ "$RUN_BUG031_ONLY" == false && "$RUN_COMMANDED_ONLY" == false ]]; then
   run_compatibility_network $((29000 + ($$ % 1000)))
   run_compatibility_hot_seat
   run_network_replay $((30000 + ($$ % 1000)))
@@ -246,6 +252,7 @@ HOME="$RUN_ROOT/home-assertions" "$GODOT_BIN" --headless --path "$PROJECT_DIR" -
   res://tests/acceptance/network_resume/assertions.gd -- --shared="$SHARED" \
 	--replay="$PROJECT_DIR/tests/fixtures/baseline_traces/replay_network.json" \
   --logs="$LOGS" \
-  --section-d-only="$RUN_SECTION_D_ONLY" --bug-031-only="$RUN_BUG031_ONLY"
+	--section-d-only="$RUN_SECTION_D_ONLY" --bug-031-only="$RUN_BUG031_ONLY" \
+	--commanded-squadron-only="$RUN_COMMANDED_ONLY"
 echo "PASS: MATCH-003 real ENet fresh-resume and compatibility scenarios completed."
 RESULT="passed"

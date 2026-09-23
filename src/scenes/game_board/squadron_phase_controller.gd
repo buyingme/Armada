@@ -257,9 +257,6 @@ func begin_activation_flow() -> void:
 	# active player's last activation (passive peer never gets a
 	# move_commit signal locally to clear it).
 	_remove_squadron_overlay()
-	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
-	var obstruction_bodies: Array = _build_obstruction_bodies()
-	EngagementResolver.update_engagement_flags(all_squads, obstruction_bodies)
 	if _squadron_modal:
 		_squadron_modal.open_for_turn(
 				_squadron_activation_count + 1,
@@ -713,13 +710,13 @@ func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 	if _highlight_active.is_valid():
 		_highlight_active.call(instance)
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
-	# Refresh engagement flags from live positions — a squadron may have
-	# been destroyed during a prior activation this turn, leaving the
-	# cached is_engaged flag stale (Bug H).
 	var obstruction_bodies: Array = _build_obstruction_bodies()
-	EngagementResolver.update_engagement_flags(all_squads, obstruction_bodies)
 	var can_move: bool = SquadronKeywordRuleHelper.can_move_with_heavy_rule(
 			instance, token.global_position, all_squads, obstruction_bodies)
+	var must_attack_engaged: bool = \
+			SquadronKeywordRuleHelper.is_engaged_by_non_heavy(
+					instance, token.global_position, all_squads,
+					obstruction_bodies)
 	var has_targets: bool = _squadron_has_valid_targets(
 			instance, token, all_squads, obstruction_bodies)
 	var faction: Constants.Faction = Constants.Faction.REBEL_ALLIANCE
@@ -736,7 +733,8 @@ func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 	_squadron_move_overlay.setup(
 			token.global_position, speed, can_move, faction,
 			token.get_radius_px())
-	_squadron_modal.set_action_availability(can_move, has_targets)
+	_squadron_modal.set_action_availability(
+			can_move, has_targets, must_attack_engaged)
 	_log.info("Squadron overlay shown for %s (can_move=%s, targets=%s)." % [
 			instance.data_key, str(can_move), str(has_targets)])
 
@@ -1015,14 +1013,17 @@ func _complete_accepted_move(instance: SquadronInstance,
 		return
 	var updated_squads: Array[Dictionary] = _build_all_squadron_positions()
 	var obstruction_bodies: Array = _build_obstruction_bodies()
-	EngagementResolver.update_engagement_flags(
-			updated_squads, obstruction_bodies)
+	var must_attack_engaged: bool = \
+			SquadronKeywordRuleHelper.is_engaged_by_non_heavy(
+					instance, token.global_position, updated_squads,
+					obstruction_bodies)
 	var new_has_targets: bool = _squadron_has_valid_targets(
 			instance, token, updated_squads, obstruction_bodies)
-	_squadron_modal.set_action_availability(false, new_has_targets)
+	_squadron_modal.set_action_availability(
+			false, new_has_targets, must_attack_engaged)
 	EventBus.squadron_moved.emit(token)
 	_squadron_modal.notify_move_completed(await_authoritative_completion)
-	_log.info("Squadron move accepted — engagement updated.")
+	_log.info("Squadron move accepted — engagement re-derived for presentation.")
 
 
 func _matches_pending_network_move(command: GameCommand) -> bool:

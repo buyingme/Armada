@@ -157,9 +157,10 @@ func _begin_fresh_resume() -> void:
 		return
 	_started_resume = true
 	var state: GameState = _build_commanded_squadron_state() \
-			if _scenario in ["commanded_squadron", "commanded_decline"] else (
+			if _scenario == "commanded_decline" else (
 					_build_commanded_selection_state() \
-					if _scenario in ["commanded_activation_gate",
+					if _scenario in ["commanded_squadron",
+							"commanded_activation_gate",
 							"commanded_activation_reject"] else (
 					_build_ship_end_activation_state() \
 					if _scenario == "ship_end_activation" \
@@ -462,8 +463,8 @@ func _begin_hot_seat_compatibility() -> void:
 		_finish(false, "hot_seat_checkpoint_install_failed")
 		return
 	_compatibility = {
-		"named_save_v6": loaded_named_meta.save_format_version,
-		"checkpoint_v6": checkpoint_meta.save_format_version,
+		"named_save_v7": loaded_named_meta.save_format_version,
+		"checkpoint_v7": checkpoint_meta.save_format_version,
 		"binding_before": expected_binding,
 		"binding_after": GameManager.current_game_state.serialize().get(
 				"match_player_control_binding", {}),
@@ -511,7 +512,7 @@ func _begin_network_same_live_named_load() -> void:
 			_compatibility["before"].get("binding", {}):
 		_finish(false, "network_named_compatibility_mismatch")
 		return
-	_compatibility["named_save_v6"] = loaded_meta.save_format_version
+	_compatibility["named_save_v7"] = loaded_meta.save_format_version
 	LobbyManager.host_load_save(loaded_state, loaded_meta)
 
 
@@ -543,7 +544,7 @@ func _begin_network_same_live_checkpoint_load() -> void:
 			_compatibility["before"].get("binding", {}):
 		_finish(false, "network_checkpoint_compatibility_mismatch")
 		return
-	_compatibility["checkpoint_v6"] = loaded_meta.save_format_version
+	_compatibility["checkpoint_v7"] = loaded_meta.save_format_version
 	_compatibility["checkpoint_persisted"] = true
 	LobbyManager.host_load_save(loaded_state, loaded_meta)
 
@@ -750,10 +751,25 @@ func _advance_commanded_client(
 	if modal == null or attacker == null or defender == null:
 		_finish(false, "commanded_client_projection_missing")
 		return
+	if not attacker.has_activation_action_state():
+		if not modal.visible or not modal.is_command_mode():
+			_game_board._ship_activation_controller \
+					.open_squadron_command_from_interaction_state()
+			return
+		if modal.get_state() != SquadronActivationModal.State.WAITING_FOR_SELECTION:
+			return
+		var attacker_token: SquadronToken = \
+				_game_board._find_squadron_token_for_instance(attacker)
+		if attacker_token == null \
+				or not controller.try_handle_squadron_click(attacker_token):
+			_finish(false, "commanded_activation_selection_failed")
+		return
 	if not _commanded_attack_started:
 		if modal.get_state() != SquadronActivationModal.State.ACTION_CHOICE \
 				or modal._selected_instance != attacker:
 			return
+		_commanded_evidence["selection_preserved_engagement_cache"] = \
+				not attacker.is_engaged and not defender.is_engaged
 		modal._on_attack_pressed()
 		var defender_token: SquadronToken = \
 				_game_board._find_squadron_token_for_instance(defender)
@@ -812,7 +828,7 @@ func _advance_commanded_client(
 		_commanded_evidence["no_completion_at_move_submit"] = \
 				_history_count(CompleteSquadronActivationCommand.TYPE) == 0
 		_commanded_evidence["no_second_activation_at_move_submit"] = \
-				_history_count("activate_squadron") == 0
+				_history_count("activate_squadron") == 1
 		_commanded_evidence["no_premature_resource_spend"] = \
 				_history_count("spend_dial") == 0 \
 				and _history_count("spend_command_token") == 0 \
@@ -848,6 +864,8 @@ func _advance_commanded_client(
 		"attacker_activated": attacker.activated_this_round,
 		"attacker_moved": attacker.move_action_disposition \
 				== SquadronInstance.MOVE_ACTION_COMMITTED,
+		"engagement_cache_inert": not attacker.is_engaged \
+				and not defender.is_engaged,
 		"ship_committed": ship.squadron_command_activations_committed,
 		"dial_still_revealed": not ship.command_dial_stack \
 				.get_revealed_dial().is_empty(),
@@ -911,6 +929,8 @@ func _advance_commanded_host(
 		"attacker_activated": attacker.activated_this_round,
 		"attacker_moved": attacker.move_action_disposition \
 				== SquadronInstance.MOVE_ACTION_COMMITTED,
+		"engagement_cache_inert": not attacker.is_engaged \
+				and not defender.is_engaged,
 		"ship_committed": ship.squadron_command_activations_committed,
 		"dial_still_revealed": not ship.command_dial_stack \
 				.get_revealed_dial().is_empty(),
@@ -1284,10 +1304,8 @@ func _advance_ship_end_activation() -> void:
 	if _role == "host":
 		_finish_ship_end_activation_host(state, ship)
 		return
-	var controller: ShipActivationController = \
-			_game_board._ship_activation_controller
 	var modal: ActivationModal = _game_board._panel_mgr.activation_modal
-	if controller == null or modal == null:
+	if _game_board._ship_activation_controller == null or modal == null:
 		_finish(false, "end_activation_real_control_missing")
 		return
 	if not _end_maneuver_submitted:
@@ -1297,9 +1315,8 @@ func _advance_ship_end_activation() -> void:
 			_finish(false, "end_activation_maneuver_submit_failed")
 			return
 		_end_maneuver_submitted = true
-		# This is the existing production tail of a committed maneuver. It
-		# requests the command-backed DONE projection without ending activation.
-		controller.show_end_activation_after_maneuver()
+		# The accepted complete_maneuver route invokes the production controller
+		# callback that requests the command-backed DONE projection.
 		return
 	if not _end_control_clicked:
 		if state.interaction_flow.step_id \

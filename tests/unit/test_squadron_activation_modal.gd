@@ -220,39 +220,42 @@ func test_click_when_hidden_returns_false() -> void:
 
 func test_engaged_squadron_move_hidden() -> void:
 	_start_squadron_phase_game()
-	var inst: SquadronInstance = _make_instance(0, true) # engaged
+	var inst: SquadronInstance = _make_instance(0, false)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
 	ps.squadrons.append(inst)
 	_modal.open_for_turn(1, 2)
 	var token: SquadronToken = _make_token(inst)
 	_modal.handle_squadron_click(token)
+	_modal.set_action_availability(false, true, true)
 	assert_false(_modal._move_button.visible,
 			"Move button should be hidden when engaged (SM-011)")
 
 
 func test_engaged_squadron_skip_disabled() -> void:
 	_start_squadron_phase_game()
-	var inst: SquadronInstance = _make_instance(0, true) # engaged
+	var inst: SquadronInstance = _make_instance(0, false)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
 	ps.squadrons.append(inst)
 	_modal.open_for_turn(1, 2)
 	var token: SquadronToken = _make_token(inst)
 	_modal.handle_squadron_click(token)
+	_modal.set_action_availability(false, true, true)
 	assert_true(_modal._skip_button.disabled,
 			"Skip button should be disabled when engaged (SM-012)")
 
 
 func test_engaged_squadron_attack_enabled() -> void:
 	_start_squadron_phase_game()
-	var inst: SquadronInstance = _make_instance(0, true) # engaged
+	var inst: SquadronInstance = _make_instance(0, false)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
 	ps.squadrons.append(inst)
 	_modal.open_for_turn(1, 2)
 	var token: SquadronToken = _make_token(inst)
 	_modal.handle_squadron_click(token)
+	_modal.set_action_availability(false, true, true)
 	assert_false(_modal._attack_button.disabled,
 			"Attack button should be enabled for engaged squadron")
 
@@ -408,7 +411,7 @@ func test_set_action_availability_hides_move() -> void:
 	_modal.open_for_turn(1, 2)
 	var token: SquadronToken = _make_token(inst)
 	_modal.handle_squadron_click(token)
-	_modal.set_action_availability(false, true)
+	_modal.set_action_availability(false, true, true)
 	assert_false(_modal._move_button.visible,
 			"Move button should be hidden when can_move=false")
 	assert_true(_modal._attack_button.visible,
@@ -424,7 +427,7 @@ func test_set_action_availability_hides_attack() -> void:
 	_modal.open_for_turn(1, 2)
 	var token: SquadronToken = _make_token(inst)
 	_modal.handle_squadron_click(token)
-	_modal.set_action_availability(true, false)
+	_modal.set_action_availability(true, false, false)
 	assert_true(_modal._move_button.visible,
 			"Move button should remain visible when can_move=true")
 	assert_false(_modal._attack_button.visible,

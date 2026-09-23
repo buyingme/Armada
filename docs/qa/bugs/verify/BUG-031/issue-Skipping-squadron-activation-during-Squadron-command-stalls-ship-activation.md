@@ -5,31 +5,46 @@ Area: Squadron command / ship activation
 Layer: Command Flow
 
 > [!IMPORTANT]
-> ## Current Status — 2026-09-06
+> ## Current Status — 2026-09-23
 >
-> **VERIFY / IMPLEMENTED AND VERIFIED, AWAITING OWNER ACCEPTANCE.**
+> **RESOLVED / OWNER ACCEPTED.**
 >
-> The historical sections below describe the original BUG-031 reproduction and
-> its investigation state. They remain preserved for traceability.
+> The accepted BUG-031 repair is implemented and verified.
 >
-> The 2026-09-05 two-human Network reproduction proves the BUG-031 failure
-> mechanism on the post-Attack branch: presentation locally completes and
-> exposes the next commanded squadron while a legal Move remains and the
-> authority correctly rejects completion.
+> The original repair introduced explicit canonical Squadron Move decline and
+> authoritative activation/completion presentation gating as specified by the
+> accepted BUG-031 implementation workbook.
 >
-> The Project Owner has accepted explicit canonical Squadron Move decline and
-> authoritative activation/completion presentation gating. The binding repair
-> specification is the accepted
-> [BUG-031 implementation workbook](../../../../architecture/implementation_workbooks/BUG-031-squadron-move-decline-and-network-activation-gating-implementation-workbook.md).
+> During later BUG-043 convergence, the BUG-031 real-ENet acceptance harness was
+> found not to satisfy the workbook's Section 8B requirement: the
+> `commanded_squadron` scenario pre-installed an active commanded Squadron
+> Activation instead of entering through the production selection and
+> `ActivateSquadronCommand` Network path.
 >
-> The accepted repair is implemented with the combined save 6, replay 9, and
-> protocol 6 compatibility cutover. Focused unit and integration coverage,
-> real two-process Network decline and activation-gating acceptance, the full
-> suite, and replay baselines pass on the current worktree.
+> The acceptance harness has now been corrected. The commanded-squadron scenario
+> begins uncommitted, traverses the production controller/ENet activation path,
+> and requires exactly one accepted `activate_squadron`.
 >
-> BUG-035 action-order recovery and CON-007 composed return remain preserved.
-> Historical range-message evidence remains outside the accepted repair unless
-> independently reproduced against current code.
+> This corrected acceptance path also exposed a separate presentation-owned
+> serialized engagement-cache convergence defect. That defect is preserved
+> separately as BUG-047 and was repaired without changing BUG-031 semantics.
+>
+> Final verification after the harness and BUG-047 repairs:
+>
+> - focused commanded-squadron real-ENet acceptance: PASS;
+> - complete Network-resume real-ENet acceptance gate: PASS;
+> - full repository suite: 4,300 / 4,300 PASS, 16,882 assertions;
+> - Hot-Seat and Network replay verification: PASS;
+> - architecture lint: clean;
+> - `git diff --check`: clean.
+>
+> Current repository compatibility has subsequently advanced to save 7,
+> replay 10, and protocol 7 through later accepted work. The BUG-031 workbook's
+> save 6 / replay 9 / protocol 6 cutover remains the historical compatibility
+> boundary specified and implemented by BUG-031 and is not amended here.
+>
+> BUG-031 is accepted as resolved. Historical reproduction and investigation
+> material below remains preserved for traceability.
 
 ### Historical Investigation Cross-Reference — 2026-08-31
 
@@ -122,8 +137,25 @@ specified by the accepted BUG-031 implementation workbook linked above. The
 implementation preserves terminal completion validation and does not encode
 decline as movement.
 
-Verification: the workbook's real two-process regressions pass for post-Attack
-Move decline through authoritative completion and for non-actionable client
-selection pending authoritative activation acceptance. Focused regressions
-also preserve recovery of the same squadron after Attack when Move becomes
-legal. BUG-031 remains VERIFY pending Owner acceptance.
+Final verification: the workbook's required real two-process regressions now
+exercise the production paths directly. Post-Attack Move decline proceeds
+through authoritative completion, and commanded-squadron selection remains
+non-actionable until authoritative `ActivateSquadronCommand` acceptance.
+
+A later verification audit found that the original commanded-squadron
+acceptance harness had pre-installed the active Squadron Activation and
+therefore did not satisfy Section 8B of the accepted workbook. The harness was
+corrected to begin uncommitted and traverse the real production controller/ENet
+activation boundary. The corrected path records exactly one accepted
+`activate_squadron`.
+
+The corrected acceptance path exposed a separate serialized engagement-cache
+convergence defect, preserved as BUG-047. After that independent defect was
+repaired, the focused commanded-squadron real-ENet gate and complete
+Network-resume real-ENet gate both passed.
+
+Final convergence also passed the full repository suite (4,300 / 4,300 tests,
+16,882 assertions), Hot-Seat and Network replay verification, architecture
+lint, and `git diff --check`.
+
+BUG-031 is Owner accepted and resolved.

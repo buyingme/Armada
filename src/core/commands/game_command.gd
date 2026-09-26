@@ -162,7 +162,9 @@ const _EXACT_LIVE_PAYLOAD_FIELDS: Dictionary = {
 	"resolve_immediate_effect": [
 		"owner_player", "ship_index", "card_index", "choice",
 	],
-	"destroy_unit": ["owner_player", "ship_index"],
+	"destroy_unit": [
+		"owner_player", "ship_index", "terminate_ship_phase_turn",
+	],
 }
 
 

@@ -381,7 +381,20 @@ func _capture_destruction_candidates(command: GameCommand,
 				"index": int(command.payload.get("ship_index", -1))})
 			targets.append({"owner": int(command.payload.get("other_owner", -1)),
 				"index": int(command.payload.get("other_ship_index", -1))})
-		"persistent_effect_damage", "resolve_immediate_effect":
+		"resolve_ship_collision_damage":
+			targets.append({"owner": int(command.payload.get(
+					"owner_player", -1)),
+				"index": int(command.payload.get("ship_index", -1))})
+			targets.append({"owner": int(command.payload.get(
+					"target_owner_player", -1)),
+				"index": int(command.payload.get("target_ship_index", -1))})
+		"resolve_thruster_fissure", "resolve_damaged_controls", \
+				"resolve_asteroid_overlap", "resolve_debris_overlap", \
+				"resolve_ruptured_engine":
+			targets.append({"owner": int(command.payload.get("owner_player", -1)),
+				"index": int(command.payload.get("ship_index", -1))})
+		"persistent_effect_damage", "resolve_immediate_effect", \
+				"debug_deal_damage":
 			targets.append({"owner": int(command.payload.get("owner_player", -1)),
 				"index": int(command.payload.get("ship_index", -1))})
 	for target: Dictionary in targets:
@@ -392,6 +405,8 @@ func _capture_destruction_candidates(command: GameCommand,
 				and index >= 0:
 			ship = game_state.get_ship(owner, index)
 		target["was_destroyed"] = ship != null and ship.is_destroyed()
+		target["had_active_ship_activation"] = ship != null \
+				and ship.has_active_ship_activation()
 	return targets
 
 
@@ -411,7 +426,12 @@ func _enqueue_authority_destruction_cleanup(game_state: GameState,
 		var ship: ShipInstance = game_state.get_ship(owner, index)
 		if not bool(candidate.get("was_destroyed", false)) and ship != null \
 				and ship.is_destroyed() and ship.get_total_damage() > 0:
-			unique[key] = {"owner": owner, "index": index}
+			unique[key] = {
+				"owner": owner,
+				"index": index,
+				"had_active_ship_activation": bool(candidate.get(
+						"had_active_ship_activation", false)),
+			}
 	var ordered: Array = unique.values()
 	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if int(a["owner"]) != int(b["owner"]):
@@ -419,10 +439,22 @@ func _enqueue_authority_destruction_cleanup(game_state: GameState,
 		return int(a["index"]) < int(b["index"])
 	)
 	for target: Dictionary in ordered:
+		var terminate_ship_phase_turn: bool = bool(target.get(
+				"had_active_ship_activation", false)) \
+				and not _ship_phase_turn_is_already_terminated(game_state)
 		_observer_followups.append(DestroyUnitCommand.new(command.player_index, {
 			"owner_player": int(target["owner"]),
 			"ship_index": int(target["index"]),
+			"terminate_ship_phase_turn": terminate_ship_phase_turn,
 		}))
+
+
+func _ship_phase_turn_is_already_terminated(game_state: GameState) -> bool:
+	if game_state == null or game_state.interaction_flow == null:
+		return false
+	var flow: InteractionFlow = game_state.interaction_flow
+	return flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION \
+			and flow.step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT
 
 
 func _enqueue_post_success_continuation(game_state: GameState,
@@ -501,16 +533,14 @@ func _maneuver_execution_continuation(game_state: GameState,
 			command_type, int(actor), payload as Dictionary)
 
 
-## Preserves the existing phase-transition owner when persistent damage ends
-## the final legal Ship Phase activation.  The damage command owns the atomic
-## destruction/activation-boundary termination; AdvancePhaseCommand remains
-## the only command that advances phase and is recorded after that damage.
+## Preserves the existing phase-transition owner when accepted destruction
+## cleanup ends the final legal Ship Phase activation. AdvancePhaseCommand
+## remains the only command that advances phase and is recorded afterward.
 func _ship_phase_termination_continuation(game_state: GameState,
 		command: GameCommand, result: Dictionary,
 		execution_mode: String) -> GameCommand:
 	if execution_mode != TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
 			or command == null \
-			or command.command_type != "persistent_effect_damage" \
 			or not bool(result.get("ship_phase_turn_terminated", false)) \
 			or game_state == null \
 			or game_state.current_phase != Constants.GamePhase.SHIP \

@@ -15,9 +15,43 @@ const EVALUATOR: GDScript = preload(
 		"res://src/core/movement/maneuver_execution_evaluator.gd")
 const OVERLAP: GDScript = preload(
 		"res://src/core/geometry/obstacle_overlap_authority.gd")
+const PROCESSOR: GDScript = preload("res://src/autoload/command_processor.gd")
+
+
+class DirectSubmitter:
+	extends CommandSubmitter
+
+	var next_sequence: int = 900
+
+	func submit(command: GameCommand) -> Dictionary:
+		command.sequence = next_sequence
+		next_sequence += 1
+		return command.execute(GameManager.current_game_state)
 
 const ACTIVATION_ID := "ship-activation:70"
 const EXECUTION_ID := "maneuver:70"
+
+var _saved_state: GameState
+var _saved_submitter: CommandSubmitter
+var _saved_game_active: bool
+var _saved_active_player: int
+var _saved_registry: Dictionary
+
+
+func before_each() -> void:
+	_saved_state = GameManager.current_game_state
+	_saved_submitter = GameManager.get_command_submitter()
+	_saved_game_active = GameManager.is_game_active
+	_saved_active_player = GameManager.active_player
+	_saved_registry = GameCommand._registry.duplicate()
+
+
+func after_each() -> void:
+	GameManager.current_game_state = _saved_state
+	GameManager.set_command_submitter(_saved_submitter)
+	GameManager.is_game_active = _saved_game_active
+	GameManager.active_player = _saved_active_player
+	GameCommand._registry = _saved_registry
 
 
 func test_asteroid_delegates_every_legal_immediate_card_and_returns_once() -> void:
@@ -105,6 +139,144 @@ func test_asteroid_non_immediate_card_completes_without_fabricated_prompt() -> v
 			"last_maneuver_execution_id"], EXECUTION_ID)
 	assert_eq(EVALUATOR.next_action(state, 0, 0)["command_type"],
 			"complete_maneuver")
+
+
+func test_production_debug_damage_does_not_poison_later_asteroid_authority() \
+		-> void:
+	var fixture: Dictionary = _fixture("asteroid_1", [
+		_card("damage:asteroid", "ordinary", "persistent"),
+		_card("damage:debug", "capacitor_failure", "persistent"),
+	])
+	var state: GameState = fixture["state"]
+	var ship: ShipInstance = fixture["ship"]
+	GameManager.current_game_state = state
+	GameManager.set_command_submitter(DirectSubmitter.new())
+	var debug_result: Dictionary = GameManager.submit_debug_deal_damage(
+			ship, "capacitor_failure")
+	assert_false(debug_result.is_empty())
+	assert_true(debug_result.has("damage_application"))
+	assert_true(state.validate_damage_state_for_save7())
+	assert_false(_commit_order(state).execute(state).is_empty())
+	var asteroid: GameCommand = ASTEROID.new(0, _base("obstacle:0"))
+	asteroid.sequence = 902
+	assert_eq(asteroid.validate(state), "")
+	assert_false(asteroid.execute(state).is_empty())
+
+
+func test_lethal_asteroid_after_speed_three_displacement_is_terminal_and_convergent() \
+		-> void:
+	var authority_fixture: Dictionary = _lethal_asteroid_sequence(false)
+	var authority_state: GameState = authority_fixture["state"]
+	var authority_ship: ShipInstance = authority_fixture["ship"]
+	var authority_command: GameCommand = authority_fixture["command"]
+	assert_eq(authority_ship.get_total_damage(), 3)
+	assert_eq(authority_command.validate(authority_state), "")
+	var result: Dictionary = authority_command.execute(authority_state)
+	assert_false(result.is_empty())
+	assert_true(bool(result["damage_application"]["destroyed"]))
+	assert_eq(authority_ship.get_total_damage(), 4)
+	assert_eq(authority_ship.faceup_damage.size(), 1)
+	assert_eq(authority_state.damage_deck.get_total_count(), 0)
+	_assert_lethal_maneuver_cleanup(authority_state, authority_ship)
+
+	# The same accepted result must terminate the passive peer at the same
+	# boundary without a second hidden draw or a fabricated continuation.
+	var passive_fixture: Dictionary = _lethal_asteroid_sequence(true)
+	var passive_state: GameState = passive_fixture["state"]
+	var passive_ship: ShipInstance = passive_fixture["ship"]
+	var passive_command: GameCommand = passive_fixture["command"]
+	var projected: Dictionary = authority_command.project_application_result(
+			result, 1)
+	assert_eq(passive_command.execute_with_application_result(
+			passive_state, projected), projected)
+	assert_eq(passive_ship.get_total_damage(), 4)
+	assert_eq(passive_ship.faceup_damage.size(), 1)
+	assert_eq(passive_state.passive_damage_ledger.draw_count, 0)
+	_assert_lethal_maneuver_cleanup(passive_state, passive_ship)
+
+	# Exact-once: neither side can apply the Asteroid consequence again.
+	assert_ne(authority_command.validate(authority_state), "")
+	assert_true(authority_command.execute(authority_state).is_empty())
+	assert_ne(passive_command.validate(passive_state), "")
+	assert_true(passive_command.execute_with_application_result(
+			passive_state, projected).is_empty())
+	assert_eq(authority_ship.get_total_damage(), 4)
+	assert_eq(passive_ship.get_total_damage(), 4)
+
+	# The accepted cleanup command carries the exceptional composed return to
+	# both authority and passive peers without reviving the dead Maneuver.
+	var authority_cleanup := DestroyUnitCommand.new(0, {
+		"owner_player": 0,
+		"ship_index": 0,
+		"terminate_ship_phase_turn": true,
+	})
+	assert_eq(authority_cleanup.validate(authority_state), "")
+	var cleanup_result: Dictionary = authority_cleanup.execute(authority_state)
+	var passive_cleanup := DestroyUnitCommand.new(0,
+			authority_cleanup.payload.duplicate(true))
+	var cleanup_projection: Dictionary = authority_cleanup \
+			.project_application_result(cleanup_result, 1)
+	assert_eq(passive_cleanup.validate(passive_state), "")
+	assert_false(passive_cleanup.execute_with_application_result(
+			passive_state, cleanup_projection).is_empty())
+	for converged_state: GameState in [authority_state, passive_state]:
+		assert_eq(converged_state.interaction_flow.flow_type,
+				Constants.InteractionFlow.SHIP_ACTIVATION)
+		assert_eq(converged_state.interaction_flow.step_id,
+				Constants.InteractionStep.WAIT_FOR_SHIP_SELECT)
+		assert_eq(converged_state.interaction_flow.controller_player, 0)
+	assert_eq(authority_ship.get_total_damage(), 0)
+	assert_eq(passive_ship.get_total_damage(), 0)
+
+
+func test_lethal_asteroid_last_ship_composes_cleanup_and_existing_end_game() \
+		-> void:
+	var fixture: Dictionary = _lethal_asteroid_sequence(false)
+	var state: GameState = fixture["state"]
+	var destroyed_ship: ShipInstance = fixture["ship"]
+	_add_flow_ship(state, 1, false)
+	var processor: Node = _game_flow_processor(state)
+	var asteroid: GameCommand = fixture["command"]
+	asteroid.sequence = -1
+	var result: Dictionary = processor.submit(asteroid)
+	assert_true(bool(result["damage_application"]["destroyed"]))
+	assert_true(destroyed_ship.has_finalized_destruction())
+	assert_false(destroyed_ship.has_active_ship_activation())
+	assert_false(destroyed_ship.has_active_maneuver_execution())
+	assert_eq(_history_types(processor), [
+		"resolve_asteroid_overlap", "destroy_unit",
+	])
+	assert_false(GameManager.is_game_active,
+			"The existing elimination owner must end the match after cleanup.")
+	assert_eq(destroyed_ship.get_total_damage(), 0)
+
+
+func test_lethal_asteroid_non_last_ship_returns_to_legal_selection_once() \
+		-> void:
+	var fixture: Dictionary = _lethal_asteroid_sequence(false)
+	var state: GameState = fixture["state"]
+	var destroyed_ship: ShipInstance = fixture["ship"]
+	var next_ship: ShipInstance = _add_flow_ship(state, 0, false)
+	_add_flow_ship(state, 1, true)
+	var processor: Node = _game_flow_processor(state)
+	var asteroid: GameCommand = fixture["command"]
+	asteroid.sequence = -1
+	assert_false(processor.submit(asteroid).is_empty())
+	assert_true(GameManager.is_game_active)
+	assert_eq(_history_types(processor), [
+		"resolve_asteroid_overlap", "destroy_unit",
+	], "No Maneuver completion or duplicate continuation may follow death.")
+	assert_false(destroyed_ship.has_active_ship_activation())
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT)
+	assert_eq(state.interaction_flow.controller_player, 0)
+	assert_eq(GameManager.active_player, 0)
+	assert_eq(ActivateShipCommand.new(0, {"ship_index": 1}).validate(state), "",
+			"The surviving friendly ship must be the next legal gameplay state.")
+	assert_false(next_ship.is_destroyed())
+	assert_eq(destroyed_ship.get_total_damage(), 0)
 
 
 func test_debris_applies_two_points_to_one_zone_and_returns() -> void:
@@ -404,6 +576,197 @@ func _fixture(obstacle_key: String,
 	return {"state": state, "ship": ship}
 
 
+func _lethal_asteroid_sequence(passive: bool) -> Dictionary:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	var ship := ShipInstance.create_from_data("obstacle", _lethal_ship_data(), 3, 0)
+	ship.roster_entry_id = "lethal-obstacle-ship"
+	ship.pos_x = 0.5
+	ship.pos_y = 0.75
+	ship.current_speed = 3
+	state.get_player_state(0).ships.append(ship)
+	if passive:
+		state.damage_deck = null
+		state.rng = null
+		state.passive_damage_ledger = PassiveDamageLedger.deserialize({
+			"schema_version": 1,
+			"draw_count": 1,
+			"discard_pile": [],
+			"facedown_counts": {"0:lethal-obstacle-ship": 3},
+		}, ["0:lethal-obstacle-ship"])
+		assert_true(ship.bind_passive_damage_ledger(
+				state.passive_damage_ledger, "0:lethal-obstacle-ship"))
+	else:
+		state.damage_deck = _deck([
+			_card("damage:asteroid", "ordinary", "persistent"),
+			_card("damage:structural-extra", "ordinary", "persistent"),
+			_card("damage:shield", "shield_failure", "immediate"),
+			_card("damage:structural", "structural_damage", "immediate"),
+		])
+		_resolve_debug_immediate(state, ship, "shield_failure", 6,
+				{"shield_zones": []})
+		_resolve_debug_immediate(state, ship, "structural_damage", 8, {})
+		assert_eq(ship.get_facedown_damage_count(), 3)
+		assert_true(state.validate_damage_state_for_save7())
+
+	assert_true(ship.establish_ship_activation("ship-activation:11"))
+	assert_true(ship.open_maneuver_opportunity("ship-activation:11"))
+	var execute := CandidateExecuteManeuverCommand.new(0, {
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:11",
+		"speed": 3,
+		"yaw_clicks": [0, 0, 0],
+		"yaw_bonus_joint": -1,
+	})
+	execute.sequence = 15
+	var committed: Dictionary = execute.execute(state)
+	assert_false(committed.is_empty())
+	state.objectives["obstacles"] = [{
+		"obstacle_id": "obstacle:0",
+		"data_key": "asteroid_1",
+		"pos_x": float(committed["pos_x"]),
+		"pos_y": float(committed["pos_y"]),
+		"rotation_deg": 0.0,
+		"placing_player": 0,
+		"placement_order": 0,
+		"last_maneuver_execution_id": "",
+	}]
+	var squadron := SquadronInstance.create_from_data(
+			"displaced", _squadron_data(), 1)
+	squadron.pos_x = float(committed["pos_x"])
+	squadron.pos_y = float(committed["pos_y"])
+	state.get_player_state(1).squadrons.append(squadron)
+	var identity: Dictionary = {
+		"owner_player": 0,
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:11",
+		"maneuver_execution_id": "maneuver:15",
+	}
+	var apply := CandidateApplyManeuverTransformCommand.new(
+			0, identity.duplicate(true))
+	apply.sequence = 16
+	assert_false(apply.execute(state).is_empty())
+	var displaced: Array[Dictionary] = [{"owner": 1, "squadron_index": 0}]
+	var start_payload: Dictionary = identity.duplicate(true)
+	start_payload["displaced_squadrons"] = displaced
+	var start := CandidateStartDisplacementCommand.new(0, start_payload)
+	start.sequence = 17
+	assert_false(start.execute(state).is_empty())
+	var point: Vector2 = _direct_displacement_point(ship)
+	var commit_payload: Dictionary = identity.duplicate(true)
+	commit_payload["placements"] = [{
+		"owner": 1,
+		"squadron_index": 0,
+		"pos_x": point.x / GameScale.play_area_size_px.x,
+		"pos_y": point.y / GameScale.play_area_size_px.y,
+	}]
+	commit_payload["excluded_squadrons"] = []
+	var commit := CandidateCommitDisplacementCommand.new(1, commit_payload)
+	commit.sequence = 18
+	assert_false(commit.execute(state).is_empty())
+	var order := ORDER.new(0, identity.merged({
+		"obstacle_ids": ["obstacle:0"],
+	}))
+	order.sequence = 19
+	assert_false(order.execute(state).is_empty())
+	var asteroid := ASTEROID.new(0, identity.merged({
+		"obstacle_id": "obstacle:0",
+	}))
+	asteroid.sequence = 20
+	return {"state": state, "ship": ship, "command": asteroid}
+
+
+func _resolve_debug_immediate(state: GameState, ship: ShipInstance,
+		effect_id: String, sequence: int, choice: Dictionary) -> void:
+	var debug := CandidateDebugDealDamageCommand.new(0, {
+		"owner_player": 0,
+		"ship_index": 0,
+		"effect_id": effect_id,
+	})
+	debug.sequence = sequence
+	assert_false(debug.execute(state).is_empty())
+	var record: Dictionary = ship.active_immediate_resolution_snapshot()
+	var payload: Dictionary = {
+		"owner_player": 0,
+		"ship_index": 0,
+		"public_card_ref": record["public_card_ref"],
+		"immediate_resolution_id": record["immediate_resolution_id"],
+		"enclosing_kind": "debug",
+		"debug_application_id": "debug:%d" % sequence,
+	}
+	for key: String in choice:
+		payload[key] = choice[key]
+	var actor: int = int(record["actor_player"])
+	var resolve := CandidateResolveImmediateEffectCommand.new(
+			0 if actor == -1 else actor, payload)
+	resolve.sequence = sequence + 1
+	assert_false(resolve.execute(state).is_empty())
+
+
+func _assert_lethal_maneuver_cleanup(
+		state: GameState, ship: ShipInstance) -> void:
+	assert_true(ship.has_finalized_destruction())
+	assert_false(ship.has_active_ship_activation())
+	assert_false(ship.has_active_maneuver_execution())
+	assert_false(ship.has_active_obstacle_resolution())
+	assert_false(ship.has_active_immediate_resolution())
+	assert_eq(state.interaction_flow.flow_type, Constants.InteractionFlow.NONE)
+	assert_true(EVALUATOR.next_action(state, 0, 0).is_empty())
+	var complete := CandidateCompleteManeuverCommand.new(0, {
+		"owner_player": 0,
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:11",
+		"maneuver_execution_id": "maneuver:15",
+	})
+	assert_ne(complete.validate(state), "")
+	assert_true(complete.execute(state).is_empty())
+
+
+func _game_flow_processor(state: GameState) -> Node:
+	if not state.has_valid_match_player_control_binding():
+		assert_true(state.install_match_player_control_binding(
+				MatchPlayerControlBinding.create_hot_seat_human()))
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	GameManager.active_player = 0
+	var processor: Node = PROCESSOR.new()
+	add_child_autofree(processor)
+	processor.command_executed.connect(
+			GameManager._on_ship_phase_turn_terminated)
+	processor.command_executed.connect(GameManager._on_destroy_unit_committed)
+	return processor
+
+
+func _add_flow_ship(state: GameState, owner: int,
+		activated: bool) -> ShipInstance:
+	var ship := ShipInstance.create_from_data(
+			"flow-ship", _ship_data(), 1, owner)
+	ship.roster_entry_id = "flow-ship:%d:%d" % [
+		owner, state.get_player_state(owner).ships.size()]
+	ship.activated_this_round = activated
+	ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.NAVIGATE], 1)
+	state.get_player_state(owner).ships.append(ship)
+	return ship
+
+
+func _history_types(processor: Node) -> Array[String]:
+	var types: Array[String] = []
+	for command: GameCommand in processor.get_history():
+		types.append(command.command_type)
+	return types
+
+
+func _direct_displacement_point(ship: ShipInstance) -> Vector2:
+	var base := ShipBase.new(ship.ship_data.ship_size,
+			Transform2D(ship.get_rotation_rad(), ship.get_pixel_position(
+					GameScale.play_area_size_px)))
+	return base.ship_transform * Vector2(0.0,
+			-base.half_length_px
+			- GameScale.squadron_base_diameter_px * 0.5 - 1.0)
+
+
 func _commit_order(state: GameState) -> GameCommand:
 	return ORDER.new(0, _identity_base().merged({
 		"obstacle_ids": ["obstacle:0"],
@@ -454,4 +817,16 @@ func _ship_data() -> ShipData:
 	data.command_value = 1
 	data.navigation_chart = [[1], [1, 1], [1, 1, 1]]
 	data.shields = {"front": 1, "left": 1, "right": 1, "rear": 1}
+	return data
+
+
+func _lethal_ship_data() -> ShipData:
+	var data: ShipData = _ship_data()
+	data.hull = 4
+	return data
+
+
+func _squadron_data() -> SquadronData:
+	var data := SquadronData.new()
+	data.hull = 3
 	return data

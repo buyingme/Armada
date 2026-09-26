@@ -530,21 +530,26 @@ func _debug_deal_faceup_card(ship: ShipInstance,
 func _react_debug_deal_damage(cmd: GameCommand,
 		result: Dictionary) -> void:
 	var gs: GameState = GameManager.current_game_state
-	if gs == null:
+	if gs == null or not result.get("damage_application") is Dictionary:
 		return
 	var owner_player: int = int(cmd.payload.get("owner_player", -1))
 	var ship_index: int = int(cmd.payload.get("ship_index", -1))
 	var ship: ShipInstance = gs.get_ship(owner_player, ship_index)
-	var card_index: int = int(result.get("card_index", -1))
-	if ship == null or card_index < 0 or card_index >= ship.faceup_damage.size():
+	var damage: Dictionary = result["damage_application"] as Dictionary
+	var additions: Array = damage.get("faceup_additions", []) as Array
+	if ship == null or additions.size() != 1 \
+			or not additions[0] is Dictionary:
 		return
-	var dealt_card: DamageCard = ship.faceup_damage[card_index]
-	var title: String = str(result.get("card_title", dealt_card.title))
+	var addition: Dictionary = additions[0] as Dictionary
+	var public_ref: String = str(addition.get("public_card_ref", ""))
+	var dealt_card: DamageCard = ship.faceup_card_for_public_ref(public_ref)
+	if dealt_card == null \
+			or str(addition.get("effect_id", "")) != dealt_card.effect_id:
+		return
+	var title: String = dealt_card.title
 	var effect_id: String = str(cmd.payload.get("effect_id", ""))
 	_log.info("Debug: dealt faceup '%s' [%s] to %s." % [
 			title, effect_id, ship.ship_data.ship_name])
-	if result.get("persistent_registered", false):
-		_log.info("Debug: persistent effect registered for '%s'." % title)
 	# Visual signals — fire on every peer so card panel and hull readout
 	# refresh consistently.
 	EventBus.damage_card_flipped.emit(ship, dealt_card, true)

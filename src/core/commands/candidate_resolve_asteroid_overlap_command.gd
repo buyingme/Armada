@@ -54,7 +54,13 @@ func execute(game_state: GameState) -> Dictionary:
 	if addition.is_empty():
 		_restore(game_state, ship, deck_before, damage_before); return {}
 	var immediate_id := str(addition.get("immediate_resolution_id", ""))
-	if not immediate_id.is_empty():
+	var destroyed: bool = ship.is_destroyed()
+	if destroyed:
+		# Destruction is the terminal Asteroid consequence. It retires the
+		# Maneuver and any just-established immediate obligation atomically;
+		# no later obstacle or Maneuver continuation may be opened.
+		ship.mark_destroyed()
+	elif not immediate_id.is_empty():
 		if not ship.open_asteroid_resolution(str(payload["ship_activation_identity"]), str(payload["maneuver_execution_id"]), str(payload["obstacle_id"]), immediate_id):
 			_restore(game_state, ship, deck_before, damage_before); return {}
 		if not ship.validate_maneuver_immediate_nesting():
@@ -63,10 +69,9 @@ func execute(game_state: GameState) -> Dictionary:
 		game_state.mark_obstacle_resolved_for_maneuver(str(payload["obstacle_id"]), str(payload["maneuver_execution_id"]))
 		if not OVERLAP.open_next_purpose_resolution(game_state, owner, index):
 			_restore(game_state, ship, deck_before, damage_before); return {}
-	if ship.get_total_damage() >= ship.ship_data.hull: ship.mark_destroyed()
 	var result := payload.duplicate(true)
 	result["immediate_resolution_id"] = immediate_id
-	result["damage_application"] = {"owner_player":owner,"ship_index":index,"shield_changes":[],"facedown_delta":0,"faceup_additions":[addition],"faceup_removals":[],"public_discards":[],"new_hull":ship.ship_data.hull-ship.get_total_damage(),"destroyed":ship.is_destroyed()}
+	result["damage_application"] = {"owner_player":owner,"ship_index":index,"shield_changes":[],"facedown_delta":0,"faceup_additions":[addition],"faceup_removals":[],"public_discards":[],"new_hull":ship.ship_data.hull-ship.get_total_damage(),"destroyed":destroyed}
 	return result
 
 func project_application_result(result: Dictionary, viewer_player: int) -> Dictionary:
@@ -78,18 +83,25 @@ func execute_with_application_result(game_state: GameState, result: Dictionary) 
 		if result[key] != payload[key]: return {}
 	var ship := game_state.get_ship(int(payload["owner_player"]), int(payload["ship_index"]))
 	var damage: Dictionary = result["damage_application"]
-	if damage["facedown_delta"] != 0 or (damage["faceup_additions"] as Array).size() != 1 or not game_state.passive_damage_ledger.can_consume_hidden_draws(1): return {}
+	var expected_new_hull: int = ship.ship_data.hull \
+			- ship.get_total_damage() - 1
+	if damage["facedown_delta"] != 0 \
+			or (damage["faceup_additions"] as Array).size() != 1 \
+			or int(damage["new_hull"]) != expected_new_hull \
+			or bool(damage["destroyed"]) != (expected_new_hull <= 0) \
+			or not game_state.passive_damage_ledger.can_consume_hidden_draws(1): return {}
 	var enclosure := {"enclosing_kind":"maneuver", "ship_activation_identity":payload["ship_activation_identity"], "maneuver_execution_id":payload["maneuver_execution_id"], "maneuver_source_kind":"asteroid", "maneuver_source_id":payload["obstacle_id"]}
 	if not APPLICATION.install_public_addition(ship, damage["faceup_additions"][0], enclosure): return {}
 	game_state.passive_damage_ledger.consume_hidden_draws(1)
 	var immediate_id := str(result["immediate_resolution_id"])
-	if not immediate_id.is_empty():
+	if bool(damage["destroyed"]):
+		ship.mark_destroyed()
+	elif not immediate_id.is_empty():
 		if not ship.open_asteroid_resolution(str(payload["ship_activation_identity"]), str(payload["maneuver_execution_id"]), str(payload["obstacle_id"]), immediate_id): return {}
 		if not ship.validate_maneuver_immediate_nesting(): return {}
 	else:
 		game_state.mark_obstacle_resolved_for_maneuver(str(payload["obstacle_id"]), str(payload["maneuver_execution_id"]))
 		if not OVERLAP.open_next_purpose_resolution(game_state, int(payload["owner_player"]), int(payload["ship_index"])): return {}
-	if bool(damage["destroyed"]): ship.mark_destroyed()
 	return result.duplicate(true)
 
 func _next(game_state: GameState, owner: int, index: int) -> Dictionary:

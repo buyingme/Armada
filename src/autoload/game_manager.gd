@@ -133,7 +133,9 @@ func _ready() -> void:
 	CommandProcessor.command_executed.connect(
 			_on_local_squadron_phase_progress_committed)
 	CommandProcessor.command_executed.connect(
-			_on_persistent_damage_ship_phase_turn_terminated)
+			_on_ship_phase_turn_terminated)
+	CommandProcessor.command_executed.connect(
+			_on_destroy_unit_committed)
 	EventBus.command_dials_submitted.connect(_on_command_dials_submitted)
 	EventBus.command_picker_confirmed.connect(_on_command_picker_confirmed)
 	EventBus.activation_ended.connect(_on_activation_ended)
@@ -150,18 +152,27 @@ func _ready() -> void:
 			_on_network_command_rejection)
 
 
-## Synchronizes the transient local controller from the accepted persistent
-## damage result.  The command has already updated canonical interaction flow;
-## this does not mutate gameplay state or infer progress from presentation.
-func _on_persistent_damage_ship_phase_turn_terminated(
+## Synchronizes the transient local controller after an accepted command has
+## terminated the current Ship Phase turn. The command has already updated
+## canonical interaction flow; this does not infer progress from presentation.
+func _on_ship_phase_turn_terminated(
 		command: GameCommand, result: Dictionary) -> void:
 	if command == null \
-			or command.command_type != "persistent_effect_damage" \
 			or not bool(result.get("ship_phase_turn_terminated", false)):
 		return
 	var next_player: int = int(result.get("next_ship_phase_controller", -1))
 	if next_player >= 0 and next_player < Constants.PLAYER_COUNT:
 		_set_active_player(next_player)
+
+
+## Destruction cleanup is the authoritative point at which elimination can be
+## evaluated. Presentation still mirrors visuals and signals, but no longer
+## owns progress out of a destroyed ship's activation.
+func _on_destroy_unit_committed(
+		command: GameCommand, _result: Dictionary) -> void:
+	if command == null or command.command_type != "destroy_unit":
+		return
+	_check_elimination()
 
 
 func _notification(what: int) -> void:
@@ -2229,7 +2240,7 @@ func submit_debug_deal_damage(ship: ShipInstance,
 		var local_idx: int = NetworkManager.get_local_player_index()
 		if local_idx >= 0:
 			submitter_player = local_idx
-	var cmd := DebugDealDamageCommand.new(submitter_player, {
+	var cmd := CandidateDebugDealDamageCommand.new(submitter_player, {
 		"owner_player": ship.owner_player,
 		"ship_index": ship_index,
 		"effect_id": effect_id,

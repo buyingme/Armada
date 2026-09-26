@@ -390,7 +390,7 @@ func _capture_destruction_candidates(command: GameCommand,
 				"index": int(command.payload.get("target_ship_index", -1))})
 		"resolve_thruster_fissure", "resolve_damaged_controls", \
 				"resolve_asteroid_overlap", "resolve_debris_overlap", \
-				"resolve_ruptured_engine":
+				"resolve_ruptured_engine", "apply_maneuver_transform":
 			targets.append({"owner": int(command.payload.get("owner_player", -1)),
 				"index": int(command.payload.get("ship_index", -1))})
 		"persistent_effect_damage", "resolve_immediate_effect", \
@@ -424,8 +424,13 @@ func _enqueue_authority_destruction_cleanup(game_state: GameState,
 			continue
 		var key: String = "%d:%d" % [owner, index]
 		var ship: ShipInstance = game_state.get_ship(owner, index)
+		var requires_card_cleanup: bool = ship != null \
+				and ship.get_total_damage() > 0
+		var is_out_of_play_maneuver: bool = command.command_type \
+				== "apply_maneuver_transform"
 		if not bool(candidate.get("was_destroyed", false)) and ship != null \
-				and ship.is_destroyed() and ship.get_total_damage() > 0:
+				and ship.is_destroyed() \
+				and (requires_card_cleanup or is_out_of_play_maneuver):
 			unique[key] = {
 				"owner": owner,
 				"index": index,

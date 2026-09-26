@@ -1929,12 +1929,19 @@ static func deserialize(
 	var immediate: Variant = data.get("active_immediate_resolution", {})
 	if not immediate is Dictionary: return null
 	inst._active_immediate_resolution = (immediate as Dictionary).duplicate(true)
-	var maneuver_data := {
-		"active_maneuver_execution": data.get("active_maneuver_execution", {}),
-		"active_asteroid_resolution": data.get("active_asteroid_resolution", {}),
-		"active_debris_resolution": data.get("active_debris_resolution", {}),
-		"active_station_resolution": data.get("active_station_resolution", {}),
-	}
+	if not inst._active_immediate_resolution.is_empty() \
+			and not _normalize_integral_field(
+					inst._active_immediate_resolution, "actor_player"):
+		return null
+	var maneuver_data: Dictionary = {}
+	for key: String in [
+			"active_maneuver_execution", "active_asteroid_resolution",
+			"active_debris_resolution", "active_station_resolution"]:
+		var raw_record: Variant = data.get(key, {})
+		if not raw_record is Dictionary:
+			return null
+		maneuver_data[key] = (raw_record as Dictionary).duplicate(true)
+	if not _normalize_save7_maneuver_integers(maneuver_data): return null
 	if not inst.install_maneuver_execution_for_save7(maneuver_data): return null
 	if passive:
 		if not inst._active_immediate_resolution.is_empty() \
@@ -1950,6 +1957,57 @@ static func deserialize(
 	inst.command_tokens = CommandTokenManager.deserialize(ctm_data) \
 			if not ctm_data.is_empty() else null
 	return inst
+
+
+## Restores only schema-declared integer fields after JSON decoding. The
+## strict installers below still reject any non-canonical in-memory value.
+static func _normalize_save7_maneuver_integers(data: Dictionary) -> bool:
+	var execution: Dictionary = data["active_maneuver_execution"] as Dictionary
+	if not execution.is_empty():
+		var committed: Variant = execution.get("committed_result")
+		if committed != null:
+			if not committed is Dictionary:
+				return false
+			var committed_result: Dictionary = committed as Dictionary
+			if not _normalize_integral_field(
+					committed_result, "yaw_bonus_joint"):
+				return false
+			var raw_clicks: Variant = committed_result.get("yaw_clicks")
+			if not raw_clicks is Array:
+				return false
+			for index: int in range((raw_clicks as Array).size()):
+				var raw_click: Variant = (raw_clicks as Array)[index]
+				if not _is_integral_number(raw_click):
+					return false
+				(raw_clicks as Array)[index] = int(raw_click)
+		var collision: Variant = execution.get("ship_collision")
+		if collision is Dictionary \
+				and str((collision as Dictionary).get("kind", "")) \
+						== "closest_ship":
+			for key: String in ["target_owner_player", "target_ship_index"]:
+				if not _normalize_integral_field(collision as Dictionary, key):
+					return false
+	for owner_key: String in [
+			"active_debris_resolution", "active_station_resolution"]:
+		var record: Dictionary = data[owner_key] as Dictionary
+		if not record.is_empty() \
+				and not _normalize_integral_field(record, "controller_player"):
+			return false
+	return true
+
+
+static func _normalize_integral_field(record: Dictionary,
+		key: String) -> bool:
+	if not record.has(key) or not _is_integral_number(record[key]):
+		return false
+	record[key] = int(record[key])
+	return true
+
+
+static func _is_integral_number(value: Variant) -> bool:
+	return typeof(value) in [TYPE_INT, TYPE_FLOAT] \
+			and is_finite(float(value)) \
+			and float(value) == float(int(value))
 
 
 func _serialize_defense_tokens() -> Array[Dictionary]:

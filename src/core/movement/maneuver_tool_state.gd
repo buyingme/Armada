@@ -175,6 +175,8 @@ func get_active_segment_count() -> int:
 ## "root" for index 0, "segment_end" for the last active segment,
 ## "segment" for all middle segments.
 func get_segment_type(segment_index: int) -> String:
+	if _simulated_speed == 0 and segment_index == 0:
+		return "segment_end"
 	if segment_index == 0:
 		return "root"
 	if segment_index == _simulated_speed:

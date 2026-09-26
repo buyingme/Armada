@@ -7,6 +7,7 @@ const APPLY: GDScript = preload(
 		"res://src/core/commands/candidate_apply_maneuver_transform_command.gd")
 const EVALUATOR: GDScript = preload(
 		"res://src/core/movement/maneuver_pre_movement_evaluator.gd")
+const PROCESSOR: GDScript = preload("res://src/autoload/command_processor.gd")
 
 const ACTIVATION_ID := "ship-activation:20"
 const EXECUTION_ID := "maneuver:20"
@@ -83,6 +84,28 @@ func test_hull_damage_destroys_before_movement_and_cleans_execution() -> void:
 	assert_false(_ship.has_active_maneuver_execution())
 	assert_eq(Vector2(_ship.pos_x, _ship.pos_y), before)
 	assert_eq(_apply().execute(_state), {})
+
+
+func test_v3_processor_pre_movement_death_cleans_once_without_transform() -> void:
+	_ship.current_shields["front"] = 0
+	_ship.ship_data.hull = 2
+	_add_thruster("damage:v3:thruster", "faceup:v3:thruster")
+	_state.damage_deck = _deck([_card("damage:v3:lethal", "ordinary")])
+	_commit(true)
+	GameManager.current_game_state = _state
+	var processor: Node = PROCESSOR.new()
+	add_child_autofree(processor)
+	var before := Vector2(_ship.pos_x, _ship.pos_y)
+
+	assert_false(processor.submit(
+			_command("faceup:v3:thruster", "front")).is_empty())
+
+	assert_true(_ship.has_finalized_destruction())
+	assert_eq(Vector2(_ship.pos_x, _ship.pos_y), before)
+	assert_eq(_processor_types(processor), [
+		"resolve_thruster_fissure", "destroy_unit", "advance_phase"])
+	assert_false(_processor_types(processor).has("apply_maneuver_transform"))
+	assert_false(_processor_types(processor).has("complete_maneuver"))
 
 
 func test_passive_application_consumes_aggregate_draw_and_suppresses_transform() -> void:
@@ -237,3 +260,10 @@ func _ship_data() -> ShipData:
 	data.navigation_chart = [[1], [1, 1], [1, 1, 1]]
 	data.shields = {"front": 1, "left": 1, "right": 1, "rear": 1}
 	return data
+
+
+func _processor_types(processor: Node) -> Array[String]:
+	var result: Array[String] = []
+	for command: GameCommand in processor.get_history():
+		result.append(command.command_type)
+	return result

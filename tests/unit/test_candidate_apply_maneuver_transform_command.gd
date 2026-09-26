@@ -5,6 +5,7 @@ const EXECUTE: GDScript = preload(
 		"res://src/core/commands/candidate_execute_maneuver_command.gd")
 const APPLY: GDScript = preload(
 		"res://src/core/commands/candidate_apply_maneuver_transform_command.gd")
+const PROCESSOR: GDScript = preload("res://src/autoload/command_processor.gd")
 
 var _state: GameState
 var _ship: ShipInstance
@@ -103,6 +104,53 @@ func test_applied_out_of_play_result_is_retained_then_terminates_execution() -> 
 	assert_true(_ship.is_destroyed())
 	assert_false(_ship.has_active_maneuver_execution())
 	assert_almost_eq(_ship.pos_x, 0.001, 0.00001)
+
+
+func test_v3_processor_out_of_play_cleanup_occurs_once_without_completion() \
+		-> void:
+	_ship.mark_destroyed()
+	_ship = ShipInstance.create_from_data("candidate", _ship_data(), 0, 0)
+	_ship.pos_x = 0.001
+	_ship.pos_y = 0.001
+	_state.get_player_state(0).ships[0] = _ship
+	var next_ship := ShipInstance.create_from_data(
+			"next", _ship_data(), 1, 1)
+	_state.get_player_state(1).ships.append(next_ship)
+	assert_true(_ship.establish_ship_activation("ship-activation:v3:oob"))
+	assert_true(_ship.open_maneuver_opportunity("ship-activation:v3:oob"))
+	var commit := EXECUTE.new(0, {
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:v3:oob",
+		"speed": 0,
+		"yaw_clicks": [],
+		"yaw_bonus_joint": -1,
+	})
+	commit.sequence = 30
+	assert_false(commit.execute(_state).is_empty())
+	GameManager.current_game_state = _state
+	var processor: Node = PROCESSOR.new()
+	add_child_autofree(processor)
+	var apply := APPLY.new(0, {
+		"owner_player": 0,
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:v3:oob",
+		"maneuver_execution_id": "maneuver:30",
+	})
+
+	assert_false(processor.submit(apply).is_empty())
+
+	assert_true(_ship.has_finalized_destruction())
+	var types: Array[String] = []
+	for command: GameCommand in processor.get_history():
+		types.append(command.command_type)
+	assert_eq(types, ["apply_maneuver_transform", "destroy_unit"])
+	assert_eq(types.count("destroy_unit"), 1)
+	assert_false(types.has("complete_maneuver"))
+	assert_eq(_state.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION)
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT)
+	assert_eq(_state.interaction_flow.controller_player, 1)
 
 
 func test_contract_2_application_accepts_only_recorded_committed_transform() -> void:

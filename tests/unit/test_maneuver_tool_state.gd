@@ -163,6 +163,12 @@ func test_get_segment_type_index0_is_root() -> void:
 			"Segment 0 should be root")
 
 
+func test_get_segment_type_speed0_is_terminal_facing_segment() -> void:
+	_state.setup(0, CR90_NAV, Constants.ShipSize.SMALL)
+	assert_eq(_state.get_segment_type(0), "segment_end",
+			"Speed 0 should render the accepted terminal/facing segment")
+
+
 func test_get_segment_type_middle_is_segment() -> void:
 	_state.setup(3, CR90_NAV, Constants.ShipSize.SMALL)
 	assert_eq(_state.get_segment_type(1), "segment",

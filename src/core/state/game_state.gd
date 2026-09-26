@@ -895,7 +895,13 @@ static func _deserialize_representation(data: Dictionary,
 			data["squadron_phase_activations_committed"])
 	var objective_data: Variant = data.get("objectives", {})
 	if objective_data is Dictionary:
-		state.objectives = (objective_data as Dictionary).duplicate(true)
+		var normalized_objectives: Dictionary = \
+				_normalize_save7_objective_integers(
+						objective_data as Dictionary)
+		if normalized_objectives.is_empty() \
+				and not (objective_data as Dictionary).is_empty():
+			return null
+		state.objectives = normalized_objectives
 	for player_state_data: Variant in data.get("player_states", []):
 		var player_state: PlayerState = PlayerState.deserialize(
 				player_state_data)
@@ -971,6 +977,40 @@ static func _deserialize_representation(data: Dictionary,
 					"validate_reconstructed_state", state)).is_empty():
 		return null
 	return state
+
+
+## Restores the integer-bearing portion of canonical Save-7 objective state
+## after JSON decoding. Geometry remains floating point, and malformed or
+## fractional identity values reject before canonical installation.
+static func _normalize_save7_objective_integers(
+		objectives_data: Dictionary) -> Dictionary:
+	var normalized: Dictionary = objectives_data.duplicate(true)
+	if not normalized.has("obstacles"):
+		return normalized
+	var raw_obstacles: Variant = normalized["obstacles"]
+	if not raw_obstacles is Array:
+		return {}
+	for raw_obstacle: Variant in raw_obstacles as Array:
+		if not raw_obstacle is Dictionary:
+			return {}
+		var obstacle: Dictionary = raw_obstacle as Dictionary
+		for key: String in ["placing_player", "placement_order"]:
+			if not _normalize_integral_field(obstacle, key):
+				return {}
+	return normalized
+
+
+static func _normalize_integral_field(record: Dictionary,
+		key: String) -> bool:
+	if not record.has(key):
+		return false
+	var value: Variant = record[key]
+	if typeof(value) not in [TYPE_INT, TYPE_FLOAT] \
+			or not is_finite(float(value)) \
+			or float(value) != float(int(value)):
+		return false
+	record[key] = int(value)
+	return true
 
 
 static func _serialized_declaration_fields_are_complete(

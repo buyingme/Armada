@@ -126,7 +126,18 @@ func validate(game_state: GameState) -> String:
 	if not ship.is_destroyed():
 		return "Ship is not destroyed."
 	if ship.get_total_damage() <= 0:
-		return "Destroyed ship is already cleaned."
+		# An out-of-play Maneuver destroys a healthy ship. Its originating
+		# transaction records the interrupted activation, so the existing
+		# destruction owner must still perform the exceptional phase return.
+		# Once that return is installed, the same cleanup is stale.
+		var flow: InteractionFlow = game_state.interaction_flow
+		var awaiting_selection: bool = flow != null \
+				and flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION \
+				and flow.step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT
+		if not bool(payload.get("terminate_ship_phase_turn", false)) \
+				or game_state.current_phase != Constants.GamePhase.SHIP \
+				or awaiting_selection:
+			return "Destroyed ship is already cleaned."
 	return ""
 
 

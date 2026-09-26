@@ -3,6 +3,7 @@ extends GutTest
 
 const COMMAND: GDScript = preload(
 		"res://src/core/commands/candidate_resolve_ship_collision_damage_command.gd")
+const PROCESSOR: GDScript = preload("res://src/autoload/command_processor.gd")
 
 const ACTIVATION_ID := "ship-activation:30"
 const EXECUTION_ID := "maneuver:30"
@@ -122,6 +123,26 @@ func test_collision_destruction_keeps_applied_geometry_and_suppresses_return() -
 	assert_false(_moving.has_active_maneuver_execution())
 	assert_eq(Vector2(_moving.pos_x, _moving.pos_y), applied_position)
 	assert_eq(_target.get_facedown_damage_count(), 1)
+
+
+func test_v3_processor_nonmoving_target_death_cleans_then_completes_mover_once() \
+		-> void:
+	_target.ship_data.hull = 1
+	GameManager.current_game_state = _state
+	var processor: Node = PROCESSOR.new()
+	add_child_autofree(processor)
+
+	assert_false(processor.submit(_command()).is_empty())
+
+	assert_true(_target.has_finalized_destruction())
+	assert_false(_moving.has_active_maneuver_execution())
+	var types: Array[String] = []
+	for command: GameCommand in processor.get_history():
+		types.append(command.command_type)
+	assert_eq(types, [
+		"resolve_ship_collision_damage", "destroy_unit", "complete_maneuver"])
+	assert_eq(types.count("destroy_unit"), 1)
+	assert_eq(types.count("complete_maneuver"), 1)
 
 
 func _command() -> GameCommand:

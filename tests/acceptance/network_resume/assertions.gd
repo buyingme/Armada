@@ -8,6 +8,11 @@ func _initialize() -> void:
 			print("COMMANDED SQUADRON REAL ENET ACCEPTANCE: passed")
 			quit(0)
 		return
+	if _arg("--bug-043-only=") == "true":
+		if _assert_bug043_stabilization(shared):
+			print("BUG-043 REAL ENET STABILIZATION: passed")
+			quit(0)
+		return
 	if _arg("--bug-031-only=") == "true":
 		if _assert_bug031_commanded_decline(shared) \
 				and _assert_bug031_activation_gate(shared):
@@ -76,6 +81,9 @@ func _assert_fresh_and_reconnect(shared: String) -> bool:
 				return false
 			if not bool(gameplay.get("dice_rolled", false)) \
 					or not bool(gameplay.get("damage_resolved", false)) \
+					or not bool(gameplay.get("speed_zero_defender", false)) \
+					or not bool(gameplay.get("no_defense_submission", false)) \
+					or not bool(gameplay.get("attack_completed_once", false)) \
 					or int(gameplay.get("defender_damage", 0)) <= 0 \
 					or not bool(gameplay.get("repair_command", false)) \
 					or not bool(gameplay.get("repair_applied", false)):
@@ -117,6 +125,50 @@ func _assert_fresh_and_reconnect(shared: String) -> bool:
 				or int(record.get("board_releases", 0)) != 1):
 			_fail("clean reconnect was not installed/released exactly once: " + path)
 			return false
+	return true
+
+
+func _assert_bug043_stabilization(shared: String) -> bool:
+	var host: Dictionary = _load_record(shared.path_join("bug043-host.json"))
+	var initial: Dictionary = _load_record(shared.path_join("bug043-client.json"))
+	var reconnect: Dictionary = _load_record(
+			shared.path_join("bug043-reconnect.json"))
+	for record: Dictionary in [host, initial, reconnect]:
+		if record.is_empty() or not bool(record.get("ok", false)) \
+				or int(record.get("protocol", 0)) != 7:
+			_fail("BUG-043 process evidence is incomplete")
+			return false
+	var host_evidence: Dictionary = host.get("bug043", {}) as Dictionary
+	if not bool(host_evidence.get("wrong_principal_rejected", false)) \
+			or not bool(host_evidence.get("wrong_principal_unchanged", false)) \
+			or int(host_evidence.get("speed_zero_execute_count", 0)) != 1 \
+			or int(host_evidence.get("apply_count", 0)) != 1 \
+			or int(host_evidence.get("order_count", 0)) != 1 \
+			or int(host_evidence.get("asteroid_count", 0)) != 1 \
+			or int(host_evidence.get("immediate_count", 0)) != 1 \
+			or not bool(host_evidence.get("automatic_authority_chain", false)) \
+			or not bool(host_evidence.get("other_principal_choice", false)) \
+			or not bool(host_evidence.get("reconnected_player_actionable", false)):
+		_fail("BUG-043 authority evidence is incomplete")
+		return false
+	var initial_evidence: Dictionary = initial.get("bug043", {}) as Dictionary
+	if not bool(initial_evidence.get("client_authored_speed_zero", false)) \
+			or not bool(initial_evidence.get(
+					"order_projected_before_disconnect", false)):
+		_fail("BUG-043 initial client did not author speed zero")
+		return false
+	var reconnect_evidence: Dictionary = reconnect.get("bug043", {}) as Dictionary
+	if not bool(reconnect_evidence.get("reconnect_restored_legal_choice", false)) \
+			or not bool(reconnect_evidence.get("reconnect_authored_order", false)) \
+			or not bool(reconnect_evidence.get("passive_ordered_application", false)) \
+			or not bool(reconnect_evidence.get("no_synthesized_duplicate", false)) \
+			or not bool(reconnect_evidence.get("legal_next_actor", false)):
+		_fail("BUG-043 reconnect evidence is incomplete")
+		return false
+	if int(host_evidence.get("cursor", -1)) \
+			!= int(reconnect_evidence.get("cursor", -2)):
+		_fail("BUG-043 authority/reconnect cursors diverged")
+		return false
 	return true
 
 

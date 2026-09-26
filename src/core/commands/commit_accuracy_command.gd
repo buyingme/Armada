@@ -92,6 +92,14 @@ func _has_defense_interaction(game_state: GameState,
 	var defender: RefCounted = _entity_for(
 			game_state, attack.defender_kind,
 			attack.defender_player, attack.defender_index)
+	# A speed-0 ship has no legal defense-token decision. Classify that
+	# canonical state here, before presentation reacts to the Accuracy result,
+	# so the existing live-authority continuation advances directly to damage.
+	# This keeps CommitDefenseCommand player-authored for genuine decisions and
+	# avoids asking the attacker's principal to impersonate the defender.
+	if defender is ShipInstance \
+			and (defender as ShipInstance).current_speed == 0:
+		return false
 	for token: Dictionary in _defense_tokens(defender):
 		if int(token.get("state", -1)) \
 				!= int(Constants.DefenseTokenState.DISCARDED):

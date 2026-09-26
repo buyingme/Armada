@@ -26,14 +26,17 @@ GODOT_BIN="${GODOT_BIN:-godot}"
 RUN_SECTION_D_ONLY=false
 RUN_BUG031_ONLY=false
 RUN_COMMANDED_ONLY=false
+RUN_BUG043_ONLY=false
 if [[ "${1:-}" == "--section-d-only" ]]; then
   RUN_SECTION_D_ONLY=true
 elif [[ "${1:-}" == "--bug-031-only" ]]; then
   RUN_BUG031_ONLY=true
 elif [[ "${1:-}" == "--commanded-squadron-only" ]]; then
   RUN_COMMANDED_ONLY=true
+elif [[ "${1:-}" == "--bug-043-only" ]]; then
+  RUN_BUG043_ONLY=true
 elif [[ $# -ne 0 ]]; then
-  echo "Usage: $0 [--section-d-only|--bug-031-only|--commanded-squadron-only]" >&2
+  echo "Usage: $0 [--section-d-only|--bug-031-only|--commanded-squadron-only|--bug-043-only]" >&2
   exit 2
 fi
 wait_for_child() {
@@ -223,14 +226,47 @@ run_reconnect() {
   wait_for_child "$reconnect" "clean reconnect endpoint"
   wait_for_child "$host" "reconnect host"
 }
-if [[ "$RUN_COMMANDED_ONLY" == true ]]; then
+run_bug043_stabilization() {
+  local port="$1"
+  local host_home="$RUN_ROOT/home-bug043-host"
+  local client_home="$RUN_ROOT/home-bug043-client"
+  local reconnect_home="$RUN_ROOT/home-bug043-reconnect"
+  mkdir -p "$host_home" "$client_home" "$reconnect_home"
+  HOME="$host_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=host --scenario=bug043_stabilization --mapping=1 --port="$port" \
+    --shared="$SHARED" >"$LOGS/bug043-host.log" 2>&1 &
+  local host=$!
+  CHILD_PIDS+=("$host")
+  sleep 1
+  HOME="$client_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=client --scenario=bug043_stabilization --mapping=1 --port="$port" \
+    --shared="$SHARED" >"$LOGS/bug043-client.log" 2>&1 &
+  local client=$!
+  CHILD_PIDS+=("$client")
+  wait_for_child "$client" "BUG-043 initial client"
+  sleep 1
+  HOME="$reconnect_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=reconnect --scenario=bug043_stabilization --mapping=1 --port="$port" \
+    --shared="$SHARED" >"$LOGS/bug043-reconnect.log" 2>&1 &
+  local reconnect=$!
+  CHILD_PIDS+=("$reconnect")
+  wait_for_child "$reconnect" "BUG-043 reconnected client"
+  wait_for_child "$host" "BUG-043 authority"
+}
+if [[ "$RUN_BUG043_ONLY" == true ]]; then
+  run_bug043_stabilization $((28100 + ($$ % 700)))
+elif [[ "$RUN_COMMANDED_ONLY" == true ]]; then
   run_commanded_squadron $((27500 + ($$ % 400)))
 elif [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false ]]; then
   run_mapping 0 $((26000 + ($$ % 1000)))
   run_mapping 1 $((27000 + ($$ % 1000)))
   run_commanded_squadron $((27500 + ($$ % 400)))
 fi
-if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_COMMANDED_ONLY" == false ]]; then
+if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_COMMANDED_ONLY" == false \
+    && "$RUN_BUG043_ONLY" == false ]]; then
   run_bug031_scenario commanded_decline \
     "BUG-031 commanded Move decline" $((27700 + ($$ % 120)))
   run_bug031_scenario commanded_activation_gate \
@@ -239,11 +275,12 @@ if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_COMMANDED_ONLY" == false ]]; then
     "BUG-031 activation rejection recovery" $((27880 + ($$ % 20)))
 fi
 if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false \
-    && "$RUN_COMMANDED_ONLY" == false ]]; then
+    && "$RUN_COMMANDED_ONLY" == false && "$RUN_BUG043_ONLY" == false ]]; then
   run_ship_end_activation $((27900 + ($$ % 80)))
   run_reconnect $((28000 + ($$ % 1000)))
 fi
-if [[ "$RUN_BUG031_ONLY" == false && "$RUN_COMMANDED_ONLY" == false ]]; then
+if [[ "$RUN_BUG031_ONLY" == false && "$RUN_COMMANDED_ONLY" == false \
+    && "$RUN_BUG043_ONLY" == false ]]; then
   run_compatibility_network $((29000 + ($$ % 1000)))
   run_compatibility_hot_seat
   run_network_replay $((30000 + ($$ % 1000)))
@@ -253,6 +290,7 @@ HOME="$RUN_ROOT/home-assertions" "$GODOT_BIN" --headless --path "$PROJECT_DIR" -
 	--replay="$PROJECT_DIR/tests/fixtures/baseline_traces/replay_network.json" \
   --logs="$LOGS" \
 	--section-d-only="$RUN_SECTION_D_ONLY" --bug-031-only="$RUN_BUG031_ONLY" \
-	--commanded-squadron-only="$RUN_COMMANDED_ONLY"
+	--commanded-squadron-only="$RUN_COMMANDED_ONLY" \
+	--bug-043-only="$RUN_BUG043_ONLY"
 echo "PASS: MATCH-003 real ENet fresh-resume and compatibility scenarios completed."
 RESULT="passed"

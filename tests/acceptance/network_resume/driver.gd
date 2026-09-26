@@ -58,6 +58,12 @@ var _end_done_seen_msec := 0
 var _end_control_clicked := false
 var _end_projection_written := false
 var _end_rejections: Array[String] = []
+var _bug043_evidence: Dictionary = {}
+var _bug043_wrong_principal_checked := false
+var _bug043_maneuver_submitted := false
+var _bug043_reconnect_started := false
+var _bug043_order_submitted := false
+var _bug043_immediate_submitted := false
 var _finish_started := false
 
 func _ready() -> void:
@@ -129,6 +135,8 @@ func _process(_delta: float) -> void:
 		_advance_commanded_activation_gate()
 	if _scenario == "ship_end_activation" and _host_fresh_live:
 		_advance_ship_end_activation()
+	if _scenario == "bug043_stabilization" and _host_fresh_live:
+		_advance_bug043_stabilization()
 
 func _on_client_handshake(_player_index: int) -> void:
 	_client_handshook = true
@@ -144,7 +152,9 @@ func _on_host_peer(_peer_id: int, _player_index: int, _name: String) -> void:
 
 
 func _on_reconnect_assignment(endpoint_id: int, available_players: Array) -> void:
-	if _role != "host" or _scenario != "reconnect" or available_players.is_empty():
+	if _role != "host" \
+			or _scenario not in ["reconnect", "bug043_stabilization"] \
+			or available_players.is_empty():
 		return
 	_reconnect_offer_count += 1
 	# This is the host's explicit acceptance-harness choice; it is not derived
@@ -156,7 +166,9 @@ func _begin_fresh_resume() -> void:
 	if _started_resume:
 		return
 	_started_resume = true
-	var state: GameState = _build_commanded_squadron_state() \
+	var state: GameState = _build_bug043_stabilization_state() \
+			if _scenario == "bug043_stabilization" else ( \
+			_build_commanded_squadron_state() \
 			if _scenario == "commanded_decline" else (
 					_build_commanded_selection_state() \
 					if _scenario in ["commanded_squadron",
@@ -164,7 +176,7 @@ func _begin_fresh_resume() -> void:
 							"commanded_activation_reject"] else (
 					_build_ship_end_activation_state() \
 					if _scenario == "ship_end_activation" \
-					else _build_learning_resume_state()))
+					else _build_learning_resume_state())))
 	if state == null:
 		_finish(false, "learning_resume_state_failed")
 		return
@@ -230,6 +242,7 @@ func _build_learning_resume_state() -> GameState:
 	attacker.commit_attack(Constants.HullZone.FRONT, 1,
 			CurrentAttackState.KIND_SHIP, 0)
 	defender.current_shields["FRONT"] = 0
+	defender.current_speed = 0
 	repair_ship.current_shields["REAR"] = maxi(0,
 			int(repair_ship.current_shields.get("REAR", 0)) - 1)
 	var attack := CurrentAttackState.new()
@@ -252,6 +265,61 @@ func _build_learning_resume_state() -> GameState:
 	}) or not state.set_current_attack_state(attack):
 		return null
 	return state
+
+
+func _build_bug043_stabilization_state() -> GameState:
+	var state := GameState.new()
+	state.rng = GameRng.new(4306)
+	state.initialize()
+	var prepared: Dictionary = LearningScenarioPreparer.prepare_game_state(
+			LearningScenarioSetup.new(), state)
+	if (prepared.get("ships", []) as Array).size() != 3 \
+			or state.stable_ship_identity_error() != "" \
+			or not state.install_match_player_control_binding(
+					MatchPlayerControlBinding.create_two_human()):
+		return null
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP
+	var ship: ShipInstance = state.get_ship(0, 0)
+	if ship == null:
+		return null
+	ship.pos_x = 0.5
+	ship.pos_y = 0.5
+	ship.rotation_deg = 0.0
+	ship.current_speed = 0
+	if not ship.establish_ship_activation("ship-activation:bug043-network") \
+			or not ship.consume_unreached_squadron_command_opportunity(
+					ship.ship_activation_identity, true) \
+			or not ship.open_maneuver_opportunity(
+					ship.ship_activation_identity):
+		return null
+	state.objectives["obstacles"] = [
+		_bug043_obstacle("obstacle:0", "asteroid_1", 0),
+		_bug043_obstacle("obstacle:1", "debris_1", 1),
+	]
+	if state.damage_deck == null:
+		return null
+	for index: int in range(state.damage_deck._draw_pile.size()):
+		if state.damage_deck._draw_pile[index].effect_id == "shield_failure":
+			var top: DamageCard = state.damage_deck._draw_pile[index]
+			state.damage_deck._draw_pile.remove_at(index)
+			state.damage_deck._draw_pile.append(top)
+			break
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.MANEUVER_STEP, 0,
+			Constants.Visibility.ALL, {
+				"ship_index": 0,
+				"ship_activation_identity": ship.ship_activation_identity,
+			})
+	return state if state.validate_declaration_adjacent_state() else null
+
+
+func _bug043_obstacle(id: String, data_key: String, order: int) -> Dictionary:
+	return {"obstacle_id":id, "data_key":data_key,
+		"pos_x":0.5, "pos_y":0.5, "rotation_deg":0.0,
+		"placing_player":0, "placement_order":order,
+		"last_maneuver_execution_id":""}
 
 
 func _build_commanded_squadron_state() -> GameState:
@@ -395,7 +463,7 @@ func _on_canonical_install() -> void:
 	_canonical_installs += 1
 	if _scenario not in ["fresh", "commanded_squadron", "commanded_decline",
 			"commanded_activation_gate", "commanded_activation_reject",
-			"ship_end_activation"] \
+			"ship_end_activation", "bug043_stabilization"] \
 			or GameManager.current_game_state == null:
 		return
 	_installed_evidence = _state_resume_evidence(
@@ -678,6 +746,9 @@ func _advance_fresh_gameplay() -> void:
 		_gameplay_evidence = {
 			"dice_rolled": _history_has("roll_dice"),
 			"damage_resolved": _history_has("resolve_damage"),
+			"speed_zero_defender": defender.current_speed == 0,
+			"no_defense_submission": _history_count("commit_defense") == 0,
+			"attack_completed_once": _history_count("complete_attack") == 1,
 			"defender_damage": defender.get_total_damage(),
 			"repair_applied": int(repair_ship.current_shields.get("REAR", -1))
 					== pre_repair + 1,
@@ -720,6 +791,9 @@ func _finish_client_after_convergence(state: GameState) -> void:
 	_gameplay_evidence = {
 		"dice_rolled": _history_has("roll_dice"),
 		"damage_resolved": _history_has("resolve_damage"),
+		"speed_zero_defender": defender.current_speed == 0,
+		"no_defense_submission": _history_count("commit_defense") == 0,
+		"attack_completed_once": _history_count("complete_attack") == 1,
 		"defender_damage": defender.get_total_damage(),
 		"repair_applied": int(repair_ship.current_shields.get("REAR", -1))
 				== repair_ship.get_max_shields("REAR"),
@@ -1372,6 +1446,136 @@ func _advance_ship_end_activation() -> void:
 	_finish(true, "client_end_activation_converged")
 
 
+func _advance_bug043_stabilization() -> void:
+	if _game_board == null or GameManager.current_game_state == null:
+		return
+	var state: GameState = GameManager.current_game_state
+	var ship: ShipInstance = state.get_ship(0, 0)
+	if ship == null:
+		_finish(false, "bug043_ship_missing")
+		return
+	if _role == "host":
+		_advance_bug043_host(state, ship)
+	elif _role == "client":
+		_advance_bug043_initial_client(state, ship)
+	elif _role == "reconnect":
+		_advance_bug043_reconnected_client(state, ship)
+
+
+func _advance_bug043_host(state: GameState, ship: ShipInstance) -> void:
+	if not _bug043_wrong_principal_checked:
+		_bug043_wrong_principal_checked = true
+		var before: String = CanonicalJson.hash(state.serialize())
+		var rejected: Dictionary = GameManager.get_command_submitter().submit(
+				CandidateExecuteManeuverCommand.new(0, {
+					"ship_index":0, "speed":0, "yaw_clicks":[],
+					"yaw_bonus_joint":-1,
+					"ship_activation_identity":ship.ship_activation_identity,
+				}))
+		_bug043_evidence["wrong_principal_rejected"] = rejected.is_empty()
+		_bug043_evidence["wrong_principal_unchanged"] = \
+				before == CanonicalJson.hash(state.serialize())
+		return
+	var action: Dictionary = ManeuverExecutionEvaluator.next_action(state, 0, 0)
+	if str(action.get("choice", "")) == "shield_zones" \
+			and int(action.get("player_index", -1)) == 1 \
+			and not _bug043_immediate_submitted:
+		var card: DamageCard = ship.faceup_card_for_public_ref(str(
+				(action.get("payload", {}) as Dictionary).get(
+						"public_card_ref", "")))
+		if card == null:
+			_finish(false, "bug043_immediate_card_missing")
+			return
+		_bug043_immediate_submitted = true
+		if GameManager.submit_resolve_immediate_effect(
+				ship, card, {"zones":[]}).is_empty():
+			_finish(false, "bug043_host_immediate_failed")
+		return
+	if _bug043_immediate_submitted \
+			and _history_count("resolve_immediate_effect") == 1:
+		var next: Dictionary = ManeuverExecutionEvaluator.next_action(state, 0, 0)
+		if str(next.get("command_type", "")) != "resolve_debris_overlap" \
+				or int(next.get("player_index", -1)) != 0:
+			return
+		_bug043_evidence.merge({
+			"speed_zero_execute_count":_history_count("execute_maneuver"),
+			"apply_count":_history_count("apply_maneuver_transform"),
+			"order_count":_history_count("commit_maneuver_obstacle_order"),
+			"asteroid_count":_history_count("resolve_asteroid_overlap"),
+			"immediate_count":_history_count("resolve_immediate_effect"),
+			"automatic_authority_chain":_history_count("apply_maneuver_transform") == 1 \
+					and _history_count("resolve_asteroid_overlap") == 1,
+			"other_principal_choice":true,
+			"reconnected_player_actionable":int(next.get("player_index", -1)) == 0,
+			"cursor":CommandProcessor.get_next_sequence(),
+		}, true)
+		_finish(true, "bug043_network_authority_converged")
+
+
+func _advance_bug043_initial_client(state: GameState,
+		ship: ShipInstance) -> void:
+	if not _bug043_maneuver_submitted:
+		_bug043_maneuver_submitted = true
+		GameManager.submit_execute_maneuver(
+				ship, 0, [], ship.pos_x, ship.pos_y, ship.rotation_deg)
+		return
+	var action: Dictionary = ManeuverExecutionEvaluator.next_action(state, 0, 0)
+	if str(action.get("command_type", "")) \
+			!= "commit_maneuver_obstacle_order" \
+			or int(action.get("player_index", -1)) != 0:
+		return
+	var projected: Dictionary = _game_board._ship_activation_controller \
+			._pending_maneuver_action
+	if str(projected.get("command_type", "")) \
+			!= "commit_maneuver_obstacle_order":
+		return
+	_bug043_evidence = {"client_authored_speed_zero":true,
+		"order_projected_before_disconnect":true}
+	NetworkManager.disconnect_from_server()
+	_finish(true, "bug043_client_disconnected_at_choice")
+
+
+func _advance_bug043_reconnected_client(state: GameState,
+		ship: ShipInstance) -> void:
+	var controller: ShipActivationController = \
+			_game_board._ship_activation_controller
+	if not _bug043_order_submitted:
+		var derived: Dictionary = ManeuverExecutionEvaluator.next_action(
+				state, ship.owner_player, state.find_ship_index(ship))
+		_bug043_evidence["reconnect_player_index"] = \
+				NetworkManager.get_local_player_index()
+		_bug043_evidence["reconnect_derived_command"] = str(
+				derived.get("command_type", ""))
+		controller.project_maneuver_consequence(
+				state, NetworkManager.get_local_player_index())
+		var projected: Dictionary = controller._pending_maneuver_action
+		if str(projected.get("command_type", "")) \
+				!= "commit_maneuver_obstacle_order" \
+				or int(projected.get("player_index", -1)) != 0:
+			return
+		_bug043_evidence["reconnect_restored_legal_choice"] = true
+		_bug043_order_submitted = true
+		controller._on_maneuver_consequence_choice(
+				{"id":"obstacle:0|obstacle:1"})
+		return
+	var next: Dictionary = ManeuverExecutionEvaluator.next_action(state, 0, 0)
+	if str(next.get("command_type", "")) != "resolve_debris_overlap":
+		return
+	_bug043_evidence.merge({
+		"reconnect_authored_order":true,
+		"passive_ordered_application":
+				_history_count("commit_maneuver_obstacle_order") == 1 \
+				and _history_count("resolve_asteroid_overlap") == 1 \
+				and _history_count("resolve_immediate_effect") == 1,
+		"no_synthesized_duplicate":
+				_history_count("commit_maneuver_obstacle_order") == 1 \
+				and _history_count("resolve_immediate_effect") == 1,
+		"legal_next_actor":int(next.get("player_index", -1)) == 0,
+		"cursor":CommandProcessor.get_next_sequence(),
+	}, true)
+	_finish(true, "bug043_reconnect_converged")
+
+
 func _finish_ship_end_activation_host(
 		state: GameState, ship: ShipInstance) -> void:
 	if _history_count("end_activation") != 1 or _end_projection_written:
@@ -1488,6 +1692,11 @@ func _on_game_starting() -> void:
 		_host_fresh_live = true
 		call_deferred("_enter_game_board")
 		return
+	if _scenario == "bug043_stabilization" \
+			and _role in ["host", "client", "reconnect"]:
+		_host_fresh_live = true
+		call_deferred("_enter_game_board")
+		return
 	_finish(true, "published")
 
 
@@ -1519,6 +1728,7 @@ func _finish(ok: bool, reason: String) -> void:
 			"decline": _decline_evidence,
 			"activation_gate": _activation_gate_evidence,
 			"end_activation": _end_activation_evidence,
+			"bug043": _bug043_evidence,
 			"compatibility": _compatibility}))
 	call_deferred("_shutdown_after_evidence", ok)
 
@@ -1567,6 +1777,8 @@ func _peer_evidence_path() -> String:
 				else "activation-gate") + "-client.json")
 	if _scenario == "ship_end_activation":
 		return _shared.path_join("end-activation-client.json")
+	if _scenario == "bug043_stabilization":
+		return _shared.path_join("bug043-reconnect.json")
 	if _scenario == "compatibility_network":
 		return _shared.path_join("compat-network-client.json")
 	if _scenario == "reconnect":
@@ -1591,6 +1803,8 @@ func _evidence_file_name() -> String:
 		return "activation-reject-" + _role
 	if _scenario == "ship_end_activation":
 		return "end-activation-" + _role
+	if _scenario == "bug043_stabilization":
+		return "bug043-" + _role
 	return "fresh-" + _role + "-" + str(_mapping)
 
 func _parse_args(values: PackedStringArray) -> Dictionary:

@@ -445,6 +445,64 @@ func test_immediate_critical_resolves_before_complete_attack_without_hidden_resu
 	assert_not_null(state.completed_attack_inspection)
 
 
+func test_v3_lethal_attack_immediate_cleans_once_then_completes_attack() -> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
+		"attack_id": "attack:391",
+		"dice_results": [{"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT_CRITICAL)}],
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	})
+	var defender: ShipInstance = state.get_ship(1, 0)
+	defender.current_shields["FRONT"] = 0
+	defender.ship_data.hull = 3
+	var surviving_defender := ShipInstance.create_from_data(
+			"v3_surviving_defender", defender.ship_data, 1, 1)
+	surviving_defender.roster_entry_id = "v3:surviving-defender"
+	surviving_defender.pos_x = 0.95
+	surviving_defender.pos_y = 0.95
+	state.get_player_state(1).ships.append(surviving_defender)
+	var structural: DamageCard = state.damage_deck.draw_card()
+	assert_not_null(structural)
+	structural.trait_type = "Ship"
+	structural.title = "Structural Damage"
+	structural.timing = "immediate"
+	structural.effect_id = "structural_damage"
+	structural.flip_facedown()
+	structural.public_card_ref = ""
+	state.damage_deck._draw_pile.append(structural)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+
+	assert_false(CommandProcessor.submit(
+			CandidateResolveDamageCommand.new(0, {
+				"attack_id": state.current_attack_state.attack_id,
+			})).is_empty())
+	var immediate_record: Dictionary = defender \
+			.active_immediate_resolution_snapshot()
+	assert_false(immediate_record.is_empty())
+	assert_false(CommandProcessor.submit(
+			CandidateResolveImmediateEffectCommand.new(1, {
+				"owner_player": 1,
+				"ship_index": 0,
+				"public_card_ref": immediate_record["public_card_ref"],
+				"immediate_resolution_id": immediate_record[
+						"immediate_resolution_id"],
+				"enclosing_kind": "attack",
+				"attack_id": state.current_attack_state.attack_id,
+			})).is_empty())
+
+	var types: Array[String] = _history_types()
+	assert_eq(types, [
+		"resolve_damage", "resolve_immediate_effect", "destroy_unit",
+		"complete_attack",
+	])
+	assert_eq(types.count("destroy_unit"), 1)
+	assert_eq(types.count("complete_attack"), 1)
+	assert_true(defender.has_finalized_destruction())
+	assert_true(state.current_attack_state.is_inactive())
+	assert_not_null(state.completed_attack_inspection)
+
+
 func test_normal_acknowledgement_retains_only_a_legal_second_attack() -> void:
 	var state: GameState = _satisfied_inactive_normal_ship_state(false)
 	GameManager.current_game_state = state
@@ -2882,6 +2940,32 @@ func test_real_hotseat_no_defense_accuracy_submits_one_resolve_damage() -> void:
 	assert_eq(_history_types().count("commit_accuracy"), 1)
 	assert_eq(_history_types().count("resolve_damage"), 1,
 			"Only CommandProcessor's queued follow-up may resolve no-defense damage.")
+	assert_eq(_history_types().count("complete_attack"), 1)
+
+
+func test_speed_zero_defense_is_classified_automatic_before_projection() -> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_ACCURACY, {
+		"attack_id": "attack:68",
+		"dice_results": [_accuracy_die(), _hit_die()],
+	})
+	var defender: ShipInstance = state.get_ship(1, 0)
+	defender.current_speed = 0
+	assert_false(defender.defense_tokens.is_empty(),
+			"The fixture must distinguish speed-0 from no-token handling.")
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 67))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	board._attack_executor._state.accuracy_step = true
+
+	assert_false(GameManager.submit_commit_accuracy(0, []).is_empty())
+	await get_tree().process_frame
+
+	assert_true(state.current_attack_state.is_inactive())
+	assert_eq(_history_types().count("commit_accuracy"), 1)
+	assert_eq(_history_types().count("commit_defense"), 0,
+			"Automatic no-defense handling must not impersonate the defender.")
+	assert_eq(_history_types().count("resolve_damage"), 1)
 	assert_eq(_history_types().count("complete_attack"), 1)
 
 

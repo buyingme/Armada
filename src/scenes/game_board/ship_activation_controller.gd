@@ -1258,9 +1258,11 @@ func _maneuver_choice_descriptor(action: Dictionary,
 	if command_type == "resolve_debris_overlap":
 		effect_text = "Choose one hull zone to suffer the Debris Field's " \
 				+ "two damage points. Shields in that zone are lost first."
+	var chooser: String = "owner" \
+			if int(action["player_index"]) == ship.owner_player \
+			else "opponent"
 	return {"card_title":_maneuver_choice_title(command_type),
-		"effect_text":effect_text,
-		"chooser":int(action["player_index"]), "options":options,
+		"effect_text":effect_text, "chooser":chooser, "options":options,
 		"multi_select":multi_select, "max_selections":max_selections,
 		"choice_type":ImmediateEffectResolver.CHOICE_SHIELD_FAILURE \
 				if multi_select else "maneuver_consequence"}
@@ -1606,7 +1608,7 @@ func _on_activation_sequence_requested() -> void:
 
 ## Called when the activation modal reaches the Execute Maneuver step.
 ## Shows the maneuver tool on the activating ship and the Execute Maneuver
-## button. For speed 0, skips the tool and executes immediately.
+## button. Speed 0 uses the same transient tool and commitment path.
 ## Requirements: FLOW-003, AC-5b-03, EXE-004.
 func _on_maneuver_step_entered() -> void:
 	_log.info("Maneuver step entered.")
@@ -1623,12 +1625,6 @@ func _on_maneuver_step_entered() -> void:
 	# bonus to a token-only spend.
 	# Rules Reference: NAV-002, NAV-006 — yaw bonus is a dial-only effect.
 	_activation_ctx.ship_activation_state.refresh_navigate_availability()
-	var ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
-	# Speed 0: no tool, ship stays in place, maneuver counts as executed.
-	if ship.current_speed == 0:
-		_log.info("Speed 0 — executing maneuver without tool.")
-		_complete_speed_zero_maneuver(ship)
-		return
 	_show_activation_maneuver_tool()
 	# Disable the simulation maneuver button while activation tool is active.
 	if _panel_mgr.action_toolbar:
@@ -1648,22 +1644,6 @@ func _show_activation_maneuver_tool() -> void:
 			_update_maneuver_damage_hint):
 		scene.maneuver_preview_changed.connect(_update_maneuver_damage_hint)
 	_update_maneuver_damage_hint()
-
-
-## Commits legal speed zero through the same authoritative intent-only
-## execute_maneuver path as every positive speed.
-func _complete_speed_zero_maneuver(ship: ShipInstance) -> void:
-	var result: Dictionary = GameManager.submit_execute_maneuver(
-			ship, 0, [], 0.0, 0.0, 0.0, -1)
-	if result.is_empty():
-		_log.error("Speed-zero Maneuver commitment was rejected.")
-		return
-	_activation_ctx.ship_activation_state.mark_maneuver_executed()
-	if _maneuver_tool_controller.get_scene() != null:
-		if _dismiss_maneuver_tool_with_preview.is_valid():
-			_dismiss_maneuver_tool_with_preview.call()
-		else:
-			_maneuver_tool_controller.dismiss(ship)
 
 
 ## Refreshes the warning for damage-card effects caused by the previewed move.

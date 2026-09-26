@@ -63,9 +63,11 @@ var _saved_submitter: CommandSubmitter = null
 func before_each() -> void:
 	_saved_state = GameManager.current_game_state
 	_saved_submitter = GameManager.get_command_submitter()
+	CommandProcessor.reset()
 
 
 func after_each() -> void:
+	CommandProcessor.reset()
 	GameManager.current_game_state = _saved_state
 	GameManager.set_command_submitter(_saved_submitter)
 
@@ -115,6 +117,101 @@ func test_speed_zero_is_committed_by_execute_maneuver_not_set_speed() -> void:
 	assert_eq(int(submitter.submitted[0].payload.get("speed", -1)), 0)
 	assert_true(ship.has_active_maneuver_execution(),
 			"The direct test submitter commits but does not synthesize follow-ups")
+
+
+func test_speed_zero_controller_entry_renders_terminal_segment_and_controls() \
+		-> void:
+	var fixture: Dictionary = _fixture("activation:bug043:entry-zero", 0)
+	var controller: ShipActivationController = fixture["controller"] \
+			as ShipActivationController
+	var maneuver_controller: ManeuverToolController = \
+			fixture["maneuver_controller"] as ManeuverToolController
+	var original_tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
+
+	controller._on_maneuver_step_entered()
+
+	var live_tool: ManeuverToolScene = maneuver_controller.get_scene()
+	assert_not_null(live_tool)
+	assert_ne(live_tool, original_tool,
+			"Controller entry must create the normal live Maneuver tool")
+	assert_true(live_tool.is_activation_mode())
+	assert_eq(live_tool.get_state().get_simulated_speed(), 0)
+	assert_eq(live_tool.get_state().get_segment_type(0), "segment_end")
+	assert_true(live_tool._segment_sprites[0].visible,
+			"The terminal/facing segment must be rendered")
+	assert_true(live_tool._speed_button_layer.visible,
+			"Speed controls remain available at canonical speed 0")
+
+
+func test_speed_zero_to_zero_commits_through_normal_authority() -> void:
+	var fixture: Dictionary = _fixture("activation:bug043:zero-zero", 0)
+	var ship: ShipInstance = fixture["ship"] as ShipInstance
+	var controller: ShipActivationController = fixture["controller"] \
+			as ShipActivationController
+	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+
+	controller._on_execute_maneuver()
+
+	assert_eq(ship.current_speed, 0)
+	assert_false(ship.has_active_maneuver_execution())
+	assert_eq(ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_eq(_history_types(), [
+		"execute_maneuver", "apply_maneuver_transform", "complete_maneuver"])
+
+
+func test_speed_zero_to_one_navigate_commits_through_normal_authority() -> void:
+	var fixture: Dictionary = _fixture("activation:bug043:zero-one", 0)
+	var ship: ShipInstance = fixture["ship"] as ShipInstance
+	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
+	var controller: ShipActivationController = fixture["controller"] \
+			as ShipActivationController
+	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+
+	tool._handle_speed_change(1)
+	assert_eq(ship.current_speed, 0,
+			"Navigate selection must remain transient before commitment")
+	assert_eq(tool.get_state().get_simulated_speed(), 1)
+	controller._on_execute_maneuver()
+
+	assert_eq(ship.current_speed, 1)
+	assert_false(ship.has_active_maneuver_execution())
+	assert_eq(_history_types(), [
+		"execute_maneuver", "apply_maneuver_transform", "complete_maneuver"])
+
+
+func test_v9_speed_zero_final_transform_detects_real_contour_overlap() -> void:
+	var fixture: Dictionary = _fixture("activation:bug043:zero-overlap", 0)
+	var state: GameState = GameManager.current_game_state
+	var ship: ShipInstance = fixture["ship"] as ShipInstance
+	var controller: ShipActivationController = fixture["controller"] \
+			as ShipActivationController
+	state.objectives["obstacles"] = [{
+		"obstacle_id": "obstacle:0",
+		"data_key": "debris_1",
+		"pos_x": ship.pos_x,
+		"pos_y": ship.pos_y,
+		"rotation_deg": 0.0,
+		"placing_player": 0,
+		"placement_order": 0,
+		"last_maneuver_execution_id": "",
+	}]
+	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+
+	controller._on_execute_maneuver()
+
+	assert_true(ship.has_active_maneuver_execution())
+	assert_true(bool(ship.active_maneuver_execution_snapshot().get(
+			"final_transform_applied", false)))
+	var next: Dictionary = ManeuverExecutionEvaluator.next_action(state, 0, 0)
+	assert_eq(next.get("kind"), "decision")
+	assert_eq(next.get("command_type"), "resolve_debris_overlap")
+	assert_eq((next.get("payload", {}) as Dictionary).get("obstacle_id"),
+			"obstacle:0")
+	assert_eq(next.get("hull_zones"), ship.current_shields.keys())
+	assert_eq(_history_types(), [
+		"execute_maneuver", "apply_maneuver_transform",
+		"commit_maneuver_obstacle_order"])
 
 
 func test_token_only_speed_change_is_debited_atomically_at_commit() -> void:
@@ -307,6 +404,8 @@ func _fixture(activation_identity: String, initial_speed: int = 2,
 	data.shields = {"front": 3, "left": 3, "right": 3, "rear": 2}
 	var ship := ShipInstance.create_from_data(
 			"bug043_ship", data, initial_speed, 0)
+	ship.pos_x = 0.5
+	ship.pos_y = 0.5
 	ship.command_dial_stack.assign_dials(
 			[Constants.CommandType.NAVIGATE, Constants.CommandType.REPAIR], 1)
 	ship.command_dial_stack.reveal_top()
@@ -323,6 +422,7 @@ func _fixture(activation_identity: String, initial_speed: int = 2,
 	var game_state := GameState.new()
 	game_state.current_phase = Constants.GamePhase.SHIP
 	game_state.player_states = [player_zero, player_one]
+	game_state.objectives["obstacles"] = []
 	GameManager.current_game_state = game_state
 
 	var activation_state := ShipActivationState.create(ship)
@@ -333,6 +433,15 @@ func _fixture(activation_identity: String, initial_speed: int = 2,
 	maneuver_controller._scene = tool
 	var token := ShipToken.new()
 	add_child_autofree(token)
+	token._ship_instance = ship
+	token._ship_data = data
+	var base_size: Vector2 = GameScale.get_base_size(data.ship_size)
+	token._half_w = base_size.x * 0.5
+	token._half_l = base_size.y * 0.5
+	token.set_meta("data_key", ship.data_key)
+	var token_container := Node2D.new()
+	add_child_autofree(token_container)
+	maneuver_controller.initialize(token_container)
 	var context := ActivationContext.new()
 	context.set_active(token, activation_state)
 	var controller := ShipActivationController.new()
@@ -368,3 +477,10 @@ func _make_tool(ship: ShipInstance,
 func _advance_to_maneuver(state: ShipActivationState) -> void:
 	while not state.is_at_step(ShipActivationState.Step.MANEUVER):
 		state.advance_step()
+
+
+func _history_types() -> Array[String]:
+	var result: Array[String] = []
+	for command: GameCommand in CommandProcessor.get_history():
+		result.append(command.command_type)
+	return result

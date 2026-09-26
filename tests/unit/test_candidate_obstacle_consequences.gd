@@ -447,6 +447,122 @@ func test_station_decline_preserves_damage_and_completes_exactly_once() -> void:
 			"complete_maneuver")
 
 
+func test_v2_live_composed_return_rederives_each_obligation_and_completes_once() \
+		-> void:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	state.damage_deck = _deck([
+		_card("damage:v2:0", "shield_failure", "immediate"),
+		_card("damage:v2:1", "shield_failure", "immediate"),
+		_card("damage:v2:2", "shield_failure", "immediate"),
+		_card("damage:v2:3", "shield_failure", "immediate"),
+		_card("damage:v2:4", "shield_failure", "immediate"),
+		_card("damage:v2:5", "shield_failure", "immediate"),
+		_card("damage:v2:6", "shield_failure", "immediate"),
+		_card("damage:v2:7", "shield_failure", "immediate"),
+		_card("damage:v2:8", "shield_failure", "immediate"),
+		_card("damage:v2:9", "shield_failure", "immediate"),
+	])
+	var ship := ShipInstance.create_from_data("composed", _ship_data(), 1, 0)
+	ship.roster_entry_id = "composed-ship"
+	ship.pos_x = 0.5
+	ship.pos_y = 0.5
+	ship.ship_data.hull = 12
+	ship.command_tokens.add_token(Constants.CommandType.NAVIGATE)
+	state.get_player_state(0).ships.append(ship)
+	assert_true(ship.establish_ship_activation("ship-activation:v2"))
+	assert_true(ship.open_maneuver_opportunity("ship-activation:v2"))
+	for source_data: Dictionary in [
+		{"id":"damage:source:thruster", "ref":"faceup:v2:thruster",
+			"effect":"thruster_fissure"},
+		{"id":"damage:source:controls", "ref":"faceup:v2:controls",
+			"effect":"damaged_controls"},
+		{"id":"damage:source:ruptured", "ref":"faceup:v2:ruptured",
+			"effect":"ruptured_engine"},
+	]:
+		var source: DamageCard = _card(
+				source_data["id"], source_data["effect"], "persistent")
+		source.flip_faceup()
+		source.public_card_ref = source_data["ref"]
+		ship.add_faceup_damage(source)
+	var processor: Node = _game_flow_processor(state)
+	var execute := CandidateExecuteManeuverCommand.new(0, {
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:v2",
+		"speed": 2,
+		"yaw_clicks": [0, 0],
+		"yaw_bonus_joint": -1,
+	})
+	var committed: Dictionary = processor.submit(execute)
+	assert_false(committed.is_empty())
+	assert_eq(_history_types(processor), ["execute_maneuver"])
+	state.objectives["obstacles"] = []
+	for obstacle_index: int in range(3):
+		state.objectives["obstacles"].append({
+			"obstacle_id": "obstacle:%d" % obstacle_index,
+			"data_key": ["asteroid_1", "debris_1", "station"][obstacle_index],
+			"pos_x": float(committed["pos_x"]),
+			"pos_y": float(committed["pos_y"]),
+			"rotation_deg": 0.0,
+			"placing_player": 0,
+			"placement_order": obstacle_index,
+			"last_maneuver_execution_id": "",
+		})
+	var identity: Dictionary = {
+		"owner_player": 0,
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:v2",
+		"maneuver_execution_id": "maneuver:%d" % execute.sequence,
+	}
+	assert_false(processor.submit(CandidateResolveThrusterFissureCommand.new(
+			0, identity.merged({
+				"public_card_ref": "faceup:v2:thruster",
+				"hull_zone": "front",
+			}))).is_empty())
+	var order_action: Dictionary = EVALUATOR.next_action(state, 0, 0)
+	assert_eq(order_action.get("kind"), "decision")
+	assert_eq(order_action.get("command_type"),
+			"commit_maneuver_obstacle_order")
+	assert_false(processor.submit(ORDER.new(0, identity.merged({
+		"obstacle_ids": ["obstacle:0", "obstacle:1", "obstacle:2"],
+	}))).is_empty())
+	var immediate_action: Dictionary = EVALUATOR.next_action(state, 0, 0)
+	assert_eq(immediate_action.get("choice"), "shield_zones")
+	var immediate_payload: Dictionary = immediate_action["payload"].duplicate(true)
+	immediate_payload["shield_zones"] = []
+	assert_false(processor.submit(IMMEDIATE.new(
+			int(immediate_action["player_index"]), immediate_payload)).is_empty())
+	var debris_action: Dictionary = EVALUATOR.next_action(state, 0, 0)
+	assert_eq(debris_action.get("command_type"), "resolve_debris_overlap")
+	assert_false(processor.submit(DEBRIS.new(0,
+			(debris_action["payload"] as Dictionary).merged({
+				"hull_zone": "front",
+			}))).is_empty())
+	var station_action: Dictionary = EVALUATOR.next_action(state, 0, 0)
+	assert_eq(station_action.get("command_type"), "resolve_station_overlap")
+	assert_false(processor.submit(STATION.new(0,
+			(station_action["payload"] as Dictionary).merged({
+				"action": "decline",
+			}))).is_empty())
+	var ruptured_action: Dictionary = EVALUATOR.next_action(state, 0, 0)
+	assert_eq(ruptured_action.get("command_type"), "resolve_ruptured_engine")
+	assert_false(processor.submit(CandidateResolveRupturedEngineCommand.new(
+			0, (ruptured_action["payload"] as Dictionary).merged({
+				"hull_zone": "front",
+			}))).is_empty())
+	assert_false(ship.has_active_maneuver_execution())
+	var types: Array[String] = _history_types(processor)
+	assert_eq(types.count("resolve_thruster_fissure"), 1)
+	assert_eq(types.count("resolve_damaged_controls"), 1)
+	assert_eq(types.count("resolve_asteroid_overlap"), 1)
+	assert_eq(types.count("resolve_immediate_effect"), 1)
+	assert_eq(types.count("resolve_debris_overlap"), 1)
+	assert_eq(types.count("resolve_station_overlap"), 1)
+	assert_eq(types.count("resolve_ruptured_engine"), 1)
+	assert_eq(types.count("complete_maneuver"), 1)
+
+
 func test_station_facedown_selection_converges_on_passive_peer() -> void:
 	var authority_fixture: Dictionary = _fixture("station", [])
 	var authority_state: GameState = authority_fixture["state"]

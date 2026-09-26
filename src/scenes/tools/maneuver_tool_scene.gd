@@ -676,7 +676,7 @@ func _update_speed_buttons(segs: Array) -> void:
 	if _speed_button_layer == null:
 		return
 	var active: int = _state.get_active_segment_count()
-	if active < 2 or segs.size() < active:
+	if active < 1 or segs.size() < active:
 		_speed_button_layer.visible = false
 		return
 	var last_idx: int = active - 1

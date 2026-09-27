@@ -116,6 +116,15 @@ func test_speed_zero_uses_same_commitment_identity_and_path() -> void:
 	assert_true(_ship.has_active_maneuver_execution())
 
 
+func test_speed_zero_yaw_bonus_rejected_without_mutation() -> void:
+	_reveal_navigate_dial()
+	var command: GameCommand = _command(17, 0, [], 0)
+	var before: Dictionary = _snapshot()
+	assert_eq(command.validate(_state), "Invalid yaw bonus joint.")
+	assert_eq(command.execute(_state), {})
+	assert_eq(_snapshot(), before)
+
+
 func test_rejects_caller_geometry_and_overlap_fields_without_mutation() -> void:
 	var command: GameCommand = _command(13, 1, [0], -1)
 	command.payload["pos_x"] = 0.1

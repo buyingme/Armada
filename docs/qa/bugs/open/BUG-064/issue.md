@@ -178,4 +178,30 @@ If replay fixture renewal becomes necessary, follow the project replay-fixture p
 
 ## Resolution
 
-Pending investigation and implementation.
+Implemented for Owner review on 2026-09-27; issue status remains Open.
+
+The X-wing card supplies the Bomber keyword. `RuleBootstrap` registers the
+Bomber damage modifier and critical-effect blocker, and `CurrentAttackState`
+uses the modifier to count its critical icon as damage against a ship. The
+demonstrated loss was in `ResolveDamageCommand._first_card_faceup()`: it
+returned false for every squadron attacker before consulting the registered
+critical-effect blocker. That made the authority deal the hull card facedown.
+
+The repair allows the existing first-card decision to examine ship and
+squadron attackers with their actual canonical entity as the rule context.
+The Bomber blocker still rejects non-Bomber squadron critical effects;
+Contain and ordinary critical eligibility remain in the same command path.
+The existing damage-card draw and immediate-resolution mechanisms deal and
+resolve the faceup card. No alternate X-wing attack lifecycle was added.
+
+The focused regression failed before the repair and passed afterward.
+Authority tests cover the X-wing qualifying critical, no-critical and
+non-Bomber negatives, canonical immediate faceup obligation, and passive
+Network application of the same public card/result. A production continuation
+test verifies `resolve_damage` → `resolve_immediate_effect` →
+`complete_attack` for an X-wing attack. Focused damage tests passed 10/10 and
+attack continuation tests passed 83/83. The full automated run passed 4,337
+of 4,338 tests; its sole failure is the pre-existing, unrelated dial-picker
+phase-3 `assign_dials` rejection. Architecture lint and `git diff --check`
+passed. No replay fixture was changed or created. Owner acceptance and any
+manual replay capture remain Owner actions.

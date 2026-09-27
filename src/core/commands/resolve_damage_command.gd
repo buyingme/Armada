@@ -370,7 +370,8 @@ func _restore_damage_deck(game_state: GameState,
 
 func _first_card_faceup(game_state: GameState,
 		attack: CurrentAttackState) -> bool:
-	if attack.attacker_kind != CurrentAttackState.KIND_SHIP \
+	if attack.attacker_kind not in [CurrentAttackState.KIND_SHIP,
+			CurrentAttackState.KIND_SQUADRON] \
 			or attack.defender_kind != CurrentAttackState.KIND_SHIP \
 			or not Dice.has_any_critical(attack.dice_results):
 		return false
@@ -379,7 +380,10 @@ func _first_card_faceup(game_state: GameState,
 			return false
 	var context := EffectContext.new()
 	context.attacker = game_state.get_ship(
-			attack.attacker_player, attack.attacker_index)
+			attack.attacker_player, attack.attacker_index) \
+			if attack.attacker_kind == CurrentAttackState.KIND_SHIP \
+			else game_state.get_squadron(
+				attack.attacker_player, attack.attacker_index)
 	context.defender = game_state.get_ship(
 			attack.defender_player, attack.defender_index)
 	context.critical_allowed = true

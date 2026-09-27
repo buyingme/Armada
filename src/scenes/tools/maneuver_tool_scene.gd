@@ -776,6 +776,11 @@ func _handle_speed_change(delta: int) -> void:
 		if applied:
 			var target_speed: int = _activation_state.get_original_speed() \
 					+ _activation_state.get_total_speed_change()
+			# A speed reduction can remove the joint carrying a Navigate yaw
+			# bonus. The preview must not submit that now-invalid joint.
+			if _activation_state.get_yaw_bonus_joint() >= target_speed:
+				_activation_state.remove_yaw_bonus()
+				_state.clear_yaw_bonus()
 			# Protocol 7 keeps selection presentation-only. execute_maneuver owns
 			# the atomic canonical speed mutation and Navigate source debit.
 			_state.set_activation_preview_speed(target_speed)

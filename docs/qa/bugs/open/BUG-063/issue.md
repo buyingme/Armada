@@ -217,6 +217,31 @@ Manual replay fixture policy remains unchanged: Codex must not generate, synthes
 reconstruct, patch, transform, relabel, or promote accepted replay fixtures. If accepted
 fixture renewal is required, stop for Owner manual replay capture.
 
+## Stabilization Result (2026-09-27)
+
+**Root cause.** Reducing an activation Maneuver preview to speed 0 clamped the
+joint clicks but retained a Navigate yaw bonus on joint 0 in both transient
+preview models. The controller submitted that obsolete joint in
+`execute_maneuver`; `ManeuverAuthority.validate_course_intent()` correctly
+rejected it. The authoritative speed-0 representation is `speed: 0`, empty
+`yaw_clicks`, and `yaw_bonus_joint: -1`.
+
+**Repair.** `ManeuverToolScene._handle_speed_change()` now removes the preview
+yaw bonus from both transient models whenever a speed reduction removes its
+joint. Canonical command validation and Navigate resource ownership were not
+changed. The production-seam regression reproduced the rejection before the
+repair and passed afterward.
+
+**Verification.** Focused Maneuver preview, command, and command-processor tests
+passed. They cover legal speed 0, unchanged 0→0, Navigate 0→1, an invalid
+speed-0 yaw bonus, rejection atomicity, and the accepted
+`execute_maneuver` → `apply_maneuver_transform` → `complete_maneuver` history.
+The full automated run passed 4,337 of 4,338 tests; the sole failure is the
+pre-existing, unrelated `test_command_dial_picker.gd::test_confirm_emits_signal_and_closes`
+phase-3 `assign_dials` rejection. Architecture lint and `git diff --check`
+passed. No replay fixture was changed or created. Status remains Open pending
+Owner disposition; no manual Network replay capture was performed by Codex.
+
 
 2026-09-27T10:14:40] [INFO] [ManeuverTool] Activation speed preview -1 → 0
 [2026-09-27T10:14:40] [INFO] [ActivationModal] [OFFSETS] _deferred:before: L=-185.5 R=215.5 T=-40.0 B=-40.0 sz=(401,400) pos=(793,640) anchors=(0.50,1.00,0.50,1.00)

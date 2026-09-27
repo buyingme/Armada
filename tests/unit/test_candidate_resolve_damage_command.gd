@@ -21,6 +21,7 @@ class PresentationAttackExecutor:
 
 func before_each() -> void:
 	_saved_game_state = GameManager.current_game_state
+	RuleBootstrap.bootstrap_rules()
 	_state = GameState.new()
 	_state.initialize()
 	_state.current_phase = Constants.GamePhase.SHIP
@@ -64,6 +65,115 @@ func test_attack_faceup_assignment_establishes_exact_public_obligation() -> void
 	assert_eq(record["attack_id"], "attack:70")
 	assert_eq(record["public_card_ref"], "faceup:70:0")
 	assert_false(result.has("physical_card_id"))
+
+
+func test_x_wing_bomber_critical_deals_immediate_faceup_card() -> void:
+	_install_squadron_ship_attack(Constants.DiceFace.CRITICAL)
+	var command: GameCommand = COMMAND.new(0, {"attack_id": "attack:70"})
+	command.sequence = 70
+	assert_eq(command.validate(_state), "")
+	var result: Dictionary = command.execute(_state)
+	assert_false(result.is_empty())
+	var additions: Array = result["damage_application"]["faceup_additions"]
+	assert_eq(additions.size(), 1)
+	if not additions.is_empty():
+		assert_eq(additions[0]["immediate_obligation"], "open")
+	var defender: ShipInstance = _state.get_ship(1, 0)
+	assert_eq(defender.faceup_damage.size(), 1)
+	assert_true(defender.has_active_immediate_resolution())
+
+
+func test_x_wing_without_critical_deals_no_faceup_card() -> void:
+	_install_squadron_ship_attack(Constants.DiceFace.HIT)
+	var command: GameCommand = COMMAND.new(0, {"attack_id": "attack:70"})
+	command.sequence = 70
+	var result: Dictionary = command.execute(_state)
+	assert_false(result.is_empty())
+	assert_eq((result["damage_application"]["faceup_additions"] as Array).size(), 0)
+	assert_eq(_state.get_ship(1, 0).faceup_damage.size(), 0)
+
+
+func test_non_bomber_critical_does_not_resolve_ship_critical_effect() -> void:
+	_install_squadron_ship_attack(Constants.DiceFace.HIT_CRITICAL)
+	var attacker: SquadronInstance = _state.get_squadron(0, 0)
+	attacker.squadron_data.keywords = []
+	var command: GameCommand = COMMAND.new(0, {"attack_id": "attack:70"})
+	command.sequence = 70
+	var result: Dictionary = command.execute(_state)
+	assert_false(result.is_empty())
+	assert_eq((result["damage_application"]["faceup_additions"] as Array).size(), 0)
+	assert_eq(result["damage_application"]["facedown_delta"], 1)
+	assert_eq(_state.get_ship(1, 0).faceup_damage.size(), 0)
+
+
+func test_x_wing_critical_projects_same_immediate_card_to_passive_peer() -> void:
+	_install_squadron_ship_attack(Constants.DiceFace.CRITICAL)
+	var authority: GameCommand = COMMAND.new(0, {"attack_id": "attack:70"})
+	authority.sequence = 70
+	var result: Dictionary = authority.execute(_state)
+	assert_false(result.is_empty())
+	var passive := GameState.new()
+	passive.initialize()
+	passive.current_phase = Constants.GamePhase.SQUADRON
+	assert_not_null(FIXTURE.install(passive, {
+		"attack_id": "attack:70",
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+		"defender_player": 1,
+		"defender_index": 0,
+		"defender_zone": int(Constants.HullZone.FRONT),
+		"dice_results": [{"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.CRITICAL)}],
+	}))
+	passive.get_ship(1, 0).current_shields["FRONT"] = 0
+	passive.damage_deck = null
+	passive.rng = null
+	var counts: Dictionary = {}
+	var keys: Array[String] = []
+	for owner: int in range(passive.player_states.size()):
+		for raw_ship: Variant in passive.get_player_state(owner).ships:
+			var ship: ShipInstance = raw_ship as ShipInstance
+			var key: String = PassiveDamageLedger.ship_key(
+					owner, ship.roster_entry_id)
+			keys.append(key)
+			counts[key] = 0
+	passive.passive_damage_ledger = PassiveDamageLedger.deserialize({
+		"schema_version": 1, "draw_count": 1,
+		"discard_pile": [], "facedown_counts": counts,
+	}, keys)
+	for owner: int in range(passive.player_states.size()):
+		for raw_ship: Variant in passive.get_player_state(owner).ships:
+			var ship: ShipInstance = raw_ship as ShipInstance
+			assert_true(ship.bind_passive_damage_ledger(
+					passive.passive_damage_ledger,
+					PassiveDamageLedger.ship_key(owner, ship.roster_entry_id)))
+	var mirror: GameCommand = COMMAND.new(0, {"attack_id": "attack:70"})
+	mirror.sequence = 70
+	var projected: Dictionary = mirror.project_application_result(result, 1)
+	assert_eq(mirror.execute_with_application_result(passive, projected), projected)
+	var defender: ShipInstance = passive.get_ship(1, 0)
+	assert_eq(defender.faceup_damage.size(), 1)
+	assert_true(defender.has_active_immediate_resolution())
+	assert_eq(passive.passive_damage_ledger.draw_count, 0)
+
+
+func _install_squadron_ship_attack(face: Constants.DiceFace) -> void:
+	_state = GameState.new()
+	_state.initialize()
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	assert_not_null(FIXTURE.install(_state, {
+		"attack_id": "attack:70",
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+		"defender_player": 1,
+		"defender_index": 0,
+		"defender_zone": int(Constants.HullZone.FRONT),
+		"dice_results": [{"color": int(Constants.DiceColor.RED), "face": int(face)}],
+	}))
+	_state.get_ship(1, 0).current_shields["FRONT"] = 0
+	_state.damage_deck = _deck("structural_damage", "immediate")
 
 
 func test_attack_assignment_rolls_back_when_obligation_already_exists() -> void:

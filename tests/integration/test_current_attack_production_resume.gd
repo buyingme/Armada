@@ -445,6 +445,49 @@ func test_immediate_critical_resolves_before_complete_attack_without_hidden_resu
 	assert_not_null(state.completed_attack_inspection)
 
 
+func test_x_wing_bomber_critical_uses_normal_immediate_attack_continuation() -> void:
+	BomberKeyword.register()
+	var state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
+		"attack_id": "attack:392",
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"dice_results": [{"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.CRITICAL)}],
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	})
+	var defender: ShipInstance = state.get_ship(1, 0)
+	defender.current_shields["FRONT"] = 0
+	var structural: DamageCard = state.damage_deck.draw_card()
+	assert_not_null(structural)
+	structural.trait_type = "Ship"
+	structural.title = "Structural Damage"
+	structural.timing = "immediate"
+	structural.effect_id = "structural_damage"
+	structural.flip_facedown()
+	structural.public_card_ref = ""
+	state.damage_deck._draw_pile.append(structural)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+
+	assert_false(CommandProcessor.submit(CandidateResolveDamageCommand.new(0, {
+		"attack_id": state.current_attack_state.attack_id,
+	})).is_empty())
+	assert_eq(_history_types(), ["resolve_damage"])
+	assert_eq(defender.faceup_damage.size(), 1)
+	var obligation: Dictionary = defender.active_immediate_resolution_snapshot()
+	assert_false(obligation.is_empty())
+	assert_false(CommandProcessor.submit(CandidateResolveImmediateEffectCommand.new(1, {
+		"owner_player": 1,
+		"ship_index": 0,
+		"public_card_ref": obligation["public_card_ref"],
+		"immediate_resolution_id": obligation["immediate_resolution_id"],
+		"enclosing_kind": "attack",
+		"attack_id": state.current_attack_state.attack_id,
+	})).is_empty())
+	assert_eq(_history_types(), [
+		"resolve_damage", "resolve_immediate_effect", "complete_attack"])
+	assert_true(state.current_attack_state.is_inactive())
+
+
 func test_v3_lethal_attack_immediate_cleans_once_then_completes_attack() -> void:
 	var state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
 		"attack_id": "attack:391",

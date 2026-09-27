@@ -63,6 +63,40 @@ func test_live_authority_rederives_apply_and_complete_without_persisted_route() 
 			float(result["rotation_deg"]), 0.00001)
 
 
+func test_speed_zero_network_history_and_invalid_bonus_atomicity() -> void:
+	assert_true(_ship.command_tokens.add_token(Constants.CommandType.NAVIGATE))
+	var invalid := CandidateExecuteManeuverCommand.new(0, {
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:90",
+		"speed": 0,
+		"yaw_clicks": [],
+		"yaw_bonus_joint": 0,
+	})
+	var before: Dictionary = _state.serialize()
+	assert_eq(invalid.validate(_state), "Invalid yaw bonus joint.")
+	assert_eq(_state.serialize(), before)
+	assert_eq(_processor.get_history().size(), 0)
+	var valid := CandidateExecuteManeuverCommand.new(0, {
+		"ship_index": 0,
+		"ship_activation_identity": "ship-activation:90",
+		"speed": 0,
+		"yaw_clicks": [],
+		"yaw_bonus_joint": -1,
+	})
+	assert_false(_processor.submit(valid).is_empty())
+	assert_eq(_ship.current_speed, 0)
+	assert_false(_ship.command_tokens.has_token(Constants.CommandType.NAVIGATE))
+	var history: Array[GameCommand] = _processor.get_history()
+	assert_eq(history.size(), 3)
+	assert_eq(history[0].command_type, "execute_maneuver")
+	assert_eq(history[0].payload["speed"], 0)
+	assert_eq(history[0].payload["yaw_bonus_joint"], -1)
+	assert_eq(history[1].command_type, "apply_maneuver_transform")
+	assert_eq(history[2].command_type, "complete_maneuver")
+	assert_eq(_ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+
+
 func test_player_decision_stops_rederivation_without_partial_activation() -> void:
 	var source := DamageCard.new()
 	source.physical_card_id = "damage:thruster"

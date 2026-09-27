@@ -119,6 +119,29 @@ func test_speed_zero_is_committed_by_execute_maneuver_not_set_speed() -> void:
 			"The direct test submitter commits but does not synthesize follow-ups")
 
 
+func test_speed_zero_preview_drops_yaw_bonus_before_network_command() -> void:
+	var fixture: Dictionary = _fixture("activation:bug063:zero", 1)
+	var ship: ShipInstance = fixture["ship"] as ShipInstance
+	var activation: ShipActivationState = fixture["activation_state"] as ShipActivationState
+	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
+	var controller: ShipActivationController = fixture["controller"] as ShipActivationController
+	var submitter := SyncSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	assert_true(activation.apply_yaw_bonus(0))
+	assert_true(tool.get_state().set_yaw_bonus_joint(0))
+
+	tool._handle_speed_change(-1)
+	assert_eq(tool.get_state().get_simulated_speed(), 0)
+	assert_eq(tool.get_state().get_yaw_bonus_joint(), -1)
+	assert_eq(activation.get_yaw_bonus_joint(), -1)
+	controller._on_execute_maneuver()
+
+	assert_eq(submitter.submitted.size(), 1)
+	assert_eq(submitter.submitted[0].payload.get("yaw_bonus_joint"), -1)
+	assert_eq(ship.current_speed, 0)
+	assert_true(ship.has_active_maneuver_execution())
+
+
 func test_speed_zero_controller_entry_renders_terminal_segment_and_controls() \
 		-> void:
 	var fixture: Dictionary = _fixture("activation:bug043:entry-zero", 0)

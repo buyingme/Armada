@@ -89,7 +89,7 @@ func _get_injured_crew_choices(
 			"label": "Discard %s (%s)" % [dt_name, state_label],
 			"available": true,
 		})
-	if options.is_empty():
+	if options.size() <= 1:
 		return {}
 	return {
 		"choice_type": CHOICE_INJURED_CREW,
@@ -143,7 +143,8 @@ func _get_comm_noise_choices(
 		if opt.get("available", false):
 			has_available = true
 			break
-	if not has_available:
+	if not has_available or (ship.current_speed > 0 \
+			and ship.command_dial_stack.get_hidden_count() == 0):
 		return {}
 	return {
 		"choice_type": CHOICE_COMM_NOISE,

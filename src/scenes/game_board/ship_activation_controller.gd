@@ -1280,10 +1280,18 @@ func _on_maneuver_consequence_choice(selection: Dictionary) -> void:
 			selected[0] if not selected.is_empty() else ""))
 	match command_type:
 		"commit_maneuver_obstacle_order":
-			payload["obstacle_ids"] = selected_id.split("|", false)
+			var obstacle_ids: Array[String] = []
+			for obstacle_id: String in selected_id.split("|", false):
+				obstacle_ids.append(obstacle_id)
+			payload["obstacle_ids"] = obstacle_ids
 		"resolve_thruster_fissure", "resolve_debris_overlap", \
 		"resolve_ruptured_engine":
 			payload["hull_zone"] = selected_id
+			if command_type == "resolve_thruster_fissure":
+				var refs: Array = action.get("public_card_refs", []) as Array
+				if refs.is_empty() or typeof(refs[0]) != TYPE_STRING:
+					return
+				payload["public_card_ref"] = refs[0]
 		"resolve_station_overlap":
 			if selected_id == "decline":
 				payload["action"] = "decline"

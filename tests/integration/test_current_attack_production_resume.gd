@@ -978,6 +978,41 @@ func test_resume_accuracy_rebuilds_pending_canonical_choice() -> void:
 			"Rebuilding Accuracy must not synthesize its decision.")
 
 
+func test_bug043_r3_resolved_attack_rebuilds_pending_immediate_choice() -> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_RESOLVED, {
+		"attack_id": "attack:91",
+		"dice_results": [_hit_die()],
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	})
+	var ship: ShipInstance = state.get_ship(1, 0)
+	var card: DamageCard = state.damage_deck.draw_card()
+	assert_not_null(card)
+	card.flip_faceup()
+	card.effect_id = "shield_failure"
+	card.timing = "immediate"
+	card.public_card_ref = "faceup:r3:attack"
+	ship.add_faceup_damage(card)
+	assert_true(ship.establish_immediate_resolution({
+		"immediate_resolution_id": "immediate:faceup:r3:attack",
+		"public_card_ref": card.public_card_ref,
+		"physical_card_id": card.physical_card_id,
+		"effect_id": "shield_failure", "actor_player": 0,
+		"exact_once_key": "immediate:attack:attack:91:%s" \
+				% card.physical_card_id,
+		"enclosing_kind": "attack", "attack_id": "attack:91",
+	}))
+	GameManager.current_game_state = state
+	var executor: AttackExecutor = _make_composition(state)
+	var plan: Dictionary = executor.resume_current_attack(
+			_find_ship_token, _find_squadron_token)
+	assert_true(bool(plan.get(AttackExecutor.RESUME_KEY_OK, false)))
+	assert_eq(executor._pending_immediate_card, card,
+			"Attack reconstruction must recover the canonical choice source.")
+	assert_eq(executor._pending_immediate_ship, ship)
+	assert_eq(CommandProcessor.get_history().size(), 0,
+			"Attack reconstruction must not synthesize commands.")
+
+
 func test_resume_during_defense_rebuilds_pending_and_evade_projection() -> void:
 	var pending_state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
 		"attack_id": "attack:10",

@@ -363,9 +363,10 @@ func test_maneuver_consequence_route_dispatches_exact_candidate_payloads() -> vo
 			"selection": {"id": "b|a"},
 			"expected": {"obstacle_ids": ["b", "a"]}},
 		{"type": "resolve_thruster_fissure",
-			"action": {"payload": base.merged({"public_card_ref": "faceup:t"})},
+			"action": {"payload": base, "public_card_refs": ["faceup:t"]},
 			"selection": {"id": "front"},
-			"expected": {"hull_zone": "front"}},
+			"expected": {"hull_zone": "front",
+				"public_card_ref": "faceup:t"}},
 		{"type": "resolve_debris_overlap",
 			"action": {"payload": base.merged({"obstacle_id": "debris"})},
 			"selection": {"id": "rear"},
@@ -409,6 +410,9 @@ func test_maneuver_consequence_route_dispatches_exact_candidate_payloads() -> vo
 		controller._on_maneuver_consequence_choice(evidence["selection"])
 		var command: GameCommand = _submitter.submitted_commands.back()
 		assert_eq(command.command_type, evidence["type"])
+		if evidence["type"] == "commit_maneuver_obstacle_order":
+			assert_true(command.payload["obstacle_ids"] is Array)
+			assert_false(command.payload["obstacle_ids"] is PackedStringArray)
 		for key: String in evidence["expected"]:
 			var actual: Variant = Array(command.payload[key]) \
 					if command.payload[key] is PackedStringArray \

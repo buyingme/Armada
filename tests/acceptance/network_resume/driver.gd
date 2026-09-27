@@ -1546,8 +1546,6 @@ func _advance_bug043_reconnected_client(state: GameState,
 				NetworkManager.get_local_player_index()
 		_bug043_evidence["reconnect_derived_command"] = str(
 				derived.get("command_type", ""))
-		controller.project_maneuver_consequence(
-				state, NetworkManager.get_local_player_index())
 		var projected: Dictionary = controller._pending_maneuver_action
 		if str(projected.get("command_type", "")) \
 				!= "commit_maneuver_obstacle_order" \

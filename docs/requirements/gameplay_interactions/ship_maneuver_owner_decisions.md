@@ -5,6 +5,16 @@
 **Related requirement:** `docs/requirements/gameplay_interactions/ship_maneuver_interaction.md`
 **Related discovery:** Ship Maneuver prerequisite impact analysis and Maneuver consequence timing discovery
 
+**Compatibility succession (Owner decision, 2026-09-27):** Version labels in
+this record preserve the original decisions. The accepted BUG-058 architecture
+decision, recorded in the pending normative amendment to
+[BUG-043 workbook Section 16](../../architecture/implementation_workbooks/BUG-043-network-maneuver-preview-speed-convergence-implementation-workbook.md#16-coordinated-candidate-and-release-compatibility-cutover)
+succeeds the original 7/10/7 candidate allocation with save 7 / replay 10 /
+protocol 8. The amended workbook wording still requires a passing independent
+fidelity audit and Owner acceptance as implementation authority. Application
+contract 2, passive-ledger schema 1, gameplay semantics, and integration/release
+gates remain unchanged.
+
 ## 1. Purpose and authority
 
 This document preserves Project Owner decisions made after the Ship Maneuver prerequisite discovery and follow-up timing discovery.

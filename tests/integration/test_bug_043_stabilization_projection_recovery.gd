@@ -16,15 +16,22 @@ var _saved_submitter: CommandSubmitter
 var _saved_mode: PlayMode.Mode
 var _saved_role: NetworkManager.Role
 var _saved_local_player: int
+var _saved_host_principal: String
+var _saved_principal_admission: bool
 
 
 class RecordingSubmitter:
 	extends CommandSubmitter
 
 	var submitted: Array[GameCommand] = []
+	var authoritative_submitted: Array[GameCommand] = []
 
 	func submit(command: GameCommand) -> Dictionary:
 		submitted.append(command)
+		return {"recorded": true}
+
+	func submit_authoritative(command: GameCommand) -> Dictionary:
+		authoritative_submitted.append(command)
 		return {"recorded": true}
 
 
@@ -36,6 +43,8 @@ func before_each() -> void:
 	_saved_mode = PlayMode.current_mode
 	_saved_role = NetworkManager.role
 	_saved_local_player = NetworkManager._local_player_index
+	_saved_host_principal = NetworkManager._host_match_principal_id
+	_saved_principal_admission = NetworkManager._principal_command_admission_enabled
 	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
 	NetworkManager.role = NetworkManager.Role.NONE
 	NetworkManager._local_player_index = -1
@@ -49,6 +58,9 @@ func after_each() -> void:
 	PlayMode.current_mode = _saved_mode
 	NetworkManager.role = _saved_role
 	NetworkManager._local_player_index = _saved_local_player
+	NetworkManager._host_match_principal_id = _saved_host_principal
+	NetworkManager._principal_command_admission_enabled = \
+			_saved_principal_admission
 
 
 func test_v4_live_and_reconstructed_decision_projection_are_equivalent() \
@@ -180,7 +192,6 @@ func test_v5_production_save_install_and_filtered_reconnect_preserve_owners() \
 			add_child(board)
 			var submitter := RecordingSubmitter.new()
 			GameManager.set_command_submitter(submitter)
-			board._command_router_adapter.reconstruct_presentation()
 			var projected: Dictionary = board._ship_activation_controller \
 					._pending_maneuver_action
 			_assert_action_equivalent(projected, expected_action,
@@ -188,6 +199,24 @@ func test_v5_production_save_install_and_filtered_reconnect_preserve_owners() \
 			assert_eq(submitter.submitted.size(), 0, kind)
 			await get_tree().process_frame
 			board.free()
+		if kind == "displacement":
+			var flow_payload: Dictionary = \
+					GameManager.current_game_state.interaction_flow.payload
+			assert_eq(typeof(flow_payload.get("owner_player")), TYPE_INT)
+			assert_eq(typeof(flow_payload.get("ship_index")), TYPE_INT)
+			var entries: Array = flow_payload["displaced_squadrons"] as Array
+			assert_eq(typeof(entries[0]["owner"]), TYPE_INT)
+			assert_eq(typeof(entries[0]["squadron_index"]), TYPE_INT)
+			var displacement_board: GameBoard = \
+					GAME_BOARD_SCENE.instantiate() as GameBoard
+			add_child(displacement_board)
+			assert_eq(displacement_board._displacement_controller \
+					._displacement_queue.size(), 1,
+					"Normal board entry must route recovered displacement.")
+			assert_true(CommandProcessor.get_history().is_empty(),
+					"Displacement reconstruction must not submit work.")
+			await get_tree().process_frame
+			displacement_board.free()
 
 		var filtered: Dictionary = StateFilter.filter_for_player(
 				source.serialize(), 1)
@@ -264,6 +293,275 @@ func test_v5_json_normalization_rejects_fractional_canonical_integers() \
 	obstacles["objectives"]["obstacles"][0]["placement_order"] = 0.5
 	assert_null(GameState.deserialize(obstacles),
 			"Fractional placement identity must not enter canonical state.")
+
+	var displaced: Dictionary = _recovery_state("displacement").serialize()
+	displaced["interaction_flow"]["payload"]["ship_index"] = 0.5
+	assert_null(GameState.deserialize(displaced),
+			"Fractional displacement identity must reject installation.")
+
+
+func test_bug056_signed_displacement_restore_submits_through_game_manager() \
+		-> void:
+	var source: GameState = _recovery_state("displacement")
+	var manager: Node = SAVE_MANAGER_SCRIPT.new()
+	var save_name: String = TEST_SAVE_PREFIX + "displacement_submission"
+	assert_true(manager.save_game(source, save_name))
+	var loaded: Dictionary = manager.load_game(save_name)
+	assert_true(bool(loaded.get("ok", false)))
+	var restored: GameState = loaded.get("state") as GameState
+	assert_not_null(restored)
+	if restored != null:
+		assert_true(GameManager.start_new_game_from_state(restored,
+				LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+				int((loaded.get("meta") as SaveGameMetadata) \
+						.next_command_sequence)))
+		var ship: ShipInstance = restored.get_ship(0, 0)
+		var base := ShipBase.new(ship.ship_data.ship_size,
+				Transform2D(0.0, ship.get_pixel_position(
+						GameScale.play_area_size_px)))
+		var point: Vector2 = base.ship_transform * Vector2(0.0,
+				-base.half_length_px \
+				- GameScale.squadron_base_diameter_px * 0.5 - 1.0)
+		var result: Dictionary = GameManager.submit_commit_displacement([{
+			"owner": 1, "squadron_index": 0,
+			"pos_x": point.x / GameScale.play_area_size_px.x,
+			"pos_y": point.y / GameScale.play_area_size_px.y,
+		}])
+		assert_false(result.is_empty(),
+				"Recovered displacement must pass its real submission adapter.")
+	manager.delete_save(save_name)
+	manager.free()
+
+
+func test_bug054_thruster_modal_confirmation_preserves_public_source() -> void:
+	var state: GameState = _plain_maneuver_state("uncommitted")
+	var ship: ShipInstance = state.get_ship(0, 0)
+	assert_true(ship.commit_maneuver_execution(
+			ACTIVATION_ID, EXECUTION_ID, true, {
+				"yaw_clicks": [0], "yaw_bonus_joint": -1,
+				"pos_x": 0.5, "pos_y": 0.5, "rotation_deg": 0.0,
+			}, {"kind": "none"}))
+	_add_faceup(state, ship, "thruster_fissure")
+	var card: DamageCard = ship.faceup_damage[0] as DamageCard
+	assert_true(GameManager.start_new_game_from_state(state,
+			LearningScenarioSetup.DEFAULT_SCENARIO_ID, 0))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var submitter := RecordingSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	var controller: ShipActivationController = \
+			board._ship_activation_controller
+	assert_eq(controller._pending_maneuver_action.get("command_type"),
+			"resolve_thruster_fissure")
+	controller._maneuver_consequence_modal.choice_confirmed.emit({"id": "FRONT"})
+	assert_eq(submitter.submitted.size(), 1)
+	if not submitter.submitted.is_empty():
+		var command: GameCommand = submitter.submitted[0]
+		assert_eq(command.payload.get("public_card_ref"),
+				card.public_card_ref)
+		assert_eq(command.payload.get("hull_zone"), "FRONT")
+		assert_eq(command.validate(state), "",
+				"The actual modal submission must satisfy strict authority.")
+
+
+func test_bug055_automatic_immediate_edges_match_canonical_union() -> void:
+	var cases: Array[Dictionary] = [
+		{"effect": "injured_crew", "branch": "single_token"},
+		{"effect": "comm_noise", "branch": "speed_only",
+			"expected_action": "speed"},
+		{"effect": "comm_noise", "branch": "neither",
+			"expected_action": "none"},
+	]
+	for spec: Dictionary in cases:
+		var state: GameState = _plain_maneuver_state("applied")
+		var ship: ShipInstance = state.get_ship(0, 0)
+		if spec["branch"] == "single_token":
+			for index: int in range(1, ship.defense_tokens.size()):
+				ship.discard_defense_token(index)
+		elif spec["branch"] == "neither":
+			ship.current_speed = 0
+		_open_immediate(state, ship, str(spec["effect"]), -1)
+		var card: DamageCard = ship.faceup_card_for_public_ref(
+				"faceup:v4:%s" % spec["effect"])
+		assert_true(ImmediateEffectResolver.new().get_required_choice(
+				card, ship).is_empty(), str(spec["branch"]))
+		GameManager.current_game_state = state
+		var submitter := RecordingSubmitter.new()
+		GameManager.set_command_submitter(submitter)
+		GameManager.submit_resolve_immediate_effect(ship, card)
+		assert_eq(submitter.authoritative_submitted.size(), 1,
+				str(spec["branch"]))
+		if not submitter.authoritative_submitted.is_empty():
+			var command: GameCommand = submitter.authoritative_submitted[0]
+			assert_false(command.payload.has("defense_token_index"),
+					str(spec["branch"]))
+			if spec.has("expected_action"):
+				assert_eq(command.payload.get("comm_noise_action"),
+						spec["expected_action"])
+			assert_eq(command.validate(state), "", str(spec["branch"]))
+
+
+func test_r1_automatic_immediate_uses_authority_submission_across_principals() \
+		-> void:
+	var state: GameState = _recovery_state("automatic_boundary")
+	var ship: ShipInstance = state.get_ship(0, 0)
+	var card: DamageCard = ship.faceup_card_for_public_ref(
+			"faceup:v4:structural_damage")
+	GameManager.current_game_state = state
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager._local_player_index = 1
+	var submitter := RecordingSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	GameManager.submit_resolve_immediate_effect(ship, card)
+	assert_eq(submitter.submitted.size(), 0,
+			"Automatic work must not enter the player principal gate.")
+	assert_eq(submitter.authoritative_submitted.size(), 1)
+	if not submitter.authoritative_submitted.is_empty():
+		assert_eq(submitter.authoritative_submitted[0].player_index, 0,
+				"The command retains the canonical ship owner as actor identity.")
+
+
+func test_r1_host_player_gate_rejects_automatic_immediate_branch() -> void:
+	var state: GameState = _recovery_state("automatic_boundary")
+	GameManager.current_game_state = state
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager._principal_command_admission_enabled = true
+	NetworkManager._host_match_principal_id = state.principal_id_for_player(0)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	var record: Dictionary = ship.active_immediate_resolution_snapshot()
+	var command := CandidateResolveImmediateEffectCommand.new(0, {
+		"owner_player": 0, "ship_index": 0,
+		"public_card_ref": record["public_card_ref"],
+		"immediate_resolution_id": record["immediate_resolution_id"],
+		"enclosing_kind": "maneuver",
+		"ship_activation_identity": ACTIVATION_ID,
+		"maneuver_execution_id": EXECUTION_ID,
+		"maneuver_source_kind": "asteroid",
+		"maneuver_source_id": "obstacle:asteroid",
+	})
+	assert_eq(command.validate(state), "")
+	var before: Dictionary = state.serialize()
+	var result: Dictionary = NetworkHostCommandSubmitter.new().submit(command)
+	assert_true(result.is_empty(),
+			"A host player cannot author an authority-only immediate branch.")
+	assert_eq(state.serialize(), before)
+
+
+func test_r2_v2_comm_noise_result_refreshes_speed_visual_consumer() -> void:
+	var state: GameState = _decision_state("comm_union")
+	GameManager.current_game_state = state
+	var ship: ShipInstance = state.get_ship(0, 0)
+	var record: Dictionary = ship.active_immediate_resolution_snapshot()
+	var card: DamageCard = ship.faceup_card_for_public_ref(
+			str(record["public_card_ref"]))
+	var command := CandidateResolveImmediateEffectCommand.new(1, {
+		"owner_player": 0, "ship_index": 0,
+		"public_card_ref": record["public_card_ref"],
+		"immediate_resolution_id": record["immediate_resolution_id"],
+		"enclosing_kind": "maneuver",
+		"ship_activation_identity": ACTIVATION_ID,
+		"maneuver_execution_id": EXECUTION_ID,
+		"maneuver_source_kind": "asteroid",
+		"maneuver_source_id": "obstacle:asteroid",
+		"comm_noise_action": "speed",
+	})
+	assert_eq(command.validate(state), "")
+	var result: Dictionary = command.execute(state)
+	assert_false(result.is_empty())
+	var speed_events: Array[int] = []
+	var on_speed := func(_changed_ship: RefCounted, speed: int) -> void:
+		speed_events.append(speed)
+	EventBus.ship_speed_changed.connect(on_speed)
+	var adapter := CommandRouterAdapter.new()
+	add_child_autofree(adapter)
+	adapter._emit_candidate_damage_events(command, result)
+	EventBus.ship_speed_changed.disconnect(on_speed)
+	assert_eq(speed_events, [ship.current_speed],
+			"The v2 result must refresh the actual speed visual consumer.")
+	var helper_events: Array[int] = []
+	var on_helper_speed := func(_changed_ship: RefCounted, speed: int) -> void:
+		helper_events.append(speed)
+	EventBus.ship_speed_changed.connect(on_helper_speed)
+	ImmediateEffectSignals.emit(card, ship, result)
+	EventBus.ship_speed_changed.disconnect(on_helper_speed)
+	assert_eq(helper_events, [ship.current_speed],
+			"The shared Attack/debug visual helper must read the v2 result.")
+	var dial_state: GameState = _decision_state("comm_union")
+	GameManager.current_game_state = dial_state
+	var dial_ship: ShipInstance = dial_state.get_ship(0, 0)
+	var dial_record: Dictionary = dial_ship.active_immediate_resolution_snapshot()
+	var dial_card: DamageCard = dial_ship.faceup_card_for_public_ref(
+			str(dial_record["public_card_ref"]))
+	var dial_payload: Dictionary = command.payload.duplicate(true)
+	dial_payload["comm_noise_action"] = "dial"
+	dial_payload["replacement_command"] = int(Constants.CommandType.REPAIR)
+	var dial_command := CandidateResolveImmediateEffectCommand.new(
+			1, dial_payload)
+	assert_eq(dial_command.validate(dial_state), "")
+	var dial_result: Dictionary = dial_command.execute(dial_state)
+	var dial_events: Array[ShipInstance] = []
+	var on_dial := func(changed_ship: RefCounted) -> void:
+		dial_events.append(changed_ship as ShipInstance)
+	EventBus.command_dials_changed.connect(on_dial)
+	adapter._emit_candidate_damage_events(dial_command, dial_result)
+	EventBus.command_dials_changed.disconnect(on_dial)
+	assert_eq(dial_events, [dial_ship])
+	dial_events.clear()
+	EventBus.command_dials_changed.connect(on_dial)
+	ImmediateEffectSignals.emit(dial_card, dial_ship, dial_result)
+	EventBus.command_dials_changed.disconnect(on_dial)
+	assert_eq(dial_events, [dial_ship])
+
+
+func test_r3_debug_choice_recovers_through_normal_board_entry() -> void:
+	var state := GameState.new()
+	state.initialize()
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP
+	state.rng = GameRng.new(4306)
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize_for_save7()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
+	var data: ShipData = AssetLoader.load_ship_data("cr90_corvette_a")
+	var ship := ShipInstance.create_from_data("cr90_corvette_a", data, 1, 0)
+	ship.roster_entry_id = "r3:ship"
+	ship.pos_x = 0.5
+	ship.pos_y = 0.5
+	state.get_player_state(0).ships.append(ship)
+	var card: DamageCard = _take_card(state, "shield_failure", true)
+	card.public_card_ref = "faceup:r3:shield"
+	ship.add_faceup_damage(card)
+	assert_true(ship.establish_immediate_resolution({
+		"immediate_resolution_id": "immediate:faceup:r3:shield",
+		"public_card_ref": card.public_card_ref,
+		"physical_card_id": card.physical_card_id,
+		"effect_id": "shield_failure", "actor_player": 1,
+		"exact_once_key": "immediate:debug:debug:60:%s" % card.physical_card_id,
+		"enclosing_kind": "debug", "debug_application_id": "debug:60",
+	}))
+	GameManager.current_game_state = state
+	assert_true(GameManager.start_new_game_from_state(state,
+			LearningScenarioSetup.DEFAULT_SCENARIO_ID, 61))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	await get_tree().process_frame
+	var controller: DamageCardImmediateEffectController = \
+			board._damage_card_immediate_effect_controller
+	assert_eq(ship.active_immediate_resolution_snapshot().get("enclosing_kind"),
+			"debug")
+	assert_false(ImmediateEffectResolver.new().get_required_choice(
+			card, ship).is_empty())
+	assert_true(controller._can_act_as(1))
+	assert_eq(controller._pending_card, card,
+			"Normal board entry must recover the pending debug decision.")
+	EventBus.handoff_accepted.emit()
+	assert_not_null(controller.get_node_or_null(
+			"DebugDamageImmediateEffectModalLayer"),
+			"The recovered decision must open after the normal handoff.")
+	assert_true(CommandProcessor.get_history().is_empty(),
+			"Reconstruction must submit no semantic command.")
 
 
 func _recovery_state(kind: String) -> GameState:

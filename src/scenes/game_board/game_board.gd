@@ -1378,14 +1378,25 @@ func _finalize_ready_sequence() -> bool:
 						"submit_timing_window_intent"))
 		if has_active_attack:
 			_schedule_active_attack_resume(attack_resume)
-	# Completed-result presentation is independently recoverable after canonical
-	# state and local viewer identity have been installed.  This invokes only the
-	# ModalRouter projection path; it does not mutate or release gameplay state.
+	# Rebuild the pending purpose-specific decisions after canonical state and
+	# viewer identity are installed. The router only projects.
 	var pending_inspection: CompletedAttackInspection = \
 			game_state.completed_attack_inspection if game_state != null else null
-	if _command_router_adapter != null and pending_inspection != null \
-			and not pending_inspection.is_satisfied():
+	var pending_maneuver: ShipInstance = \
+			game_state.get_active_ship_activation() if game_state != null else null
+	var pending_displacement: bool = game_state != null \
+			and game_state.interaction_flow != null \
+			and game_state.interaction_flow.flow_type \
+					== Constants.InteractionFlow.SQUADRON_DISPLACEMENT
+	if _command_router_adapter != null and (
+			(pending_inspection != null and not pending_inspection.is_satisfied()) \
+			or (pending_maneuver != null \
+				and pending_maneuver.has_active_maneuver_execution()) \
+			or pending_displacement):
 		_command_router_adapter.reconstruct_presentation()
+	if _damage_card_immediate_effect_controller != null:
+		_damage_card_immediate_effect_controller.reconstruct_from_state(
+				game_state)
 	# The state and projection are now fully reconstructed. A satisfied durable
 	# inspection may release exactly one existing consumer on live authority.
 	GameManager.release_reconstructed_completed_attack_inspection()

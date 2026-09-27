@@ -331,8 +331,47 @@ func resume_current_attack(
 	game_state.interaction_flow = flow
 	_reconstructed_current_attack = true
 	_render_resume_projection(plan)
+	if attack.stage == CurrentAttackState.STAGE_RESOLVED:
+		_reconstruct_resolved_attack_immediate_choice(game_state, attack)
 	plan[RESUME_KEY_FLOW] = flow
 	return plan
+
+
+## A resolved Attack can still own one canonical immediate card decision.
+## Rebuild its existing modal without publishing flow or submitting work.
+func _reconstruct_resolved_attack_immediate_choice(
+		game_state: GameState, attack: CurrentAttackState) -> void:
+	if attack.defender_kind != CurrentAttackState.KIND_SHIP:
+		return
+	var ship: ShipInstance = game_state.get_ship(
+			attack.defender_player, attack.defender_index)
+	if ship == null:
+		return
+	var record: Dictionary = ship.active_immediate_resolution_snapshot()
+	if str(record.get("enclosing_kind", "")) != "attack" \
+			or str(record.get("attack_id", "")) != attack.attack_id \
+			or int(record.get("actor_player", -1)) < 0:
+		return
+	var card: DamageCard = ship.faceup_card_for_public_ref(
+			str(record.get("public_card_ref", "")))
+	if card == null or not ImmediateEffectResolver.is_immediate(card):
+		return
+	var choice_info: Dictionary = _immediate_resolver.get_required_choice(
+			card, ship)
+	if choice_info.is_empty():
+		return
+	if _pending_immediate_card == card:
+		return
+	_pending_immediate_card = card
+	_pending_immediate_ship = ship
+	_pending_immediate_choice = choice_info
+	var actor: int = int(record["actor_player"])
+	var local: int = NetworkManager.get_local_player_index()
+	if local >= 0 and local != actor:
+		return
+	if local < 0 and _try_open_immediate_choice_handoff(actor):
+		return
+	_show_immediate_choice_modal()
 
 
 ## Rebuilds a declaration presentation after an individual attack has been

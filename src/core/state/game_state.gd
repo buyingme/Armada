@@ -925,6 +925,8 @@ static func _deserialize_representation(data: Dictionary,
 	var flow_data: Dictionary = data.get("interaction_flow", {})
 	if not flow_data.is_empty():
 		state.interaction_flow = InteractionFlow.deserialize(flow_data)
+		if state.interaction_flow == null:
+			return null
 	else:
 		state.interaction_flow = InteractionFlow.new()
 	var had_current_attack_state: bool = data.has("current_attack_state")

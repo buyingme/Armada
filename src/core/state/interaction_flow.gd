@@ -88,9 +88,36 @@ static func deserialize(data: Dictionary) -> InteractionFlow:
 	var raw_payload: Variant = data.get("payload", {})
 	if raw_payload is Dictionary:
 		f.payload = (raw_payload as Dictionary).duplicate(true)
+		if f.flow_type == Constants.InteractionFlow.SQUADRON_DISPLACEMENT \
+				and not f.payload.is_empty():
+			for key: String in ["owner_player", "ship_index"]:
+				if not _normalize_displacement_identity(f.payload, key):
+					return null
+			var entries: Variant = f.payload.get("displaced_squadrons")
+			if not entries is Array:
+				return null
+			for raw_entry: Variant in entries as Array:
+				if not raw_entry is Dictionary:
+					return null
+				for key: String in ["owner", "squadron_index"]:
+					if not _normalize_displacement_identity(
+							raw_entry as Dictionary, key):
+						return null
 	else:
 		f.payload = {}
 	return f
+
+
+static func _normalize_displacement_identity(data: Dictionary,
+		key: String) -> bool:
+	var value: Variant = data.get(key)
+	if typeof(value) == TYPE_INT:
+		return true
+	if typeof(value) == TYPE_FLOAT and is_finite(value) \
+			and value == floor(value) and absf(value) <= 2147483647.0:
+		data[key] = int(value)
+		return true
+	return false
 
 
 # ---------------------------------------------------------------------------

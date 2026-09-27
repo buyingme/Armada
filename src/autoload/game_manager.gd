@@ -2150,14 +2150,25 @@ func submit_resolve_immediate_effect(ship: ShipInstance,
 				pl["projector_zone"] = projector_id.trim_prefix("zone_")
 		"injured_crew":
 			var token_id: String = str(choice.get("id", ""))
-			if not token_id.is_empty():
+			var available_tokens: int = 0
+			for token: Dictionary in ship.defense_tokens:
+				if int(token.get("state", -1)) \
+						!= int(Constants.DefenseTokenState.DISCARDED):
+					available_tokens += 1
+			if available_tokens > 1 and not token_id.is_empty():
 				pl["defense_token_index"] = int(
 						token_id.trim_prefix("discard_defense_"))
 		"shield_failure":
 			pl["shield_zones"] = (choice.get("zones", []) as Array).duplicate()
 		"comm_noise":
 			var action_id: String = str(choice.get("id", ""))
-			if action_id == "reduce_speed":
+			if ship.current_speed == 0 \
+					and ship.command_dial_stack.get_hidden_count() == 0:
+				pl["comm_noise_action"] = "none"
+			elif ship.current_speed > 0 \
+					and ship.command_dial_stack.get_hidden_count() == 0:
+				pl["comm_noise_action"] = "speed"
+			elif action_id == "reduce_speed":
 				pl["comm_noise_action"] = "speed"
 			elif action_id.begins_with("change_dial_"):
 				pl["comm_noise_action"] = "dial"
@@ -2166,6 +2177,8 @@ func submit_resolve_immediate_effect(ship: ShipInstance,
 	var actor: int = int(record["actor_player"])
 	var cmd := CandidateResolveImmediateEffectCommand.new(
 			ship.owner_player if actor == -1 else actor, pl)
+	if actor == -1:
+		return _submitter.submit_authoritative(cmd)
 	return _submitter.submit(cmd)
 
 

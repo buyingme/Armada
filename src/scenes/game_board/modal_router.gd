@@ -312,13 +312,12 @@ func _ensure_ecm_ready_cost_modal() -> Variant:
 
 func _drive_displacement_modal(intent: UIProjector.UIIntent,
 		command: GameCommand) -> void:
-	if command == null:
+	if not _is_displacement_place_intent(intent):
 		return
-	match command.command_type:
-		"start_displacement":
-			if _is_displacement_place_intent(intent):
-				_open_displacement_modal_from_command(
-						command, intent.controller_player)
+	if command != null and command.command_type == "start_displacement":
+		_open_displacement_modal_from_command(command, intent.controller_player)
+	elif command == null:
+		_open_displacement_modal_from_flow(intent.controller_player)
 
 
 func _is_displacement_place_intent(intent: UIProjector.UIIntent) -> bool:
@@ -459,15 +458,36 @@ func _open_activation_modal_from_intent() -> void:
 
 func _open_displacement_modal_from_command(command: GameCommand,
 		controller: int) -> void:
+	_open_displacement_modal(command.player_index, command.payload, controller)
+
+
+func _open_displacement_modal_from_flow(controller: int) -> void:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or game_state.interaction_flow == null:
+		return
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow.controller_player != controller:
+		return
+	var payload: Dictionary = flow.payload
+	if typeof(payload.get("owner_player")) != TYPE_INT \
+			or typeof(payload.get("ship_index")) != TYPE_INT \
+			or not payload.get("displaced_squadrons") is Array:
+		return
+	_open_displacement_modal(int(payload["owner_player"]), payload,
+			controller)
+
+
+func _open_displacement_modal(owner_player: int, payload: Dictionary,
+		controller: int) -> void:
 	if _displacement_controller == null:
 		return
-	var payload: Dictionary = command.payload
 	if controller < 0 or not _can_act_as(controller):
 		return
 	var game_state: GameState = GameManager.current_game_state
 	if game_state == null:
 		return
-	var ship: ShipInstance = _resolve_displacing_ship(game_state, command)
+	var ship: ShipInstance = game_state.get_ship(owner_player,
+			int(payload.get("ship_index", -1)))
 	if ship == null:
 		return
 	var ship_token: ShipToken = _find_ship_token_fn.call(ship) as ShipToken
@@ -481,15 +501,6 @@ func _open_displacement_modal_from_command(command: GameCommand,
 		_log.warn("Displacement modal: no squadron tokens resolved.")
 		return
 	_displacement_controller.start(displaced_tokens, ship_base)
-
-
-func _resolve_displacing_ship(game_state: GameState,
-		command: GameCommand) -> ShipInstance:
-	var ship_index: int = int(command.payload.get("ship_index", -1))
-	var ship: ShipInstance = game_state.get_ship(command.player_index, ship_index)
-	if ship == null:
-		_log.warn("Displacement modal: ship not found.")
-	return ship
 
 
 func _ship_base_from_token(ship_token: ShipToken) -> ShipBase:

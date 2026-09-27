@@ -18,6 +18,36 @@ func initialize(camera: BoardCamera, handoff_overlay: HandoffOverlay) -> void:
 	_handoff_overlay = handoff_overlay
 
 
+## Rebuilds only an existing debug-owned player choice after state install.
+## Automatic work remains authority-owned and is never submitted here.
+func reconstruct_from_state(state: GameState) -> void:
+	if state == null:
+		return
+	for player_state: PlayerState in state.player_states:
+		for raw_ship: Variant in player_state.ships:
+			if not raw_ship is ShipInstance:
+				continue
+			var ship: ShipInstance = raw_ship as ShipInstance
+			var record: Dictionary = ship.active_immediate_resolution_snapshot()
+			if str(record.get("enclosing_kind", "")) != "debug" \
+					or int(record.get("actor_player", -1)) < 0:
+				continue
+			var card: DamageCard = ship.faceup_card_for_public_ref(
+					str(record.get("public_card_ref", "")))
+			if card == null or not ImmediateEffectResolver.is_immediate(card) \
+					or not _can_act_as(int(record["actor_player"])):
+				continue
+			var choice_info: Dictionary = ImmediateEffectResolver.new() \
+					.get_required_choice(card, ship)
+			if choice_info.is_empty():
+				continue
+			_pending_ship = ship
+			_pending_card = card
+			if not _open_handoff(int(record["actor_player"])):
+				_open_choice(choice_info)
+			return
+
+
 func react_to_debug_damage_result(_command: GameCommand, result: Dictionary) -> void:
 	var state: GameState = GameManager.current_game_state
 	if state == null or not result.get("damage_application") is Dictionary:

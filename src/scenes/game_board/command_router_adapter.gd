@@ -216,6 +216,21 @@ func _emit_persistent_damage_events(cmd: GameCommand,
 
 func _emit_candidate_damage_events(cmd: GameCommand,
 		result: Dictionary) -> void:
+	if cmd.command_type == "resolve_immediate_effect" \
+			and (str(cmd.payload.get("enclosing_kind", "")) == "maneuver" \
+				or NetworkManager.role == NetworkManager.Role.CLIENT):
+		var state: GameState = GameManager.current_game_state
+		var ship: ShipInstance = state.get_ship(
+				int(result.get("owner_player", -1)),
+				int(result.get("ship_index", -1))) if state != null else null
+		var effect: Dictionary = result.get("effect_result", {}) as Dictionary
+		if ship != null and str(result.get("effect_id", "")) == "comm_noise":
+			match str(effect.get("comm_noise_action", "")):
+				"speed":
+					EventBus.ship_speed_changed.emit(ship,
+							int(effect.get("new_speed", ship.current_speed)))
+				"dial":
+					EventBus.command_dials_changed.emit(ship)
 	var applications: Array[Dictionary] = []
 	for key: String in ["damage_application", "moving_damage_application",
 			"target_damage_application"]:

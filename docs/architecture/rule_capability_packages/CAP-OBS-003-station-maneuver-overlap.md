@@ -24,7 +24,7 @@ discard one of its faceup or facedown damage cards. SMI-091 requires it to
 reach CON-003 `Integrated`, with explicit Owner approval, before accepted
 release/cutover depends on it. Its complete ordinary path may participate
 earlier only after the whole workbook reaches Owner Decision 27's
-`candidate-code-complete` condition in the unreleased 7/10/7 Integration
+`candidate-code-complete` condition in the unreleased 7/10/8 Integration
 Candidate, without changing this Draft status.
 
 This Draft records boundaries and missing evidence only.

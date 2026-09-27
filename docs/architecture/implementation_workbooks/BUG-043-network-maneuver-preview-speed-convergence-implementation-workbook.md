@@ -1,10 +1,11 @@
 # Ship Maneuver Capability Integration And BUG-043 Convergence Implementation Workbook
 
-Accepted by: Project Owner
-Accepted date: 2026-09-13
+Historical workbook acceptance: Project Owner, 2026-09-13
+BUG-058 Alternative A architecture decision: accepted by Project Owner, 2026-09-27
+Current BUG-058 normative amendment: pending independent fidelity audit and Owner acceptance
 
-Owner acceptance: BUG-043-network-maneuver-preview-speed-convergence-implementation-workbook.md is accepted as the sole implementation specification for BUG-043 and the associated Maneuver/Immediate-Damage integration work described by the workbook.
-The previously accepted BUG-043 workbook revision is superseded and no longer implementation authority.
+Historical Owner acceptance (2026-09-13 revision): BUG-043-network-maneuver-preview-speed-convergence-implementation-workbook.md was accepted as the sole implementation specification for BUG-043 and the associated Maneuver/Immediate-Damage integration work described by that revision.
+That acceptance superseded its predecessor; it does not accept this amended revision or retire the pre-amendment implementation authority.
 Implementation must follow the accepted workbook without redesign. Any conflict with accepted architecture or an unresolved Owner decision is a STOP condition.
 Replay files/fixtures remain Owner-recorded only, after candidate-code-complete and the workbook’s non-fixture convergence gate.
 
@@ -12,8 +13,12 @@ Prepared: 2026-09-12
 
 Owner: Project Owner
 
-Implementation posture: documentation only; no implementation is authorized by
-this Draft
+Implementation posture: the BUG-058 architecture decision is accepted, but this
+normative amendment is not yet accepted implementation authority. Its independent
+fidelity audit must pass and the Owner must explicitly accept the wording before
+implementation proceeds under it. This documentation correction does not itself
+pass that independent gate, implement or verify BUG-058, integrate a package, or
+complete a release. BUG-058 remains Open pending implementation and verification.
 
 Purpose: provide one coordinated implementation specification for the complete
 Ship Maneuver capability integration, all twelve prerequisite Rule Capability
@@ -32,10 +37,41 @@ Attack return, Network/passive execution, recovery, and compatibility. The
 uncertainty is resolved by the accepted sources below; this workbook does not
 reopen their decisions.
 
-After explicit Project Owner acceptance, this file SHALL be the sole executable
-implementation specification for the scope in Section 1.3. Until then it is an
-audit candidate, authorizes no production change, and SHALL NOT be treated as
-evidence that any capability is Implemented, Tested, or Integrated.
+The historical acceptance establishes the pre-amendment revision's implementation
+authority for Section 1.3, not acceptance of this revision. All BUG-058 normative
+amendment wording below remains pending the audit and Owner acceptance gate above,
+including its implementation and scoped-supersession instructions. The accepted
+architecture decision remains recorded as accepted. Neither decision acceptance
+nor eventual wording acceptance is evidence that a capability is Implemented,
+Tested, or Integrated.
+
+#### BUG-058 accepted architecture decision and pending successor wording (2026-09-27)
+
+The Project Owner accepted Alternative A for
+[BUG-058](../../qa/bugs/open/BUG-058/issue.md): preserve decision-equivalent
+recovery through the minimum purpose-specific, authority-derived,
+viewer-authorized Maneuver consequence projection. Sections 12.2.2--12.2.4,
+15, 16, 19, and 20 encode that decision. Existing gameplay owners and private
+completion/execution markers remain authoritative. No new canonical gameplay
+owner, generic pending-work mechanism, queue/FSM, completion bitmap, generic
+transaction/rollback/snapshot service, filtering exception, or recovery
+restriction is authorized. `InteractionFlow` may carry derived information but
+never owns pending existence, legality, completion, or mutation.
+
+Upon Owner acceptance of this amendment, for Network protocol 8 this workbook
+explicitly supersedes the envelope
+allocation and corresponding processing requirements of the accepted
+[BUG-042 workbook](BUG-042-network-rng-authority-result-application-implementation-workbook.md)
+Sections 4.1--4.3 only to add the mandatory Maneuver replacement, centralized
+capture, and atomic passive validation/installation defined here. BUG-042
+remains unchanged; its historical protocol-5 allocation is not rewritten.
+Its command-owned mutation, privacy, presentation non-authority, ordered
+application, and failure-atomicity requirements remain in force. Deterministic
+commands retain their execution mode; the new envelope member is not a new
+generic result-driven gameplay mutation API. The previous protocol-7 envelope
+allocation in this workbook is replaced by Section 16's protocol-8 allocation.
+This scoped succession does not retire other BUG-042 obligations or amend the
+governing ADRs/Contracts.
 
 Accepted normative authority, in descending topic-specific order:
 
@@ -203,7 +239,7 @@ WP3b active ──────────────────────�
 
 All completed prerequisite paths
                  ↓
-WP6 candidate-code-complete save-7 / replay-10 / protocol-7 Integration Candidate
+WP6 candidate-code-complete save-7 / replay-10 / protocol-8 Integration Candidate
   (activate complete purpose-specific paths together; incomplete paths absent)
                  ↓
 TEST-003/runtime/Network/non-fixture replay convergence
@@ -296,6 +332,15 @@ evidence/removal targets, not accepted future behavior. A later implementer
 must preserve, attribute, and reconcile them without destructive overwrite.
 
 ### 2.2 Version and status entry assertions
+
+The table below preserves the original pre-WP6 entry gate. For the accepted
+BUG-058 architecture decision, the existing candidate is save 7 / replay 10 / protocol 7 /
+application contract 2 / passive-ledger schema 1; do not rerun the original
+6/9/6 migration or treat that established allocation as a new conflict.
+BUG-058 implementation entry SHALL verify those current values (or an
+attributed implementation of this amendment), the protocol-8 allocation in
+Section 16, and the existing dirty-worktree baseline. Unexpected intervening
+allocations or semantic/schema drift remain STOP conditions.
 
 | Item | Required entry value | Drift response |
 | --- | --- | --- |
@@ -423,6 +468,13 @@ activation/execution identities, final canonical facts, and each purpose-
 specific consequence owner, and returns at most one currently legal semantic
 command or completion. It stores no route, queue, priority list, stage, or
 continuation token. Mirror and replay modes never synthesize a command.
+
+BUG-058 filtered recovery consumes Section 12.2.2's installed `consequence_view`
+and existing public purpose-specific records. It SHALL NOT run private-marker
+absence checks to reconstruct remaining work. The pure authority-side
+projection derives that view without changing gameplay state; Section 15.1
+requires its centralized capture after every successful live Network semantic
+command, independently of the evaluator's authority-only follow-up generation.
 
 ### 3.4 Exceptional termination and behavior-inert landing
 
@@ -820,7 +872,13 @@ Each faceup instance gets its own execution-bound exact-once guard and direct
 facedown draw/application command. Multiple ships, multiple obstacles, both
 categories, reduced-speed attempts, and duplicate effect ids never multiply or
 collapse one physical instance incorrectly. Facedown/inactive cards do not
-apply. Re-derive after every consequence and recovery; authority alone draws,
+apply. Owner Decisions 7, 15, and 16 and SMI-064/067 preserve the rules-assigned
+player's choice among same-timing sources at both item 3 and item 4. Mandatory
+damage and authority-derived overlap context do not make that source choice
+automatic. Section 12.2.2 exposes every currently legal source; Section 12.2.4
+binds the selected source to the existing instance command. A sole source with
+no rules-assigned ordering choice resolves automatically without a prompt.
+Re-derive after every consequence and recovery; authority alone draws,
 passive peers apply the count/result, and later destruction suppresses invalid
 return.
 
@@ -959,7 +1017,7 @@ implementation and test code required by this workbook is
 `candidate-code-complete`, including replay-10 format/version logic,
 serialization/application, compatibility handling, and automated non-fixture
 replay tests. Its mutually wired purpose-specific paths become reachable for
-evidence under the coordinated save-7/replay-10/protocol-7 boundary. This is
+evidence under the coordinated save-7/replay-10/protocol-8 boundary. This is
 the **Unreleased Integration Candidate** from Owner Decisions 26--27: a workflow and
 implementation condition, not a new CON-003 lifecycle status, a `Tested` claim,
 an `Integrated` claim, or an accepted release. No incomplete path is made
@@ -1000,7 +1058,7 @@ that will be registered is complete, the contour gate has passed for all real-
 obstacle paths, exact schemas in Section 12 are locked, and an unreachable-path
 audit finds no incomplete route. WP6 then activates the complete serializers,
 command vocabulary, routes, application contracts, filtered state, and version
-constants together as an unreleased 7/10/7 candidate. There is no supported
+constants together as an unreleased 7/10/8 candidate. There is no supported
 intermediate combination and no mixed old/new Maneuver session.
 
 The candidate gathers TEST-003, runtime, Hot-Seat, Network, save/load,
@@ -1044,11 +1102,11 @@ format.
 | Ruptured Engine command/state | Yes, direct-test only | WP4 convergence | WP5 then WP6 | Post-obstacle re-derivation/exact-once | Raw execute observer/direct-facedown path |
 | Applicability and `FlowSpec` routes | No partial live route | Matching command/state/projector complete | WP6 | Three-way consistency tests per command | Legacy broad/manual routes |
 | UI projection/controllers/automatic evaluators | Projection helpers may land; live trigger may not | Full authoritative source and recovery exist | WP6 | Live-route, reconnect, non-synthesis tests | Modal/callback legality and completion |
-| StateFilter/result-application changes | Helpers may land; no schema publication | Complete command contract and protocol 7 | WP6 | Exact `PublicFaceupDamageCard`, Attack/debug assignment, collision, Station, Comm Noise viewer-specific install/application/correlation tests | Hidden identity/dial disclosure, passive draw, or legacy card index |
+| StateFilter/result-application changes | Helpers may land; no schema publication | Complete command contract and protocol 8 | WP6 | Exact `PublicFaceupDamageCard`, Attack/debug assignment, collision, Station, Comm Noise viewer-specific install/application/correlation tests | Hidden identity/dial disclosure, passive draw, or legacy card index |
 | Command registration and remote-effect classification | No partial vocabulary | Every corresponding handler/result/route complete | WP6 | Exact registration/schema audit | Missing or legacy classifications |
 | Legacy BUG-043 pre-commit paths | Existing only; do not extend | Remove at cutover | WP6 | Replacement path proven | Pending SetSpeed snapshots, preview acceptance repair, speed-zero bypass |
 | Old raw Maneuver observers | Existing only; do not extend | Remove at cutover | WP6 | WP2/WP3b/WP5 proven | `execute_maneuver` observer generation/deduplication |
-| Version constants and application-contract version | No intermediate bump | Every candidate path/schema candidate-code-complete | WP6 candidate assembly | Section 16 atomic 7/10/7 plus application-contract-v2 boundary | 6/9/6 and application contract v1 old semantics |
+| Version constants and application-contract version | Only Section 16's accepted allocation | Every candidate path/schema candidate-code-complete | WP6 candidate assembly | Complete 7/10/8 successor; retain existing application contract 2 | Partial protocol-8 publication, protocol-7 mixed peers, 6/9/6 and application contract v1 old semantics |
 | Replay files/fixtures | No; they are not implementation work | Candidate-code-complete, otherwise-converged unreleased candidate justifies manual replay-10 capture | Project Owner, then Codex inspection/integration/verification | Section 17 STOP satisfied | Replay-9 files remain historical, never transformed |
 
 Audit fails if a “must remain unreachable” artifact appears in live command
@@ -1154,24 +1212,136 @@ mutation.
 | `DamageCard` authority serialization | Existing six keys plus required `physical_card_id:String`; while faceup, required `public_card_ref:String`; while facedown or in draw/discard, `public_card_ref` is forbidden. The three applicable persistent cards conditionally carry exactly one matching key: `last_thruster_fissure_execution_id:String`, `last_damaged_controls_execution_id:String`, or `last_ruptured_engine_execution_id:String`. The conditional key is absent on other card types and initially `""`. | Physical id persists deck↔ship↔discard. Public ref persists only for that faceup occurrence and maps to this physical object. Last-execution value changes only on accepted matching resolution and cannot suppress a later distinct execution. Filtered faceup serialization is exactly `PublicFaceupDamageCard`; filtered discard uses six-field `PublicDamageCard`; all authority-only keys are omitted. |
 | `ShipInstance.active_maneuver_execution` | Absent or an exact base `{maneuver_execution_id:String, ship_activation_identity:String, navigate_speed_changed:bool, final_transform_applied:bool, obstacle_resolution_order:Array[String], ship_collision:Dictionary}` with conditional `committed_result:Dictionary`. While `final_transform_applied:false`, `committed_result` is required and is exactly `{yaw_clicks:Array[int],yaw_bonus_joint:int,pos_x:float,pos_y:float,rotation_deg:float}`; it contains the non-derivable committed course/final-transform facts, while canonical speed remains owned by `ShipInstance.current_speed`. Atomic transform application changes `final_transform_applied:false→true` and removes `committed_result`; while `true`, that key is forbidden because canonical position/orientation then own the applied transform. `ship_collision` is exactly `{kind:"none"}` or `{kind:"closest_ship",target_owner_player:int,target_ship_index:int,exact_once_key:String,damage_resolved:bool}`. Its key is exactly `"collision:<ship_activation_identity>:<maneuver_execution_id>:<target_owner_player>:<target_ship_index>"`. The closest-target branch is the non-derivable result of the accepted RRG closest-ship comparison across every ship overlapped by the attempted committed result, including deterministic accepted tie handling; it is established atomically with committed course/result facts, before transform application, displacement, or collision damage, and is immutable except `damage_resolved:false→true`. Order is empty until no obstacle choice is required or an accepted `commit_maneuver_obstacle_order` supplies every currently overlapped `obstacle_id` exactly once; afterward immutable. | Exists only with matching activation and Maneuver `OPEN`. Collision evidence survives later transform/displacement changes so recovery never recomputes it from a changed position. Before movement, recovery uses `committed_result`; after movement, it uses the canonical applied transform. Accepted collision damage sets `damage_resolved:true` atomically with both damage applications. Normal completion removes the whole record while setting `CONSUMED`; destruction before movement removes it without applying `committed_result` and without `CONSUMED`, along with any invalid nested state. |
 | `ShipInstance.active_immediate_resolution` | Authority state is absent or base exact `{immediate_resolution_id:String, public_card_ref:String, physical_card_id:String, effect_id:String, actor_player:int, exact_once_key:String, enclosing_kind:String}` plus exactly one enclosure branch: Attack `{attack_id:String}`; Maneuver `{ship_activation_identity:String, maneuver_execution_id:String, maneuver_source_kind:"asteroid", maneuver_source_id:String}`; debug `{debug_application_id:String}`. `actor_player` is `-1` only for automatic cards, otherwise the accepted rules actor. Filtered state uses that exact applicable branch but omits `physical_card_id` and `exact_once_key`; it exists only while `public_card_ref` remains public. | Removed atomically on resolution/destruction. Faceup→facedown removes the entire filtered record, so no public reference can correlate the physical facedown card. It never stores a choice, stage, callback, or continuation. |
-| Obstacle placement in `GameState.objectives["obstacles"]` | Authority state uses the existing placement keys plus required `obstacle_id:String` and authority-only `last_maneuver_execution_id:String`; the latter initially `""` and changes only when that placement's ordinary effect completes for the matching execution. Filtered placement has the same exact shape except that `last_maneuver_execution_id` is always omitted. | Placement persists. The filtered active purpose record and InteractionFlow carry only the viewer-needed public unresolved identity; the authority exact-once marker is save/replay state and never published. |
+| Obstacle placement in `GameState.objectives["obstacles"]` | Authority state uses the existing placement keys plus required `obstacle_id:String` and authority-only `last_maneuver_execution_id:String`; the latter initially `""` and changes only when that placement's ordinary effect completes for the matching execution. Filtered placement has the same exact shape except that `last_maneuver_execution_id` is always omitted. | Placement persists. The filtered active purpose record and `consequence_view` carry the viewer-needed current unresolved identity; InteractionFlow may carry derived information. The authority exact-once marker is save/replay state and never published. |
 | `ShipInstance.active_asteroid_resolution` | Absent or exact `{maneuver_execution_id:String, ship_activation_identity:String, obstacle_id:String, immediate_resolution_id:String, disposition:"OPEN"}`. | Created atomically with faceup assignment; removed after nested immediate return or destruction, setting the obstacle's last-execution marker only on normal completion. |
 | `ShipInstance.active_debris_resolution` | Absent or exact `{maneuver_execution_id:String, ship_activation_identity:String, obstacle_id:String, controller_player:int, disposition:"OPEN"}`. No damage midpoint is stored because the two points resolve in one command. | Removed after accepted damage/destruction return; obstacle marker records normal completion. |
 | `ShipInstance.active_station_resolution` | Absent or exact `{maneuver_execution_id:String, ship_activation_identity:String, obstacle_id:String, controller_player:int, disposition:"OPEN"}`. | Removed after decline, discard, no-option completion, suppression, or destruction; obstacle marker records normal ordinary completion. Unsupported modifying objectives create no record and fail closed. |
 | `InteractionFlow.payload` additions | Every Maneuver/Card/Obstacle decision contains required `owner_player:int`, `ship_index:int`, `ship_activation_identity:String`, `maneuver_execution_id:String` when Maneuver-bound, plus only the command-specific public choice fields listed below. `controller_player` remains the rules actor and `visible_to` uses the existing enum. | Re-derived from authoritative state; cleared/replaced on accepted command or terminal cleanup. It never contains `physical_card_id`, `exact_once_key`, hidden dial value, or authority deck order. |
 | `PassiveDamageLedger` | Unchanged exact schema-1 `{schema_version:1, draw_count:int, discard_pile:Array[PublicDamageCard], facedown_counts:Dictionary[String,int]}`. `PublicDamageCard` remains the existing exact six public card fields with no identity. | Installed only as filtered live-Network state. No physical/public transaction identity, RNG, hidden order, or new schema-1 field is permitted. |
 
+##### BUG-058 filtered execution extension
+
+Every filtered `ShipInstance.active_maneuver_execution` SHALL additionally
+contain required `consequence_view:ManeuverConsequenceView`. It is derived
+viewer-authorized information in the existing passive execution representation,
+not a new authoritative gameplay fact or writable gameplay owner. The containing
+ship and execution supply owner/ship, activation, and execution identity.
+Authority serialization/save 7 SHALL omit this field and retain the exact
+authoritative execution schema above. Authoritative save/load regenerates the
+view from restored owners. Passive installation SHALL reject a missing field
+rather than default it to `{}`. No execution means no execution field to extend.
+
+`ManeuverConsequenceView` is the following closed exact union:
+
+| Exact shape | Current meaning |
+| --- | --- |
+| `{}` | No additional identity from this union is currently needed. Other interactions use their existing public records; automatic progression still requires an authoritative command. This is not proof of Maneuver completion. |
+| `{kind:"thruster_fissure", public_card_refs:Array[String]}` | Every currently legal source occurrence for the current Thruster Fissure decision. |
+| `{kind:"ruptured_engine", public_card_refs:Array[String]}` | Every currently legal source occurrence for the current Ruptured Engine decision. |
+| `{kind:"damaged_controls", public_card_refs:Array[String], overlap_kind:"ship"}` | Every currently legal Damaged Controls source occurrence at SMI-064 item 3, after ordinary collision. Ship-overlap context is authority-derived; source ordering remains rules-assigned. |
+| `{kind:"damaged_controls", public_card_refs:Array[String], overlap_kind:"obstacle", obstacle_id:String}` | Every currently legal Damaged Controls source occurrence at SMI-064 item 4. The qualifying obstacle identity is authority-derived overlap evidence, not a player-selectable obstacle or an additional trigger per obstacle. |
+| `{kind:"obstacle_order", obstacle_ids:Array[String]}` | The complete set over which the current legal obstacle-order choice operates. |
+| `{kind:"obstacle", obstacle_id:String}` | The current obstacle consequence under the committed order, including its existing nested resolution. |
+
+References SHALL be nonempty and arrays nonempty, duplicate-free, and serialized
+deterministically. Array serialization order SHALL NOT prescribe the player's
+choice. Unknown kinds/keys, missing keys, wrong types, invalid references, and
+fields from another branch reject. This is a current consequence projection,
+not a phase/stage variable, stored transition table, future-work list, queue,
+completion bitmap, callback, or continuation token.
+
+The projection SHALL reuse Section 12.2.1's faceup-occurrence `public_card_ref`
+and placement `obstacle_id`, without a new identifier or counter. Both
+participating viewers may receive the public identities in these baseline
+branches for passive application; command entitlement remains independently
+validated. No physical identity, private marker, hidden dial, RNG/deck fact, or
+faceup-to-facedown correlation is authorized. These fields do not enter
+`PublicFaceupDamageCard` or `PassiveDamageLedger`.
+
+Authority derives the current branch from existing canonical owners, accepted
+ordering, survival/applicability, private completion evidence, and purpose-
+specific records. It exposes all currently legal card-source alternatives;
+selection of the first serialized entry SHALL NOT replace a legal player
+choice.
+
+For Damaged Controls, the source set is the complete set of legal **next**
+occurrences at the current item-3/item-4 boundary under accepted timing/priority,
+not every future consequence in the Maneuver. Owner Decisions 7, 15, and 16 and
+SMI-064/067 require individual cumulative copies and preserve same-player
+source ordering (and first-player priority across players). The common
+`overlap_kind` and conditional `obstacle_id` describe the qualifying overlap;
+they do not pair each card with every overlapped object or expose an overlap
+choice. Ship-plus-obstacle overlap uses item 3 only for the same occurrence.
+The authority-private per-instance execution marker excludes completed sources
+from both categories; it is neither published nor inferred by the passive peer.
+
+When multiple sources are legal next, the rules-assigned player chooses one
+through the existing command's singular `public_card_ref`; deterministic array
+order SHALL NOT select it. A singleton with no remaining rules-assigned ordering
+choice uses automatic resolution, without a fabricated prompt. Zero sources
+means re-derive the next existing branch, never an empty `damaged_controls`
+array or a completion assertion. The projection records neither a chosen order
+nor a new pending/completion owner. Authority rechecks timing, source, overlap,
+survival, and applicability before mutation, then re-derives all legal next
+sources after each individual resolution. Choosing a source cannot decline
+mandatory damage, choose the drawn card, change overlap facts, or pre-empt
+another effect's accepted timing/priority.
+
+This corrects the automatic-only actor wording against the existing source-order
+requirement; it adds no command, intent/result field, stored selection, or timing
+rule. The singular selected-source command schema and application contract 2
+remain unchanged.
+
+Before obstacle-order commitment, expose the current order-choice set; after
+commitment, expose only the current obstacle identity, leaving the full
+`obstacle_resolution_order` immutable. During nested immediate resolution,
+retain that obstacle identity while `active_immediate_resolution` governs the
+nested decision. Matching existing active obstacle records SHALL agree with
+the view; their owners, schemas, and mutation surfaces remain unchanged.
+
+`InteractionFlow` may carry/render derived information but SHALL NOT be the sole
+recoverable storage or determine pending existence, legality, completion, or
+mutation. Scene teardown cannot remove the installed passive view. Authority
+validation never consumes or reverse-synchronizes this projection.
+
 #### 12.2.3 Exact result envelope and damage application body
 
-Every affected application-contract command uses the existing exact envelope:
+Every successful live Network semantic-command result, including deterministic
+commands with no application contract, SHALL use this exact protocol-8 envelope:
 
-`{protocol_version:7, application_contract:String,
-application_contract_version:2, viewer_player:int,
-application_result:Dictionary, presentation_result:{}}`.
+`{protocol_version:8, application_contract:String,
+application_contract_version:int, viewer_player:int,
+application_result:Dictionary, presentation_result:Dictionary,
+maneuver_consequence_view:Dictionary}`.
+
+Converted commands retain their exact command-specific contract id, application
+contract 2, exact `application_result` body below, and `presentation_result:{}`.
+Deterministic commands retain `application_contract:"none"`,
+`application_contract_version:0`, `application_result:{}`, and their existing
+viewer-authorized presentation-result semantics. No new application contract is
+allocated solely for this projection. `presentation_result` remains forbidden
+as an input to validation, canonical mutation, history/cursor, or continuation.
+
+Required `maneuver_consequence_view` is an exact complete-replacement union:
+
+- `{}` when no active Maneuver execution exists in this command's post-state;
+- otherwise `{owner_player:int, ship_index:int,
+  ship_activation_identity:String, maneuver_execution_id:String,
+  consequence_view:ManeuverConsequenceView}`, with identities matching the
+  unique active execution and the closed union in Section 12.2.2.
+
+An active execution with no additional current identity uses the nonempty
+wrapper with inner `consequence_view:{}`; it SHALL NOT use outer `{}`.
+The existing envelope viewer and command sequence bind the replacement; no
+second sequence/revision is added. An absent member is invalid, even when its
+required value is `{}`. This requirement applies to successful live Network
+semantic-command results, not all RPCs, local command artifacts, saves, or
+replay records. Section 15.1 defines centralized capture and atomic application;
+individual commands SHALL NOT opt in, derive, or manually maintain the view.
 
 The command data carries its ordinary `sequence`; the envelope does not add a
-second sequence. `application_contract` equals the command type listed below.
-For converted commands, `application_result` has the exact command-specific
+second sequence. For converted commands listed below, `application_contract`
+equals the command type and `application_result` has the exact command-specific
 shape below. It is transient, validated against the filtered pre-state, and is
 neither saved nor replayed.
 
@@ -1222,7 +1392,7 @@ application result.
 | `debug_deal_damage`; authorized host debug issuer | Exact existing intent `{owner_player:int,ship_index:int,effect_id:String}`; serialized `"player"` is required, deserializes to the in-memory `player_index` recording the accepted host issuer, and no actor field is permitted in payload. Authority derives `debug_application_id:"debug:<sequence>"` and selects the accepted top-most matching physical draw-pile card; clients cannot submit it. | Exact authority/application result `{debug_application_id:String,owner_player:int,ship_index:int,damage_application:Dictionary}` with exactly one `PublicFaceupAddition` in `faceup_additions`. It contains no actor alias, `physical_card_id`, deck index/order, or legacy `card_index`. Contract id `debug_deal_damage`, v2. | Validation requires host-debug authority from the accepted command's `player_index`, exact target/effect availability, unique new public ref, and no conflicting active immediate record. Assignment and any required ADR-014 record are atomic and bound to `debug_application_id`; passive application validates the one public addition plus ledger delta without reading actor identity from the result. Non-immediate debug assignment terminates after assignment; immediate resolution returns only to that debug application and then terminates. |
 | `resolve_immediate_effect`; recorded player actor or authority-generated automatic branch | Required base `{owner_player:int,ship_index:int,public_card_ref:String,immediate_resolution_id:String,enclosing_kind:String}` plus the matching enclosure identity fields from state. Player branches require serialized `"player"` → `player_index==actor_player`; automatic branches derive `player_index==owner_player` and serialize it as `"player"`, require `actor_player==-1`, and reject player/remote submission. No payload/result actor alias is legal. Conditional choice union: Projector `{projector_zone:String}` only for a positive tie; Injured `{defense_token_index:int}` only when multiple; Shield `{shield_zones:Array[String]}` of 0--2 distinct zones; Comm Noise uses Section 12.2.5; Structural/Life Support and other automatic branches add no choice key. | Exact authority/application result repeats the five-field command base and its exact Attack/Maneuver/debug enclosure branch, then adds `{effect_id:String,source_disposition:"faceup"|"facedown",obligation_retired:true,damage_application:Dictionary,effect_result:Dictionary}`. It contains no command-actor field. Non-Comm exact effect results remain Structural `{additional_card_dealt:bool}`, Projector `{zone:String,shields_lost:int}`, Life Support `{tokens_cleared:bool}`, Injured `{defense_token_index:int}`, and Shield `{shield_zones:Array[String]}`; Comm authority/filter unions are Section 12.2.5. Contract id `resolve_immediate_effect`, v2. | Resolves the exact public ref→physical mapping and active record once, validates actor from the accepted command plus canonical state rather than the result, applies mutation, atomically retires record/public ref and its exact-once key, then binds return solely through its typed Attack/Maneuver/debug enclosure. Debug terminates; destruction suppresses invalid Maneuver return. |
 | `resolve_thruster_fissure`; affected ship owner | Required `{owner_player:int, ship_index:int, ship_activation_identity:String, maneuver_execution_id:String, public_card_ref:String, hull_zone:String}`. | Authority/application exact identities plus `{public_card_ref:String, hull_zone:String, damage_application:Dictionary}`. Contract id matches command, v2. | Sets only `last_thruster_fissure_execution_id`, retires its decision, then returns to the matching execution; destruction terminates it. |
-| `resolve_damaged_controls`; authority-generated for moving controller | Required `{owner_player:int, ship_index:int, ship_activation_identity:String, maneuver_execution_id:String, public_card_ref:String, overlap_kind:"ship"|"obstacle", obstacle_id:String}`; `obstacle_id` required only for obstacle and forbidden for ship. | Authority/application exact payload identities plus `{damage_application:Dictionary}`. Contract id matches command, v2. | Sets only `last_damaged_controls_execution_id`; returns to matching execution or terminates on destruction. The prior marker rejects a second category for the same card/execution. |
+| `resolve_damaged_controls`; rules-assigned player for a source-order choice; authority-generated for moving controller only when no such choice remains | Required `{owner_player:int, ship_index:int, ship_activation_identity:String, maneuver_execution_id:String, public_card_ref:String, overlap_kind:"ship"|"obstacle", obstacle_id:String}`; `obstacle_id` required only for obstacle and forbidden for ship. | Authority/application exact payload identities plus `{damage_application:Dictionary}`. Contract id matches command, v2. | Source-order submission requires serialized `"player"` → `player_index` to equal the rules-assigned actor (the affected ship owner for these same-player copies), subject to accepted timing/priority. Automatic resolution derives the moving controller and rejects player/remote submission when no player choice exists. Authority freshly validates the selected public occurrence, current category/overlap evidence, survival/applicability, and private guard; it never validates legality from the view. Authority alone draws/applies mandatory damage. Sets only `last_damaged_controls_execution_id`; returns to matching execution or terminates on destruction. The prior marker rejects a second category for the same card/execution. |
 | `resolve_asteroid_overlap`; authority-generated for moving controller | Required four Maneuver identities plus `{obstacle_id:String}`. | Exact authority/application result is the four identities plus `{obstacle_id:String, immediate_resolution_id:String, damage_application:Dictionary}`. Physical-card/deck/RNG facts remain canonical authority state and are not result fields. Contract id matches command, v2. | Atomically creates asteroid state and WP-ID assignment/obligation. Nested immediate return marks obstacle completion and resumes the matching execution; Asteroid never resolves the card. |
 | `resolve_debris_overlap`; affected ship owner | Required four Maneuver identities plus `{obstacle_id:String, hull_zone:String}`. | Authority/application exact payload identities plus `{damage_application:Dictionary}` representing both sequential points. Contract id matches command, v2. | One command applies both points, records obstacle completion, retires debris state, and returns or terminates. |
 | `resolve_station_overlap`; affected ship owner for use/decline, authority-generated for no option | Required four Maneuver identities plus exact action union: `{obstacle_id:String,action:"use_faceup",public_card_ref:String}`; `{obstacle_id:String,action:"use_facedown",facedown_ordinal:int}`; `{obstacle_id:String,action:"decline"}`; or `{obstacle_id:String,action:"no_option"}`. Selection fields are forbidden outside their branch. Use/decline requires submitted serialized `"player"` → `player_index==controller_player`; `no_option` derives `player_index==owner_player`, serializes it as `"player"`, requires zero currently legal faceup and facedown cards, and rejects player/remote submission. | Exact authority/application result is the four Maneuver identities plus `{obstacle_id:String,action:"use_faceup"|"use_facedown"|"decline"|"no_option",damage_application:Dictionary}`. It has no command-actor field. Faceup use consumes exactly the referenced visible occurrence; facedown use consumes exactly the validated ordinal without returning identity. Decline/no-option carry the exact empty damage application. The selected physical identity is never a result field. Contract id `resolve_station_overlap`, v2. | Each accepted branch validates actor only from the accepted command plus canonical state, sets the obstacle exact-once marker, removes `active_station_resolution`, and returns to the matching execution. `no_option` is legal only after fresh zero-option re-derivation. Unsupported modifying objectives reject before this command/state exists. Positive modifier paths exist only in a separately Integrated objective capability. |
@@ -1288,14 +1458,15 @@ authority. They contain the exact discriminator required above (`"none"` or
 peers apply the validated v2 result and never originate the command, next
 consequence, or return.
 
-Repository evidence fixes the subordinate live-Network allocations:
+The original allocation and accepted BUG-058 retention of subordinate
+live-Network versions are:
 
-- `GameCommand.APPLICATION_CONTRACT_VERSION` is currently `1`. Because the
-  existing `resolve_immediate_effect` contract has an empty result and uses
-  array-index intent while this candidate changes its semantic intent/result,
-  every converted affected command uses application contract **2** at the
-  protocol-7 candidate boundary. Contract 1 is not accepted for those changed
-  shapes and no per-fixture adapter is added.
+- The original migration advanced `GameCommand.APPLICATION_CONTRACT_VERSION`
+  from `1` to **2** because `resolve_immediate_effect` changed its empty-result,
+  array-index contract to the accepted occurrence-bound intent/result. BUG-058
+  retains contract **2** and those exact bodies at the protocol-8 successor
+  boundary. Contract 1 remains rejected for the changed shapes; no per-fixture
+  adapter is added.
 - `PassiveDamageLedger.SCHEMA_VERSION` is currently `1`, with the exact fields
   `schema_version`, `draw_count`, `discard_pile`, and `facedown_counts`.
   ADR-013 keeps it as aggregate hidden damage state, and the new transient
@@ -1375,7 +1546,7 @@ pass” alone is insufficient.
 | Projection/UI | Viewer-authorized source, actor, choices, deficiency guidance, and live route; no fabricated prompt for automatic/no-option branches | All twelve, with explicit reduced rationale for automatic CAP-DMG-002/004/006 and CAP-OBS-001 branches |
 | Save/load | Full authority identity/location/RNG and active purpose state round-trip; completed work does not reopen | All twelve; CAP-DMG-004--009 every Attack/Maneuver/debug source; obstacles pending/complete states |
 | Replay | Replay-10 semantic order, deterministic authority RNG, no UI/passive input, no duplicate automatic follow-up | All twelve; CAP-OBS-001 nested immediate order; CAP-DMG-003 after obstacles |
-| Network protocol | Protocol-7 exact schemas retain serialized `"player":int` ↔ in-memory `player_index:int`; entitled submissions validate the accepted command actor, automatic commands serialize the authority-derived actor, and passive results contain/trust no actor alias. Include Attack/debug faceup assignment v2, ordinary collision v2, Station four-action union, Comm Noise per-viewer result unions, ordered passive command-owned application, and rejection atomicity | All twelve, identified per command/result contract, plus WP3a ordinary collision |
+| Network protocol | Protocol-8 exact schemas retain serialized `"player":int` ↔ in-memory `player_index:int`; entitled submissions validate the accepted command actor, automatic commands serialize the authority-derived actor, and passive results contain/trust no actor alias. Include Attack/debug faceup assignment v2, ordinary collision v2, Station four-action union, Comm Noise per-viewer result unions, ordered passive command-owned application, and rejection atomicity | All twelve, identified per command/result contract, plus WP3a ordinary collision |
 | Passive result application | Viewer-authorized realized facts validate/apply inside owning command; no passive draw/shuffle/resolution/return | All damage RCPs and all three obstacle RCPs because each touches damage or nested damage |
 | Reconnect | Decision-equivalent filtered install before admission; exact pending actor/options/identity without hidden authority reconstruction | All twelve; test every genuine choice and representative automatic inter-command boundary |
 | Visibility/filtering | `PublicFaceupDamageCard.public_card_ref` is unique/recoverable while faceup but never reveals physical identity; duplicate-title cards remain distinct; stale refs reject; faceup→facedown correlation is retired from exposed history/reconnect; Comm Noise old/resulting dials obey the exact entitled/unauthorized unions; Station faceup-ref and facedown-ordinal selection are safe | All CAP-DMG RCPs; CAP-OBS-001/002 via damage, CAP-OBS-003 via both selection forms |
@@ -1416,46 +1587,164 @@ canonical mutation, history/cursor advance, follow-up, or success presentation.
 Replay remains full-authority seed-plus-history re-execution and never consumes
 live passive results.
 
+### 15.1 BUG-058 capture, installation, and lifecycle
+
+**Centralized capture.** The common accepted command transaction boundary SHALL
+derive and freeze the complete viewer-authorized replacement from each
+successful live Network semantic command's committed post-state, before
+success callbacks, subsequent commands, or follow-ups can change it. This
+applies to every command, including deterministic, debug, cleanup, and commands
+whose replacement is unchanged or outer `{}`. Individual commands SHALL NOT opt
+in, maintain an affecting-command list, or derive the projection. The existing
+authority-side purpose-specific projection performs the pure calculation;
+central orchestration does not acquire gameplay mutation or rule ownership.
+
+Envelope construction, host-local delivery, delayed/buffered distribution, and
+each peer delivery SHALL use the frozen value for that command sequence. They
+SHALL NOT re-evaluate current `GameState` at delivery time. No new revision,
+delta/change detector, generic projection registry, transaction service, or
+continuation mechanism is introduced. Rejected commands publish no successful
+replacement. Unchanged views are complete replacements, not omission signals.
+
+**Filtered installation.** Capture full canonical state with the existing
+reconstruction cursor consistently, derive the view from that captured state
+before private markers are removed, and install it with the complete validated
+filtered candidate. Fresh installation, resume, and reconnect SHALL finish
+state/view/cursor validation before presentation or command admission. Discard
+the previous installed view on state replacement. Authority save/load derives a
+fresh view from restored owners, never from serialized presentation. These
+paths submit no semantic command merely to reconstruct the view.
+
+**Atomic passive application.** The existing ordered command transaction SHALL:
+
+1. validate sequence, protocol, viewer, command/contract, complete envelope,
+   replacement shape, and applicable pre-state/lifecycle conditions;
+2. validate/apply the command's normal canonical result through its existing
+   owning mutation surface, retaining deterministic execution for commands
+   without an application contract;
+3. validate the replacement against the resulting public state and install it
+   on the matching filtered execution, or clear it with execution retirement;
+   and
+4. only after the complete transaction succeeds, record the command, advance
+   the cursor exactly once, and permit success presentation.
+
+These are one atomic acceptance boundary, not separately committed operations.
+Wrong ship/activation/execution, wrong card type, missing/nonpublic source,
+invalid obstacle, contradictory active record, malformed/absent replacement,
+stale/duplicate/out-of-order sequence, or failed application rejects without
+changes to the passive canonical state, installed view, history, cursor,
+follow-ups, or success presentation. Existing ordering may buffer future
+sequences but SHALL NOT apply them early or skip a rejected sequence. Passive
+rejection does not roll back an already accepted authority transaction.
+
+For a Damaged Controls source-order command, passive pre-state validation binds
+the selected singular source to the installed legal-source set, the accepted
+command actor/timing, and the authority-derived overlap context. It SHALL NOT
+require the first array entry or treat obstacle evidence as a player choice.
+The replacement may contain every remaining legal source or a different current
+branch; validate its public references and shape under the same atomic boundary.
+
+Passive validation uses only accepted command/order, filtered pre-state, its
+installed view, public post-state, and authorized result facts. It SHALL NOT
+re-run private-marker absence checks, infer a completed set from reference
+differences, populate authority-only markers, or synthesize decisions,
+completion, or composed returns. Authority alone proves completeness of the
+projected choice set from its full owners; passive validation SHALL NOT pretend
+to independently reproduce that hidden proof. Authority still revalidates every
+submitted choice against canonical owners and markers, not against the view.
+
+**Implementation STOP:** if passive atomic validation/installation cannot be
+implemented within the accepted command transaction boundary without new
+generic transaction, rollback, or snapshot infrastructure, implementation SHALL
+STOP for Owner review. A post-success patch, generic snapshot replacement, or
+transport/UI mutation is not an authorized substitute. The existing common
+processor entry point does not itself prove late-failure atomicity; that
+property requires the Section 20.3 evidence within accepted owner transactions.
+
+**Cleanup and invalidation.** Each accepted consequence replaces the view from
+fresh authority evaluation; passive code does not subtract the resolved source
+and guess what follows. For Damaged Controls, re-evaluate survival, applicability,
+and timing after each instance, exclude that instance by its private execution
+guard, and retain all other currently legal sources. Do not freeze the initial
+set as a resolution queue or reopen item-3 sources at item 4. Card concealment
+or faceup-occurrence retirement removes its reference atomically from the view
+and existing exposed correlation
+surfaces. Redeal uses a new public reference. Nested immediate completion uses
+its existing purpose-specific return, then publishes the resulting current
+obstacle/consequence identity. Normal completion removes the execution and
+publishes outer `{}`. Destruction/exceptional termination clears the execution-
+bound view without fabricated `CONSUMED` or a return to a nonexistent owner.
+State replacement discards the prior view; scene/modal teardown discards only
+presentation copies. Inner `{}` never authorizes passive Maneuver completion.
+
+Authoritative save 7, replay 10, application contract 2, and passive-ledger
+schema 1 remain unchanged. The projection adds no semantic command or replay
+input and is not persisted as live result history. No partially resolved
+Maneuver is made non-checkpointable or non-reconnectable by this repair.
+
 ## 16. Coordinated candidate and release compatibility cutover
 
-The only permitted boundary is:
+### 16.1 Accepted BUG-058 protocol-8 allocation (2026-09-27)
 
-| Owner | Current | Final | Required behavior |
+Immediately before this normative amendment, the allocation check inspected the
+working tree (including uncommitted/untracked repository material) and all six
+available local/remote-tracking refs at
+`HEAD 66a256d3ab20c0f3fe5d728a0c14c2536a383361`. Production and accepted BUG-043
+allocation used protocol 7; no conflicting protocol-8 allocation was found.
+References to replay format 8 were not Network protocol allocations. This
+records available repository evidence, not unfetched remote state.
+
+The Project Owner allocates Network protocol **8** for the Section 12.2.2
+filtered execution extension and Section 12.2.3 successor envelope/processing
+semantics. BUG-042 remains unchanged under Section 1.1's scoped supersession.
+The earlier BUG-043 migration established save 7 / replay 10 / protocol 7 /
+application contract 2 / passive-ledger schema 1 from the original 6/9/6/1/1
+baseline. BUG-058 changes only the Network protocol allocation:
+
+| Owner | Before BUG-058 | Required successor | Required behavior |
 | --- | ---: | ---: | --- |
-| `SaveGameMetadata.CURRENT_VERSION` | 6 | 7 | Save 7 requires the complete Maneuver, physical-card, location, immediate-record, purpose-specific state, and validation shape. Save 6 rejects before body installation. |
-| `GameReplay.FORMAT_VERSION` and signed alias | 9 | 10 | Replay 10 records the new commitment, final-transform application, and all accepted consequence/completion commands. Replay 9 rejects before command application. |
-| `NetworkManager.PROTOCOL_VERSION` | 6 | 7 | Protocol 7 carries the complete new command/result/state vocabulary. Protocol 6 fails handshake before play. |
-| `GameCommand.APPLICATION_CONTRACT_VERSION` | 1 | 2 | Contract 2 gates changed exact intent/result shapes, especially immediate damage and the new purpose-specific damage/obstacle application paths. Contract 1 rejects for changed commands. |
-| `PassiveDamageLedger.SCHEMA_VERSION` | 1 | 1 | Repository evidence shows the accepted four-field aggregate hidden-state schema remains sufficient; transient public occurrence/application identity stays outside the ledger. Any required field/meaning change is a stop, not a silent schema-1 widening. |
+| `SaveGameMetadata.CURRENT_VERSION` | 7 | 7 | Full-authority save shape is unchanged; no `consequence_view` is saved. Existing save-6 rejection remains. Derive the view after canonical load. |
+| `GameReplay.FORMAT_VERSION` and signed alias | 10 | 10 | Semantic commands and seed-plus-history reconstruction are unchanged. Existing replay-9 rejection remains; no live projection/result payload is persisted or consumed as replay input. |
+| `NetworkManager.PROTOCOL_VERSION` | 7 | 8 | Require the exact filtered-view and every-successful-command replacement schemas. Protocol-7 and all other mismatched peers fail handshake before play. |
+| `GameCommand.APPLICATION_CONTRACT_VERSION` | 2 | 2 | Existing command-specific intent/application bodies retain their meanings. Deterministic `none` contracts remain version 0. The new mandatory envelope semantics are gated by protocol 8. |
+| `PassiveDamageLedger.SCHEMA_VERSION` | 1 | 1 | Preserve the exact four-field schema and meanings; public consequence identity stays outside this ledger. |
 
-The 7/10/7 plus application-contract-2 constants activate together when WP6
-assembles the **unreleased** candidate, before Tested readiness and Owner
-`Integrated` approval, because those complete live paths are required to gather
-evidence. They are not released at that point. After Owner-recorded replay verification and
-twelve explicit approvals, release/cutover accepts the already-versioned
-candidate without another bump.
+If faithful implementation requires a change to the retained save, replay,
+application-contract, or ledger schema/meaning, STOP for Owner review rather
+than silently reusing or incrementing its version. No contradiction requiring
+such a change was identified in this documentation allocation.
 
-Protocol 7 retains the existing serialized command-envelope field
-`"player":int`; only the in-memory property is named `player_index`. This
-correction is not a wire-schema rename, does not allocate another protocol
-version, and requires no compatibility adapter beyond the already coordinated
-protocol-6-to-7 fail-closed cutover.
+### 16.2 Candidate activation and compatibility
 
-Do not bump an intermediate format or contract for WP1, WP-ID, any individual
-card, contour data, WP3a, or an obstacle slice. Do not dual-write, default missing fields,
-infer from `InteractionFlow`, transform history, translate old commands, accept
-mixed peers, or add adapters solely for old development fixtures. Old
-incompatible schemas fail closed through their existing compatibility owners.
+The successor candidate is **save 7 / replay 10 / protocol 8**, with application
+contract 2 and passive-ledger schema 1. Activate protocol 8 only with the complete
+filtered representation, centralized capture, ordered atomic passive install,
+cleanup, and exact validation paths. Do not partially publish the new field
+under protocol 7, accept mixed shapes, default a missing view, reconstruct it
+from hidden-history inference, or add adapters for old development fixtures.
+Existing authoritative save-7/replay-10 artifacts remain subject to their
+unchanged validators; obsolete filtered protocol-7 snapshots cannot supply the
+new required view and SHALL NOT be installed as protocol-8 state.
 
-`BaselineTrace.FORMAT_VERSION` is independent and remains unchanged unless its
-own trace schema actually changes; a replay semantic/version change alone does
-not allocate a trace version.
+The original WP6 completeness/integration/replay-capture/release gates remain.
+The 7/10/7 candidate is not the final protocol target after this amendment;
+convergence and release require 7/10/8. Promotion of that already-versioned
+successor candidate to accepted release creates no further version bump and
+claims no package approval merely from implementing BUG-058.
 
-Before changing constants, re-run the version allocation search. Any
-intervening accepted use of save 7, replay 10, protocol 7, or application
-contract 2 is a hard stop for authority resolution, not permission to choose
-new numbers silently. `PassiveDamageLedger` schema 1 must retain its exact
-current fields and meanings.
+Protocol 8 retains serialized command-envelope `"player":int`; only the
+in-memory property is `player_index`. No actor alias, second sequence, generic
+compatibility mechanism, old-command translation, or gameplay semantic change
+is introduced. `BaselineTrace.FORMAT_VERSION` remains independent and unchanged
+unless its own trace schema changes under separate applicable authority.
+
+After Owner acceptance of this amendment and before implementation changes a
+constant, recheck allocation against the accepted BUG-058 Owner decision and
+intervening accepted work. An attributed implementation
+of this allocation is not a conflicting reuse. Any different allocation of
+protocol 8 or contradiction in the retained schemas is a STOP for Owner review,
+not permission to choose another number. Historical baseline/evidence labels
+remain historical; normative candidate references use this successor allocation.
 
 ## 17. Replay/manual-capture hard STOP
 
@@ -1594,17 +1883,24 @@ Implementation stops rather than improvises when:
 10. a purpose-specific consequence cannot return without inventing a generic
     mechanism;
 11. a real canonical state presents two non-nested simultaneous returns that
-    accepted composed-return authority cannot order; or
+    accepted composed-return authority cannot order;
 12. any genuine new Owner gameplay, architecture, geometry, compatibility, or
-    visibility decision appears.
+    visibility decision appears; or
+13. passive atomic validation/installation of the BUG-058 replacement cannot
+    be implemented within the accepted command transaction boundary without
+    new generic transaction, rollback, or snapshot infrastructure. STOP for
+    Owner review; do not substitute post-success repair or weaken atomicity.
 
 The stop report names the exact state/path, conflicting sources, safe work that
 is already complete, and the smallest Owner decision needed. It does not spend
 credits redesigning settled architecture.
 
-The independent-audit C findings are resolved by Owner Decisions 24--27. No
-Owner architecture, gameplay, or workflow decision remains unresolved in this
-Draft. Workbook acceptance/legacy retirement, contour evidence approval,
+The independent-audit C findings are resolved by Owner Decisions 24--27.
+The BUG-058 representation/allocation decision is accepted above; this amendment's
+wording still requires a passing independent fidelity audit and Owner acceptance.
+These decisions do not waive any implementation STOP condition or establish
+implementation conformance. Workbook acceptance/legacy retirement, contour
+evidence approval,
 manual replay capture, twelve per-RCP `Integrated` approvals, and final
 release acceptance are scheduled actions under settled criteria, not open
 semantics.
@@ -1627,7 +1923,7 @@ semantics.
 | Contour approval + WP3b | Evidence hash audit, synthetic plus all real-contour characterization, Damaged Controls two-boundary protocol. |
 | WP4 | Separate CAP-OBS-001/002/003 suites; Asteroid supplies the six later cross-source evidence rows. Station always covers ordinary behavior and unsupported-objective fail-closed behavior; positive modifier evidence is required only if an applicable objective capability already exists at `Integrated`, otherwise it is not applicable. |
 | WP5 | Post-obstacle re-derivation, no-stage recovery, exact final completion/retirement and destruction. |
-| WP6 unreleased 7/10/7 candidate | Activate only complete paths plus application contract 2; run affected unit/integration/save/non-fixture replay/Network/reconnect/visibility/runtime groups, full suite, architecture lint, and structural/registration/schema/legacy-path audit. |
+| WP6 unreleased 7/10/8 candidate | Activate only complete paths plus application contract 2; run affected unit/integration/save/non-fixture replay/Network/reconnect/visibility/runtime groups, full suite, architecture lint, and structural/registration/schema/legacy-path audit. |
 | Pre-capture convergence | Exact old-version/contract rejection, non-fixture replay, and all other candidate evidence stable enough to justify manual capture; then Section 17 STOP. |
 | Post-capture Tested readiness | Hash/provenance, Hot-Seat and two-process Network replay baselines, per-RCP matrix completion, full suite, real runtime coverage, architecture lint, diff/whitespace and authorized-file audit. |
 | Owner approval and release | Twelve explicit Integrated decisions, final no-drift check, then accept the already-versioned candidate as release without another bump. |
@@ -1651,7 +1947,8 @@ Release convergence requires:
   decision family, completed Maneuver, and destruction;
 - replay-10 Hot-Seat and Network files manually recorded by the Owner and then
   inspected, integrated, and verified by Codex;
-- protocol-7 ordered passive application/non-synthesis and viewer filtering;
+- protocol-8 ordered passive application/non-synthesis, viewer filtering, and
+  Section 20.3 BUG-058 recovery/freshness/atomicity evidence;
 - no faceup-to-facedown correlation or Comm Noise hidden-dial disclosure;
 - exact cleanup of activation, execution, immediate, displacement, card,
   obstacle, and package state on every terminal path;
@@ -1660,6 +1957,31 @@ Release convergence requires:
 - architecture lint, structural authority checks, cross-reference checks,
   `git diff --check`, and authorized-file review; and
 - a concise final evidence report mapping each result to its WP and RCP IDs.
+
+### 20.3 BUG-058 mandatory evidence
+
+The following evidence is required before claiming BUG-058 conformance. It
+supplements Sections 14 and 20.2 without changing RCP status or release gates.
+
+| Boundary | Required proof |
+| --- | --- |
+| Partial-resolution equivalence | After each accepted consequence, uninterrupted ordered passive application and a fresh filtered install at the same cursor expose the same authorized decision. Two Ruptured Engine occurrences resolve A then expose B without reopening A; three or more preserve every currently legal source/order choice. |
+| Damaged Controls source choice and automatic context | At both item 3 and obstacle-only item 4, two and three or more faceup copies expose every legal next source; choose a non-first serialized source and prove the remaining legal choices after each resolution through live application, authoritative save/load, filtered reconnect, and replay. Preserve same-player order and applicable first-player priority; reject wrong actor, stale/completed/concealed source, wrong category/obstacle, and duplicate instance resolution. One source with no ordering choice resolves automatically without a prompt; zero sources produces no empty card branch. Multiple ships/obstacles and both categories do not multiply an occurrence; item-3 resolution never reopens at item 4. Re-evaluate survival/applicability after each copy and prove destruction/retirement cleanup without private-marker disclosure or synthesis. Source selection uses the existing singular command field; mandatory draw/application and overlap context remain authority-derived. |
+| Obstacle sequence and nesting | After obstacle A completes, current identity advances to B without changing immutable full order or reconstructing markers. Asteroid retains its parent identity during each applicable immediate-card nested decision, then advances only on accepted return. Completed obstacles do not reopen after reconnect. |
+| Closed schema and identity | Every union branch, inner versus outer `{}`, missing/extra/wrong-type keys, empty/duplicate refs, wrong card type/ship/activation/execution, invalid obstacle, contradictory active record, and retired/concealed occurrence are covered. Deterministic serialization does not select a player's source/order. |
+| Centralized coverage | Structural and production-entry evidence proves every successful live Network semantic command captures a replacement through the common boundary, with no per-command opt-in, projector, or affecting-command list. Include result-aware and deterministic commands, debug damage/repositioning, cleanup, unchanged views, creation, retirement, and no-active-execution `{}`. |
+| Frozen delivery | Delay/buffer delivery and allow a host-local success callback or subsequent command to change state; every viewer still receives the original command's frozen post-state value at its original sequence. Envelope construction performs no current-state derivation. |
+| Atomic rejection | Forced failure in replacement validation/installation after tentative canonical application leaves passive canonical state, installed view, history, cursor, follow-ups, and success presentation unchanged. Missing member, wrong viewer/identity, duplicate/stale/future sequence, and blocked later delivery use the existing ordered boundary. Prove this with accepted owner transactions; inability to do so triggers Section 19.13. |
+| Cleanup and privacy | Completion, exceptional destruction, concealment/discard, redeal, load/reconnect replacement, and scene/modal teardown obey Section 15.1. No private marker/history synthesis, hidden physical identity, faceup-to-facedown correlation, generic progress structure, or passive semantic follow-up occurs. |
+| Compatibility and persistence | Protocol 8 rejects protocol-7 peers and obsolete filtered snapshots; every live envelope requires its replacement even for `none`/0 contracts. Save 7, replay 10, contract 2, and ledger 1 retain exact existing meanings. Authoritative save/load regenerates the view and seed-plus-history replay uses no live result payload. |
+
+Run equivalent checks for both assigned viewers and swapped host/client sides,
+including real Network reconnect before command admission. Report the affected
+CAP-DMG-001--003 and CAP-OBS-001--003 evidence, and attribute nested immediate
+paths to the applicable CAP-DMG-004--009 packages as well. Existing tests of
+today's command list alone are not evidence of centralized future coverage.
+All replay fixture handling remains subject to Section 17 and CODEX_WORKFLOW;
+this amendment authorizes no fixture generation or relabeling.
 
 ## 21. Token/credit-efficient execution and Owner checkpoints
 
@@ -1694,7 +2016,8 @@ or redesigned to save an implementation step.
 
 - [ ] Obtain one Owner action that accepts this workbook and explicitly retires
   the former accepted BUG-043 revision; then confirm sole-workbook authority,
-  hashes, baseline tests/lint, versions 6/9/6, RCP statuses, and contour status.
+  hashes, baseline tests/lint, the applicable original or BUG-058 entry values
+  in Section 2.2, RCP statuses, and contour status.
 - [ ] Complete WP1 dormant Maneuver owner/identity/re-evaluation/cleanup
   foundation without claiming final command convergence.
 - [ ] Complete WP3a pure final-course/final-transform/collision/play-area/
@@ -1716,10 +2039,15 @@ or redesigned to save an implementation step.
   fail closed for unsupported Station-modifying objective configurations.
 - [ ] Complete WP5 CAP-DMG-003, post-obstacle re-derivation, exact completion
   proof, `OPEN -> CONSUMED`, and active-record retirement.
+- [ ] After this amendment passes independent fidelity audit and receives Owner
+  acceptance, implement the BUG-058 filtered union, centralized frozen
+  every-command replacement, and atomic passive installation; satisfy Section
+  20.3 without expanding transaction/rollback/snapshot architecture, or STOP
+  under Section 19.13. Recheck Section 16's protocol-8 allocation.
 - [ ] Build the unreleased WP6 candidate; remove obsolete BUG-043/raw-observer
   paths; register only complete purpose-specific behavior; activate save 7,
-  replay 10, protocol 7, and application contract 2 together; keep passive
-  ledger schema 1 exact; verify old schemas fail closed.
+  replay 10, protocol 8, and application contract 2 as the complete successor;
+  keep passive ledger schema 1 exact; verify old schemas fail closed.
 - [ ] Run non-fixture replay verification and continue until the candidate has
   otherwise converged and is stable enough for manual recording; then **STOP
   FOR OWNER REPLAY CAPTURE**.

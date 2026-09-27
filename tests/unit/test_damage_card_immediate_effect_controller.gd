@@ -15,6 +15,12 @@ class DirectSubmitter:
 		submitted.append(command)
 		return command.execute(GameManager.current_game_state)
 
+	func submit_authoritative(command: GameCommand) -> Dictionary:
+		command.sequence = next_sequence
+		next_sequence += 1
+		submitted.append(command)
+		return command.execute(GameManager.current_game_state)
+
 
 var _state: GameState
 var _controller: Node

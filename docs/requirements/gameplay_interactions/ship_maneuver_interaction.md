@@ -14,6 +14,12 @@ Accepted date: 2026-09-10
 Refined from committed Owner decisions: 2026-09-11
 Audit corrections and additional Owner decisions: 2026-09-12
 Owner Decision 28 timing correction: 2026-09-13
+BUG-058 compatibility reference update: 2026-09-27. The accepted Owner
+architecture decision allocates save 7 / replay 10 / protocol 8, recorded in
+[BUG-043 workbook Section 16](../../architecture/implementation_workbooks/BUG-043-network-maneuver-preview-speed-convergence-implementation-workbook.md#16-coordinated-candidate-and-release-compatibility-cutover),
+whose amended wording remains pending independent fidelity audit and Owner
+acceptance as implementation authority. This changes no gameplay,
+integration-status, or recovery requirement here.
 
 ## 1. Purpose and authority
 
@@ -670,7 +676,7 @@ overlap slices for asteroid fields, debris fields, and the station must each
 have a CON-003 Rule Capability Package at `Integrated` status, including the
 explicit Owner approval required by CON-003. Only after the whole workbook is
 candidate-code-complete under Owner Decision 27 may the complete paths be
-activated together in the unreleased 7/10/7 Integration Candidate so required
+activated together in the unreleased 7/10/8 Integration Candidate so required
 TEST-003/runtime/Network evidence can be gathered. The candidate is not a
 CON-003 status and no incomplete path may be
 made reachable for incremental testing. `Integrated` records complete
@@ -771,7 +777,7 @@ Controls, and Ruptured Engine prerequisite slices must each have a CON-003 Rule
 Capability Package at `Integrated` status, including the explicit Owner
 approval required by CON-003. Together with the three obstacle slices in
 SMI-063, all six prerequisite slices SHALL satisfy that release gate. Their
-complete paths may participate earlier in the same unreleased 7/10/7
+complete paths may participate earlier in the same unreleased 7/10/8
 Integration Candidate, but only after the whole workbook is candidate-code-
 complete under Owner Decision 27, solely to gather the evidence required for
 Tested readiness and Owner review; this does not advance package status.
@@ -908,7 +914,7 @@ Maneuver boundary must invoke and await them. Each of those six slices must
 reach CON-003 `Integrated` status with explicit Owner approval before accepted
 release/cutover depends on it. Before that approval, complete paths may be
 activated together only after the whole workbook is candidate-code-complete
-under Owner Decision 27, in the unreleased 7/10/7 Integration Candidate to
+under Owner Decision 27, in the unreleased 7/10/8 Integration Candidate to
 gather TEST-003/runtime/Network evidence. The candidate is not a
 CON-003 lifecycle status, does not imply Tested or Integrated, and may not make
 an incomplete path reachable.
@@ -950,7 +956,7 @@ return, or exact-once completion invariants.
 | SMI-AC-010 | Ship overlap searches successively lower temporary speeds without changing canonical speed; after final geometry and Squadron displacement, ordinary collision damage precedes collision-triggered effects. |
 | SMI-AC-011 | Speed-zero execution evaluates applicable ship, squadron, and obstacle overlaps. |
 | SMI-AC-012 | The non-moving player proposes one complete Squadron-displacement batch containing placed and excluded identities and all placed positions. Authority validates the maximum legally placeable subset, permits identity choice only among equally maximal legal subsets, validates the maximum direct-touch count and secondary placement, and destroys exactly the identities genuinely excluded from the chosen maximal subset. Suboptimal selection, order, or placement cannot cause additional destruction and receives deficiency guidance. |
-| SMI-AC-013 | The asteroid, debris, and ordinary-station Maneuver slices may become reachable together only after the whole workbook reaches Owner Decision 27's `candidate-code-complete` condition in the unreleased 7/10/7 Integration Candidate, then satisfy TEST-003 `implementation-complete`/Tested readiness and reach CON-003 `Integrated` with explicit Owner approval before accepted release/cutover. Maneuver invokes the responsibility-specific implementation without transferring obstacle-rule ownership; an unsupported active Station-modifying objective configuration fails closed, and the moving ship's controller chooses among multiple RRG-permitted orders unless another accepted gameplay-rule authority assigns the choice. |
+| SMI-AC-013 | The asteroid, debris, and ordinary-station Maneuver slices may become reachable together only after the whole workbook reaches Owner Decision 27's `candidate-code-complete` condition in the unreleased 7/10/8 Integration Candidate, then satisfy TEST-003 `implementation-complete`/Tested readiness and reach CON-003 `Integrated` with explicit Owner approval before accepted release/cutover. Maneuver invokes the responsibility-specific implementation without transferring obstacle-rule ownership; an unsupported active Station-modifying objective configuration fails closed, and the moving ship's controller chooses among multiple RRG-permitted orders unless another accepted gameplay-rule authority assigns the choice. |
 | SMI-AC-014 | For a surviving normal activation, Maneuver remains `OPEN` through all mandatory consequences; after purpose-specific authority-side return and re-evaluation, completion consumes it and retires the active execution exactly once. |
 | SMI-AC-015 | Passive peers project ordered viewer-authorized canonical state and originate neither player decisions nor automatic authoritative follow-up commands; identical authority-private representation is not required. |
 | SMI-AC-016 | Save/load/reconnect rebuild transient pre-commit geometry from canonical state or resume the committed Maneuver without duplication, preserving whether its canonical final transform remains unapplied or has already been applied. |
@@ -963,7 +969,7 @@ return, or exact-once completion invariants.
 | SMI-AC-023 | Dial effect permits speed ±1 and optional +1 yaw on one joint; token effect permits speed ±1 with no yaw; combined effects permit total speed ±2 and optional dial yaw. Armada exposes no explicit source choice or no-effect resolution. |
 | SMI-AC-024 | Tool-side alignment is derived automatically and deterministically; if both sides are legal, the player receives no side-selection decision. |
 | SMI-AC-025 | The ship-overlap footprint is the simplified rectangular `ShipBase`; core obstacle overlap uses verified explicit canonical contours and never runtime sprite-derived geometry. |
-| SMI-AC-026 | Thruster Fissure is exposed after committed Determine Course speed-change facts exist but before the committed final board transform is applied; each Damaged Controls faceup instance is exposed once at its Owner-assigned SMI-064 boundary, and Ruptured Engine only after obstacle convergence. Their complete paths may participate in the unreleased 7/10/7 Integration Candidate for evidence only after the whole workbook reaches Owner Decision 27's `candidate-code-complete` condition, then satisfy TEST-003 `implementation-complete`/Tested readiness and reach CON-003 `Integrated` with explicit Owner approval before accepted release/cutover; detailed rule ownership remains responsibility-specific. |
+| SMI-AC-026 | Thruster Fissure is exposed after committed Determine Course speed-change facts exist but before the committed final board transform is applied; each Damaged Controls faceup instance is exposed once at its Owner-assigned SMI-064 boundary, and Ruptured Engine only after obstacle convergence. Their complete paths may participate in the unreleased 7/10/8 Integration Candidate for evidence only after the whole workbook reaches Owner Decision 27's `candidate-code-complete` condition, then satisfy TEST-003 `implementation-complete`/Tested readiness and reach CON-003 `Integrated` with explicit Owner approval before accepted release/cutover; detailed rule ownership remains responsibility-specific. |
 | SMI-AC-027 | Multiple applicable faceup instances are not collapsed by shared card identity; a player chooses the order of that player's same-timing effects, and when both players have effects at the same timing the first player resolves all of theirs first. Facedown copies provide no active effect. |
 
 ## Appendix A — Evidence classification and traceability

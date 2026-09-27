@@ -2,10 +2,11 @@
 
 Historical workbook acceptance: Project Owner, 2026-09-13
 BUG-058 Alternative A architecture decision: accepted by Project Owner, 2026-09-27
-Current BUG-058 normative amendment: pending independent fidelity audit and Owner acceptance
+BUG-058 Option B passive acceptance-boundary decision: accepted by Project Owner, 2026-09-27
+Current amended workbook, including BUG-058 Option B: accepted by Project Owner, 2026-09-27, as implementation authority for the remaining BUG-043 work
 
 Historical Owner acceptance (2026-09-13 revision): BUG-043-network-maneuver-preview-speed-convergence-implementation-workbook.md was accepted as the sole implementation specification for BUG-043 and the associated Maneuver/Immediate-Damage integration work described by that revision.
-That acceptance superseded its predecessor; it does not accept this amended revision or retire the pre-amendment implementation authority.
+That historical acceptance superseded its predecessor. The explicit 2026-09-27 Owner acceptance now establishes this amended revision as the sole implementation authority for the remaining BUG-043 work and retires the pre-amendment revision from executable authority; earlier revisions remain historical evidence only.
 Implementation must follow the accepted workbook without redesign. Any conflict with accepted architecture or an unresolved Owner decision is a STOP condition.
 Replay files/fixtures remain Owner-recorded only, after candidate-code-complete and the workbook’s non-fixture convergence gate.
 
@@ -13,12 +14,13 @@ Prepared: 2026-09-12
 
 Owner: Project Owner
 
-Implementation posture: the BUG-058 architecture decision is accepted, but this
-normative amendment is not yet accepted implementation authority. Its independent
-fidelity audit must pass and the Owner must explicitly accept the wording before
-implementation proceeds under it. This documentation correction does not itself
-pass that independent gate, implement or verify BUG-058, integrate a package, or
-complete a release. BUG-058 remains Open pending implementation and verification.
+Implementation posture: the Project Owner explicitly accepted this amended
+workbook, including the Option B BUG-058 passive-atomicity refinement, on
+2026-09-27 as implementation authority for the remaining BUG-043 work. This
+status record does not assert a passing independent fidelity audit, implement
+or verify BUG-058, integrate a package, or complete a release. Existing technical
+STOP conditions and verification obligations remain unchanged. BUG-058 remains
+Open pending implementation and verification.
 
 Purpose: provide one coordinated implementation specification for the complete
 Ship Maneuver capability integration, all twelve prerequisite Rule Capability
@@ -37,15 +39,14 @@ Attack return, Network/passive execution, recovery, and compatibility. The
 uncertainty is resolved by the accepted sources below; this workbook does not
 reopen their decisions.
 
-The historical acceptance establishes the pre-amendment revision's implementation
-authority for Section 1.3, not acceptance of this revision. All BUG-058 normative
-amendment wording below remains pending the audit and Owner acceptance gate above,
-including its implementation and scoped-supersession instructions. The accepted
-architecture decision remains recorded as accepted. Neither decision acceptance
-nor eventual wording acceptance is evidence that a capability is Implemented,
-Tested, or Integrated.
+The explicit 2026-09-27 Owner acceptance establishes this amended revision,
+including its BUG-058 implementation and scoped-supersession wording, as the
+sole implementation authority for the remaining BUG-043 work. The earlier
+architecture decisions remain accepted. Neither architecture decision acceptance
+nor workbook wording acceptance is evidence that a capability is Implemented,
+Tested, or Integrated. Governing accepted ADRs/Contracts remain authoritative.
 
-#### BUG-058 accepted architecture decision and pending successor wording (2026-09-27)
+#### BUG-058 accepted architecture decisions and accepted successor wording (2026-09-27)
 
 The Project Owner accepted Alternative A for
 [BUG-058](../../qa/bugs/open/BUG-058/issue.md): preserve decision-equivalent
@@ -58,12 +59,39 @@ transaction/rollback/snapshot service, filtering exception, or recovery
 restriction is authorized. `InteractionFlow` may carry derived information but
 never owns pending existence, legality, completion, or mutation.
 
-Upon Owner acceptance of this amendment, for Network protocol 8 this workbook
-explicitly supersedes the envelope
+The Project Owner subsequently accepted **Option B** for the passive acceptance
+boundary on 2026-09-27. This refines Alternative A's application mechanism; it
+does not replace the accepted consequence representation. The former requirement
+for fallible replacement validation after tentative canonical application was
+over-specified in mechanism, not in its observable atomicity guarantee. All
+independently checkable passive rejection conditions SHALL be validated before
+canonical mutation. The owning command then applies its normal transition and
+the already-validated frozen replacement is installed/removed before history,
+cursor advancement, or any success observer. Installation SHALL introduce no
+new input-dependent rejection point. Section 15.1 defines the exact boundary;
+existing command-owned failure-atomicity obligations remain unchanged.
+
+The implementation STOP that prompted this decision exposed no enclosing
+whole-state transaction: the current processor mutates passive state and records
+history/cursor before a newly added post-application check could reject.
+Command-local rollback and detached reconstruction validation do not establish
+rollback for that added gate. Passive peers also intentionally lack the private
+completion facts needed to prove semantic completeness, even after application.
+Authority alone establishes that completeness; public compatibility remains
+independently validated as specified below. Generic transaction/rollback/snapshot
+infrastructure is not authorized. Maneuver-specific staging is not authorized
+unless a demonstrated residual check returns for Owner review and receives a
+separate decision. Neither alternative is an implicit fallback from Option B.
+Option B direction acceptance initially left amended wording acceptance pending.
+The subsequent explicit Owner acceptance on 2026-09-27 accepts that wording as
+implementation authority; this record makes no independent-audit result claim.
+
+With the recorded Owner acceptance of this amendment, for Network protocol 8
+this workbook explicitly supersedes the envelope
 allocation and corresponding processing requirements of the accepted
 [BUG-042 workbook](BUG-042-network-rng-authority-result-application-implementation-workbook.md)
 Sections 4.1--4.3 only to add the mandatory Maneuver replacement, centralized
-capture, and atomic passive validation/installation defined here. BUG-042
+capture, and prevalidated atomic passive acceptance defined here. BUG-042
 remains unchanged; its historical protocol-5 allocation is not rewritten.
 Its command-owned mutation, privacy, presentation non-authority, ordered
 application, and failure-atomicity requirements remain in force. Deterministic
@@ -133,19 +161,15 @@ an RCP into a runtime or gameplay authority.
 
 ### 1.2 BUG-043 consolidation and preserved history
 
-This file is an in-place consolidation candidate for the former **BUG-043:
-Network Maneuver Preview Speed Convergence Implementation Workbook**. While
-this file remains `Draft`, it does **not** supersede the former accepted
-SetSpeed-centered revision introduced by git commit `28241a6` and refined at
-git commit `4c2797f`.
+This file is the accepted in-place consolidation of the former **BUG-043:
+Network Maneuver Preview Speed Convergence Implementation Workbook**, including
+the SetSpeed-centered revision introduced by git commit `28241a6` and refined
+at git commit `4c2797f`.
 
-Project Owner acceptance of this Draft SHALL perform one explicit authority
-transition: accept this workbook as the sole implementation specification and
-retire the former accepted BUG-043 revision from executable authority. The
-acceptance record must name both actions. After that transition, the old
-revisions remain historical evidence in git only and SHALL NOT be executed as
-a parallel plan. If the Owner does not accept both halves, implementation stops
-because two competing Maneuver authorities would remain.
+The explicit 2026-09-27 Owner acceptance establishes this amended workbook as
+the sole implementation specification for the remaining BUG-043 work and
+retires the former revisions from executable authority. Those revisions remain
+historical evidence in git only and SHALL NOT be executed as a parallel plan.
 
 Still-valid forensic history remains referenced by the
 [BUG-043 issue](../../qa/bugs/open/BUG-043/issue.md), its
@@ -1246,9 +1270,12 @@ rather than default it to `{}`. No execution means no execution field to extend.
 References SHALL be nonempty and arrays nonempty, duplicate-free, and serialized
 deterministically. Array serialization order SHALL NOT prescribe the player's
 choice. Unknown kinds/keys, missing keys, wrong types, invalid references, and
-fields from another branch reject. This is a current consequence projection,
-not a phase/stage variable, stored transition table, future-work list, queue,
-completion bitmap, callback, or continuation token.
+fields from another branch reject before live canonical mutation under Section
+15.1, or before publication of a filtered installation candidate. Semantic
+completeness and hidden-history-dependent correctness are authority-side
+invariants, not independently reproducible passive checks. This is a current
+consequence projection, not a phase/stage variable, stored transition table,
+future-work list, queue, completion bitmap, callback, or continuation token.
 
 The projection SHALL reuse Section 12.2.1's faceup-occurrence `public_card_ref`
 and placement `obstacle_id`, without a new identifier or counter. Both
@@ -1336,8 +1363,10 @@ The existing envelope viewer and command sequence bind the replacement; no
 second sequence/revision is added. An absent member is invalid, even when its
 required value is `{}`. This requirement applies to successful live Network
 semantic-command results, not all RPCs, local command artifacts, saves, or
-replay records. Section 15.1 defines centralized capture and atomic application;
-individual commands SHALL NOT opt in, derive, or manually maintain the view.
+replay records. Section 15.1 defines centralized capture, pre-mutation passive
+validation, and atomic command-plus-replacement acceptance without a new late
+rejection point. Individual commands SHALL NOT opt in, derive, or manually
+maintain the view.
 
 The command data carries its ordinary `sequence`; the envelope does not add a
 second sequence. For converted commands listed below, `application_contract`
@@ -1614,52 +1643,117 @@ state/view/cursor validation before presentation or command admission. Discard
 the previous installed view on state replacement. Authority save/load derives a
 fresh view from restored owners, never from serialized presentation. These
 paths submit no semantic command merely to reconstruct the view.
+Complete-candidate public cross-state validation remains required before
+installation; Option B removes no reconstruction validation. Semantic
+completeness is still established by authority before filtering, without
+passive reconstruction of private completion history.
 
-**Atomic passive application.** The existing ordered command transaction SHALL:
+**Validation responsibilities.** Authority SHALL derive and semantically validate
+the current branch and complete legal alternatives from its existing owners,
+accepted ordering, survival/applicability, and private completion evidence.
+The projection remains viewer-authorized recovery information, never gameplay
+authority. Authority SHALL revalidate submitted choices against canonical owners
+and markers, not against the view. The passive responsibilities are:
+
+| Responsibility | Required boundary |
+| --- | --- |
+| Envelope, schema, identity and order | Before mutation, validate protocol/schema, command/contract and sequence binding, accepted viewer/session authorization, activation/execution identity, stale/duplicate/out-of-order protection, and command/result structural compatibility. |
+| Public transition compatibility | Before mutation, establish reference visibility/type/ownership, execution presence or retirement, public applicability, and agreement with applicable purpose-specific records using accepted filtered pre-state and independently validated public command effects. |
+| Resulting-public-state consistency | Existing command-owned application must produce its validated public effects. A redundant post-application check may be assertive/diagnostic only under the limits below; it is not a new fallible replacement gate. |
+| Hidden-history-dependent semantics | Authority alone proves completeness, unresolved occurrence membership, and correct consequence progression where private facts are required. The passive peer SHALL NOT attempt an independent hidden proof. |
+
+**Atomic passive application.** The existing ordered command boundary SHALL:
 
 1. validate sequence, protocol, viewer, command/contract, complete envelope,
-   replacement shape, and applicable pre-state/lifecycle conditions;
-2. validate/apply the command's normal canonical result through its existing
-   owning mutation surface, retaining deterministic execution for commands
-   without an application contract;
-3. validate the replacement against the resulting public state and install it
-   on the matching filtered execution, or clear it with execution retirement;
-   and
-4. only after the complete transaction succeeds, record the command, advance
-   the cursor exactly once, and permit success presentation.
+   replacement shape, command intent/result, and all independently checkable
+   passive rejection conditions, including the public-transition checks below,
+   before canonical mutation;
+2. after successful admission, apply the command's normal canonical transition
+   through its existing owning mutation surface, retaining deterministic
+   execution for commands without an application contract and all existing
+   command-owned failure-atomicity obligations;
+3. install the already-validated frozen replacement on the matching filtered
+   execution, or remove it with execution retirement, without a new
+   input-dependent rejection point; and
+4. only after command application and replacement installation/removal succeed,
+   record the command and advance the cursor exactly once. Success signals,
+   presentation, callbacks, follow-ups, and subsequent commands SHALL NOT
+   observe success before that complete boundary.
 
 These are one atomic acceptance boundary, not separately committed operations.
 Wrong ship/activation/execution, wrong card type, missing/nonpublic source,
 invalid obstacle, contradictory active record, malformed/absent replacement,
-stale/duplicate/out-of-order sequence, or failed application rejects without
-changes to the passive canonical state, installed view, history, cursor,
-follow-ups, or success presentation. Existing ordering may buffer future
+and stale/duplicate/out-of-order sequence SHALL be detected before canonical
+mutation. Rejection leaves passive canonical state, installed view, history,
+cursor, follow-ups, and success presentation unchanged. Command application
+failure retains the same unchanged-state guarantee through its existing owning
+transaction; Option B waives no owner-local snapshots, cross-validation, or
+rollback required by accepted ADRs/Contracts. Existing ordering may buffer future
 sequences but SHALL NOT apply them early or skip a rejected sequence. Passive
 rejection does not roll back an already accepted authority transaction.
+
+**Public-transition validation.** Checks SHALL use accepted command/order,
+filtered pre-state, its installed view, and independently validated,
+viewer-authorized command application facts. They SHALL account for public
+additions, removals, concealment/discard, redeal with a new public reference,
+execution creation/preservation/retirement, destruction, and nested-record
+creation/retirement caused by the same command. The outer `{}` versus active
+wrapper distinction SHALL be checked against those lifecycle effects, not
+pre-state existence alone. Surviving card references SHALL bind to the correct
+ship and public faceup effect type; obstacle identities, applicable order and
+overlap context, and matching active records SHALL satisfy their public
+compatibility conditions. A reference appearing only in the replacement does
+not establish its public authorization. Unknown/private fields remain forbidden.
+Authority-side filtering remains responsible for preventing disclosure before
+delivery; passive rejection cannot undo a disclosure already sent.
+
+These checks SHALL remain within existing purpose-specific validation and owner
+boundaries. They SHALL NOT use `presentation_result`, speculative whole-state
+execution, a generic mutation plan, or replacement-driven creation of gameplay
+owners. Deterministic commands remain subject to public-transition validation
+without acquiring an application contract solely for this projection. An
+unavailable required public fact is a Section 19.13 STOP, not permission to
+trust an otherwise checkable contradiction or weaken the owning command.
 
 For a Damaged Controls source-order command, passive pre-state validation binds
 the selected singular source to the installed legal-source set, the accepted
 command actor/timing, and the authority-derived overlap context. It SHALL NOT
 require the first array entry or treat obstacle evidence as a player choice.
 The replacement may contain every remaining legal source or a different current
-branch; validate its public references and shape under the same atomic boundary.
+branch; validate its public references and shape before mutation under the same
+acceptance boundary. Do not impose a decrement-only source-set transition.
 
-Passive validation uses only accepted command/order, filtered pre-state, its
-installed view, public post-state, and authorized result facts. It SHALL NOT
-re-run private-marker absence checks, infer a completed set from reference
-differences, populate authority-only markers, or synthesize decisions,
-completion, or composed returns. Authority alone proves completeness of the
-projected choice set from its full owners; passive validation SHALL NOT pretend
-to independently reproduce that hidden proof. Authority still revalidates every
-submitted choice against canonical owners and markers, not against the view.
+Passive validation SHALL NOT re-run private-marker absence checks, infer a
+completed set from reference differences, populate authority-only markers, or
+synthesize decisions, completion, or composed returns. Authority alone proves
+completeness of the projected choice set from its full owners; passive validation
+SHALL NOT pretend to independently reproduce that hidden proof. Two authority
+states may have identical public facts but different private completion markers and therefore
+different correct views. Applying a command does not make those private facts
+available. Inner `{}` is never proof authorizing passive Maneuver completion.
 
-**Implementation STOP:** if passive atomic validation/installation cannot be
-implemented within the accepted command transaction boundary without new
-generic transaction, rollback, or snapshot infrastructure, implementation SHALL
-STOP for Owner review. A post-success patch, generic snapshot replacement, or
-transport/UI mutation is not an authorized substitute. The existing common
-processor entry point does not itself prove late-failure atomicity; that
-property requires the Section 20.3 evidence within accepted owner transactions.
+**Post-application assertion limits.** A post-application consistency check MAY
+be diagnostic/assertive only when its condition was already guaranteed by
+successful prevalidation and command-owned application. A check capable of
+rejecting otherwise admissible input SHALL NOT be relabeled as diagnostic.
+An assertion failure is an implementation invariant failure, not an ordinary
+rejected transaction claimed to have left state unchanged; it SHALL NOT be
+silently ignored while claiming convergence. This permission does not alter
+existing command-owned cross-validation or failure recovery. Section 20.3
+requires evidence that replacement installation has no new input-dependent
+failure and that success observers cannot see a partial state/view boundary.
+
+**Implementation STOP:** if any required passive rejection check genuinely
+cannot be completed before mutation using authorized facts and existing owner
+boundaries, or replacement installation introduces a new input-dependent
+rejection point, implementation SHALL STOP for Owner review. Do not introduce
+new rollback or staging, synthesize private history, or weaken validation.
+Generic transaction/rollback/snapshot infrastructure and Maneuver-specific
+staging are not authorized substitutes; a demonstrated residual check must
+return for Owner review. A post-success patch, generic snapshot replacement,
+or transport/UI mutation is likewise forbidden. Existing command-owned
+failure-atomicity remains mandatory; the common processor entry point alone
+does not prove compliance with this acceptance boundary.
 
 **Cleanup and invalidation.** Each accepted consequence replaces the view from
 fresh authority evaluation; passive code does not subtract the resolved source
@@ -1718,10 +1812,15 @@ such a change was identified in this documentation allocation.
 
 The successor candidate is **save 7 / replay 10 / protocol 8**, with application
 contract 2 and passive-ledger schema 1. Activate protocol 8 only with the complete
-filtered representation, centralized capture, ordered atomic passive install,
-cleanup, and exact validation paths. Do not partially publish the new field
-under protocol 7, accept mixed shapes, default a missing view, reconstruct it
-from hidden-history inference, or add adapters for old development fixtures.
+filtered representation, centralized capture, pre-mutation passive validation,
+and ordered command-plus-replacement acceptance with no new input-dependent
+installation rejection, plus cleanup and exact validation paths. The explicit
+Owner acceptance of this amendment is recorded above; this status update does
+not assert a passing independent fidelity audit or completion of activation
+verification.
+Do not partially publish the new field under protocol 7, accept mixed shapes,
+default a missing view, reconstruct it from hidden-history inference, or add
+adapters for old development fixtures.
 Existing authoritative save-7/replay-10 artifacts remain subject to their
 unchanged validators; obsolete filtered protocol-7 snapshots cannot supply the
 new required view and SHALL NOT be installed as protocol-8 state.
@@ -1886,21 +1985,25 @@ Implementation stops rather than improvises when:
     accepted composed-return authority cannot order;
 12. any genuine new Owner gameplay, architecture, geometry, compatibility, or
     visibility decision appears; or
-13. passive atomic validation/installation of the BUG-058 replacement cannot
-    be implemented within the accepted command transaction boundary without
-    new generic transaction, rollback, or snapshot infrastructure. STOP for
-    Owner review; do not substitute post-success repair or weaken atomicity.
+13. any required BUG-058 passive rejection check genuinely cannot be completed
+    before mutation using authorized facts and existing owner boundaries, or
+    replacement installation introduces a new input-dependent rejection point.
+    STOP for Owner review; do not introduce new rollback or staging, synthesize
+    private history, substitute post-success repair, or weaken validation or
+    observable atomicity. Existing command-owned failure-atomicity remains.
 
 The stop report names the exact state/path, conflicting sources, safe work that
 is already complete, and the smallest Owner decision needed. It does not spend
 credits redesigning settled architecture.
 
 The independent-audit C findings are resolved by Owner Decisions 24--27.
-The BUG-058 representation/allocation decision is accepted above; this amendment's
-wording still requires a passing independent fidelity audit and Owner acceptance.
+The BUG-058 representation/allocation and Option B acceptance-boundary decisions
+and this amendment's wording are accepted above. The wording acceptance was
+explicitly recorded on 2026-09-27; this status update makes no independent-audit
+result claim.
 These decisions do not waive any implementation STOP condition or establish
-implementation conformance. Workbook acceptance/legacy retirement, contour
-evidence approval,
+implementation conformance. Workbook acceptance/legacy retirement is recorded
+above. Contour evidence approval,
 manual replay capture, twelve per-RCP `Integrated` approvals, and final
 release acceptance are scheduled actions under settled criteria, not open
 semantics.
@@ -1965,13 +2068,17 @@ supplements Sections 14 and 20.2 without changing RCP status or release gates.
 
 | Boundary | Required proof |
 | --- | --- |
-| Partial-resolution equivalence | After each accepted consequence, uninterrupted ordered passive application and a fresh filtered install at the same cursor expose the same authorized decision. Two Ruptured Engine occurrences resolve A then expose B without reopening A; three or more preserve every currently legal source/order choice. |
+| Partial-resolution equivalence | After each accepted consequence, uninterrupted ordered passive application and a fresh filtered install at the same cursor expose the same authorized decision and accept the same subsequent ordered command sequence. Two Ruptured Engine occurrences resolve A then expose B without reopening A; three or more preserve every currently legal source/order choice. |
+| Authority semantic completeness | Prove the current branch and complete legal next-source set against full authority owners and private markers, including distinct private completion histories with identical public facts. Correct filtering and frozen delivery preserve the resulting decision semantics; passive validation neither reconstructs that history nor claims to reproduce the hidden proof. |
 | Damaged Controls source choice and automatic context | At both item 3 and obstacle-only item 4, two and three or more faceup copies expose every legal next source; choose a non-first serialized source and prove the remaining legal choices after each resolution through live application, authoritative save/load, filtered reconnect, and replay. Preserve same-player order and applicable first-player priority; reject wrong actor, stale/completed/concealed source, wrong category/obstacle, and duplicate instance resolution. One source with no ordering choice resolves automatically without a prompt; zero sources produces no empty card branch. Multiple ships/obstacles and both categories do not multiply an occurrence; item-3 resolution never reopens at item 4. Re-evaluate survival/applicability after each copy and prove destruction/retirement cleanup without private-marker disclosure or synthesis. Source selection uses the existing singular command field; mandatory draw/application and overlap context remain authority-derived. |
 | Obstacle sequence and nesting | After obstacle A completes, current identity advances to B without changing immutable full order or reconstructing markers. Asteroid retains its parent identity during each applicable immediate-card nested decision, then advances only on accepted return. Completed obstacles do not reopen after reconnect. |
 | Closed schema and identity | Every union branch, inner versus outer `{}`, missing/extra/wrong-type keys, empty/duplicate refs, wrong card type/ship/activation/execution, invalid obstacle, contradictory active record, and retired/concealed occurrence are covered. Deterministic serialization does not select a player's source/order. |
 | Centralized coverage | Structural and production-entry evidence proves every successful live Network semantic command captures a replacement through the common boundary, with no per-command opt-in, projector, or affecting-command list. Include result-aware and deterministic commands, debug damage/repositioning, cleanup, unchanged views, creation, retirement, and no-active-execution `{}`. |
 | Frozen delivery | Delay/buffer delivery and allow a host-local success callback or subsequent command to change state; every viewer still receives the original command's frozen post-state value at its original sequence. Envelope construction performs no current-state derivation. |
-| Atomic rejection | Forced failure in replacement validation/installation after tentative canonical application leaves passive canonical state, installed view, history, cursor, follow-ups, and success presentation unchanged. Missing member, wrong viewer/identity, duplicate/stale/future sequence, and blocked later delivery use the existing ordered boundary. Prove this with accepted owner transactions; inability to do so triggers Section 19.13. |
+| Pre-mutation rejection | Every independently checkable malformed, unauthorized, inconsistent, or inapplicable command/replacement input rejects before canonical mutation, leaving canonical state, installed view, history, cursor, follow-ups, and success presentation unchanged. Cover schema/protocol/contract/viewer/sequence binding, wrong ship/activation/execution, public references/types, contradictory records, missing member, duplicate/stale/future sequence, and blocked later delivery through the production ordered boundary. |
+| Public-transition compatibility | Cover references created and retired by the same incoming command, faceup concealment/discard and redeal, execution creation and inner/outer `{}`, normal completion/destruction, nested record creation/retirement, and applicable public obstacle/order/overlap conditions. Include deterministic, debug, and result-aware commands. Public checks use independently validated command effects before mutation; replacement-only references and presentation-result inputs cannot authorize them. |
+| Atomic acceptance and existing application failure | Prove the already-validated frozen replacement is installed/removed with the owning command before history, cursor advancement, success signals, presentation, callbacks, follow-ups, or subsequent commands observe success. Prove installation introduces no new input-dependent rejection and preserve existing command-owned failure/rollback evidence, including unchanged view/history/cursor on command failure. No forced late replacement rejection is required or authorized. |
+| Assertion limits and residual checks | Every post-application diagnostic/assertion must map to a condition guaranteed by successful prevalidation and command-owned application. No otherwise admissible invalid input may be accepted by downgrading its rejection check. Identify any check requiring unavailable authorized facts or a new fallible installation step and STOP under Section 19.13; do not introduce rollback/staging or hidden-history synthesis. |
 | Cleanup and privacy | Completion, exceptional destruction, concealment/discard, redeal, load/reconnect replacement, and scene/modal teardown obey Section 15.1. No private marker/history synthesis, hidden physical identity, faceup-to-facedown correlation, generic progress structure, or passive semantic follow-up occurs. |
 | Compatibility and persistence | Protocol 8 rejects protocol-7 peers and obsolete filtered snapshots; every live envelope requires its replacement even for `none`/0 contracts. Save 7, replay 10, contract 2, and ledger 1 retain exact existing meanings. Authoritative save/load regenerates the view and seed-plus-history replay uses no live result payload. |
 
@@ -1985,7 +2092,7 @@ this amendment authorizes no fixture generation or relabeling.
 
 ## 21. Token/credit-efficient execution and Owner checkpoints
 
-After acceptance, a later implementation task starts with `AGENTS.md` and this
+A later implementation task starts with `AGENTS.md` and this accepted
 workbook. Load only the active WP's linked RCP and authority needed to resolve a
 drift/conflict; do not reread every source at every checkpoint. Reuse the entry
 hashes and accepted discovery instead of repeating broad tracing.
@@ -1997,8 +2104,9 @@ full verification only at the meaningful convergence boundaries in Section 20.
 
 Owner checkpoints are:
 
-1. accept this workbook after focused independent re-audit and explicitly
-   retire the former accepted BUG-043 revision in the same authority action;
+1. workbook acceptance and former-revision retirement: recorded by explicit
+   Owner acceptance on 2026-09-27; no independent re-audit result is asserted
+   by this status update;
 2. approve the Section 18 contour evidence/version/hash;
 3. allow no replay-file/fixture creation or modification by Codex; when the
    candidate is `candidate-code-complete` and otherwise converged through
@@ -2014,10 +2122,11 @@ or redesigned to save an implementation step.
 
 ## 22. Final ordered execution checklist
 
-- [ ] Obtain one Owner action that accepts this workbook and explicitly retires
-  the former accepted BUG-043 revision; then confirm sole-workbook authority,
-  hashes, baseline tests/lint, the applicable original or BUG-058 entry values
-  in Section 2.2, RCP statuses, and contour status.
+- [x] Record the 2026-09-27 explicit Owner acceptance of this amended workbook
+  as sole implementation authority for the remaining BUG-043 work, retiring
+  the former revision from executable authority.
+- [ ] Confirm sole-workbook authority, hashes, baseline tests/lint, the applicable
+  original or BUG-058 entry values in Section 2.2, RCP statuses, and contour status.
 - [ ] Complete WP1 dormant Maneuver owner/identity/re-evaluation/cleanup
   foundation without claiming final command convergence.
 - [ ] Complete WP3a pure final-course/final-transform/collision/play-area/
@@ -2039,11 +2148,14 @@ or redesigned to save an implementation step.
   fail closed for unsupported Station-modifying objective configurations.
 - [ ] Complete WP5 CAP-DMG-003, post-obstacle re-derivation, exact completion
   proof, `OPEN -> CONSUMED`, and active-record retirement.
-- [ ] After this amendment passes independent fidelity audit and receives Owner
-  acceptance, implement the BUG-058 filtered union, centralized frozen
-  every-command replacement, and atomic passive installation; satisfy Section
-  20.3 without expanding transaction/rollback/snapshot architecture, or STOP
-  under Section 19.13. Recheck Section 16's protocol-8 allocation.
+- [ ] Under this explicitly Owner-accepted amendment, implement the BUG-058
+  filtered union, centralized frozen
+  every-command replacement, pre-mutation passive validation, and atomic
+  command-plus-replacement acceptance without a new input-dependent installation
+  rejection. Preserve command-owned failure-atomicity and satisfy Section 20.3;
+  STOP under Section 19.13 for a residual check rather than introduce rollback,
+  staging, private-history synthesis, or weakened validation. Recheck Section
+  16's protocol-8 allocation.
 - [ ] Build the unreleased WP6 candidate; remove obsolete BUG-043/raw-observer
   paths; register only complete purpose-specific behavior; activate save 7,
   replay 10, protocol 8, and application contract 2 as the complete successor;

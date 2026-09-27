@@ -219,6 +219,7 @@ func _empty_result_envelope() -> Dictionary:
 		"viewer_player": 0,
 		"application_result": {},
 		"presentation_result": {},
+		"maneuver_consequence_view": {},
 	}
 
 

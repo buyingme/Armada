@@ -116,11 +116,15 @@ func test_passive_ship_branch_applies_aggregate_damage_without_physical_id() -> 
 	}))
 	assert_false(mirror.apply_maneuver_final_transform(
 			"ship-activation:40", "maneuver:40").is_empty())
+	mirror.install_validated_passive_maneuver_consequence_view({
+		"kind": "damaged_controls", "public_card_refs": ["faceup:39:0"],
+		"overlap_kind": "ship",
+	})
 	var command: GameCommand = COMMAND.new(0, _payload.duplicate(true))
 	assert_eq(command.execute_with_application_result(passive, result), result)
 	assert_eq(mirror.get_facedown_damage_count(), 1)
 	assert_eq(source.physical_card_id, "")
-	assert_eq(source.last_damaged_controls_execution_id, "maneuver:40")
+	assert_eq(source.last_damaged_controls_execution_id, "")
 
 
 func test_obstacle_only_speed_zero_branch_resolves_each_copy_once() -> void:
@@ -146,6 +150,53 @@ func test_obstacle_only_speed_zero_branch_resolves_each_copy_once() -> void:
 	assert_eq(ship.get_facedown_damage_count(), 2)
 	assert_eq(EVALUATOR.next_action(state, 0, 0)["command_type"],
 			"commit_maneuver_obstacle_order")
+
+
+func test_three_sources_keep_nonfirst_choices_in_both_overlap_categories() \
+		-> void:
+	for category: String in ["ship", "obstacle"]:
+		var fixture: Dictionary = _obstacle_fixture() \
+				if category == "obstacle" else {
+					"state": _state, "ship": _ship,
+					"payload": _payload,
+				}
+		var state: GameState = fixture["state"]
+		var ship: ShipInstance = fixture["ship"]
+		ship.ship_data.hull = 8
+		state.damage_deck = _deck(4)
+		var refs: Array[String] = ["faceup:39:0"]
+		for source_index: int in [1, 2]:
+			var source := DamageCard.create("Ship", "Damaged Controls")
+			source.physical_card_id = "damage:source:%d" % source_index
+			source.effect_id = "damaged_controls"
+			source.timing = "persistent"
+			source.is_faceup = true
+			source.public_card_ref = "faceup:39:%d" % source_index
+			ship.add_faceup_damage(source)
+			refs.append(source.public_card_ref)
+		var next: Dictionary = EVALUATOR.next_action(state, 0, 0)
+		assert_eq(next["kind"], "decision", category)
+		assert_eq(next["public_card_refs"], refs, category)
+		for selected_index: int in [2, 1]:
+			var payload: Dictionary = (fixture["payload"] as Dictionary) \
+					.duplicate(true)
+			payload["public_card_ref"] = refs[selected_index]
+			var command: GameCommand = COMMAND.new(0, payload)
+			assert_eq(command.validate(state), "", category)
+			assert_false(command.execute(state).is_empty(), category)
+			next = EVALUATOR.next_action(state, 0, 0)
+			var remaining: Array = [refs[0], refs[1]] \
+					if selected_index == 2 else [refs[0]]
+			assert_eq(next["public_card_refs"], remaining, category)
+		assert_eq(next["kind"], "command", category)
+		var last: GameCommand = COMMAND.new(0, fixture["payload"])
+		assert_false(last.execute(state).is_empty(), category)
+		assert_ne(EVALUATOR.next_action(state, 0, 0).get(
+				"command_type"), "resolve_damaged_controls", category)
+		for ref: String in refs:
+			assert_ne(COMMAND.new(0, (fixture["payload"] as Dictionary) \
+					.merged({"public_card_ref": ref}, true)).validate(state), "",
+					category)
 
 
 func test_ship_plus_obstacle_does_not_resolve_same_copy_twice() -> void:

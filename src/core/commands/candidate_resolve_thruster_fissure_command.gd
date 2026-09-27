@@ -61,9 +61,16 @@ func validate(game_state: GameState) -> String:
 			str(payload["public_card_ref"]))
 	if card == null or not card.is_faceup \
 			or card.effect_id != "thruster_fissure" \
-			or card.last_thruster_fissure_execution_id \
-					== str(payload["maneuver_execution_id"]):
+			or (game_state.passive_damage_ledger == null \
+					and card.last_thruster_fissure_execution_id \
+					== str(payload["maneuver_execution_id"])):
 		return "Thruster Fissure source is not applicable."
+	if game_state.passive_damage_ledger != null:
+		var view: Dictionary = ship.passive_maneuver_consequence_view_snapshot()
+		if view.get("kind") != "thruster_fissure" \
+				or payload["public_card_ref"] not in view.get(
+						"public_card_refs", []):
+			return "Thruster Fissure source is not in the installed view."
 	var zone: String = str(payload["hull_zone"])
 	if not ship.current_shields.has(zone):
 		return "Invalid hull zone."
@@ -151,8 +158,9 @@ func execute_with_application_result(game_state: GameState,
 	var card: DamageCard = ship.faceup_card_for_public_ref(
 			str(payload["public_card_ref"]))
 	if card == null or card.effect_id != "thruster_fissure" \
-			or card.last_thruster_fissure_execution_id \
-					== str(payload["maneuver_execution_id"]):
+			or card.public_card_ref not in ship \
+					.passive_maneuver_consequence_view_snapshot().get(
+							"public_card_refs", []):
 		return {}
 	var damage: Dictionary = application_result["damage_application"]
 	var prior_shields: int = int(ship.current_shields[
@@ -187,8 +195,6 @@ func execute_with_application_result(game_state: GameState,
 		game_state.passive_damage_ledger.consume_hidden_draws(1)
 		if not ship.increment_passive_facedown_damage(delta):
 			return {}
-	card.last_thruster_fissure_execution_id = \
-			str(payload["maneuver_execution_id"])
 	if bool(damage["destroyed"]):
 		ship.mark_destroyed()
 	return application_result.duplicate(true)

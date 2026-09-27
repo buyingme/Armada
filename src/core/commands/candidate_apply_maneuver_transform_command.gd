@@ -85,7 +85,11 @@ func validate(game_state: GameState) -> String:
 	if bool(execution.get("final_transform_applied", false)) \
 			or not execution.has("committed_result"):
 		return "Final Maneuver transform is not pending."
-	if PRE_MOVEMENT.has_mandatory_work(ship):
+	if (game_state.passive_damage_ledger != null \
+			and ship.passive_maneuver_consequence_view_snapshot().get(
+					"kind") == "thruster_fissure") \
+			or (game_state.passive_damage_ledger == null \
+					and PRE_MOVEMENT.has_mandatory_work(ship)):
 		return "A pre-movement obligation remains active."
 	return ""
 

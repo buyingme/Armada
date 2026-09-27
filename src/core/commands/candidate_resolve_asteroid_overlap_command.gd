@@ -67,7 +67,8 @@ func execute(game_state: GameState) -> Dictionary:
 			_restore(game_state, ship, deck_before, damage_before); return {}
 	else:
 		game_state.mark_obstacle_resolved_for_maneuver(str(payload["obstacle_id"]), str(payload["maneuver_execution_id"]))
-		if not OVERLAP.open_next_purpose_resolution(game_state, owner, index):
+		if not OVERLAP.open_next_purpose_resolution(game_state, owner, index,
+				str(payload["obstacle_id"])):
 			_restore(game_state, ship, deck_before, damage_before); return {}
 	var result := payload.duplicate(true)
 	result["immediate_resolution_id"] = immediate_id
@@ -101,7 +102,7 @@ func execute_with_application_result(game_state: GameState, result: Dictionary) 
 		if not ship.validate_maneuver_immediate_nesting(): return {}
 	else:
 		game_state.mark_obstacle_resolved_for_maneuver(str(payload["obstacle_id"]), str(payload["maneuver_execution_id"]))
-		if not OVERLAP.open_next_purpose_resolution(game_state, int(payload["owner_player"]), int(payload["ship_index"])): return {}
+		if not OVERLAP.open_next_purpose_resolution(game_state, int(payload["owner_player"]), int(payload["ship_index"]), str(payload["obstacle_id"])): return {}
 	return result.duplicate(true)
 
 func _next(game_state: GameState, owner: int, index: int) -> Dictionary:

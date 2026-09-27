@@ -353,7 +353,13 @@ func test_debris_passive_application_matches_lethal_first_point_result() -> void
 	}, ["0:obstacle-ship"])
 	assert_true(passive_ship.bind_passive_damage_ledger(
 			passive_state.passive_damage_ledger, "0:obstacle-ship"))
+	passive_ship.install_validated_passive_maneuver_consequence_view({
+		"kind": "obstacle_order", "obstacle_ids": ["obstacle:0"],
+	})
 	assert_false(_commit_order(passive_state).execute(passive_state).is_empty())
+	passive_ship.install_validated_passive_maneuver_consequence_view({
+		"kind": "obstacle", "obstacle_id": "obstacle:0",
+	})
 	var passive_command: GameCommand = DEBRIS.new(
 			0, authority_command.payload.duplicate(true))
 	var projected: Dictionary = passive_command.project_application_result(
@@ -592,7 +598,13 @@ func test_station_facedown_selection_converges_on_passive_peer() -> void:
 	}, ["0:obstacle-ship"])
 	assert_true(passive_ship.bind_passive_damage_ledger(
 			passive_state.passive_damage_ledger, "0:obstacle-ship"))
+	passive_ship.install_validated_passive_maneuver_consequence_view({
+		"kind": "obstacle_order", "obstacle_ids": ["obstacle:0"],
+	})
 	assert_false(_commit_order(passive_state).execute(passive_state).is_empty())
+	passive_ship.install_validated_passive_maneuver_consequence_view({
+		"kind": "obstacle", "obstacle_id": "obstacle:0",
+	})
 	var passive_command: GameCommand = STATION.new(
 			0, authority_command.payload.duplicate(true))
 	var projected: Dictionary = passive_command.project_application_result(
@@ -785,7 +797,15 @@ func _lethal_asteroid_sequence(passive: bool) -> Dictionary:
 		"obstacle_ids": ["obstacle:0"],
 	}))
 	order.sequence = 19
+	if passive:
+		ship.install_validated_passive_maneuver_consequence_view({
+			"kind": "obstacle_order", "obstacle_ids": ["obstacle:0"],
+		})
 	assert_false(order.execute(state).is_empty())
+	if passive:
+		ship.install_validated_passive_maneuver_consequence_view({
+			"kind": "obstacle", "obstacle_id": "obstacle:0",
+		})
 	var asteroid := ASTEROID.new(0, identity.merged({
 		"obstacle_id": "obstacle:0",
 	}))

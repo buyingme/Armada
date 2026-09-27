@@ -55,8 +55,6 @@ func execute_with_application_result(game_state: GameState,
 			- ship.get_total_damage() - 1 if ship != null else 0
 	if ship == null or ship.is_destroyed() or card == null \
 			or card.effect_id != "damaged_controls" \
-			or card.last_damaged_controls_execution_id \
-					== str(payload["maneuver_execution_id"]) \
 			or int(damage["owner_player"]) != int(payload["owner_player"]) \
 			or int(damage["ship_index"]) != int(payload["ship_index"]) \
 			or int(damage["facedown_delta"]) != 1 \
@@ -71,8 +69,6 @@ func execute_with_application_result(game_state: GameState,
 	game_state.passive_damage_ledger.consume_hidden_draws(1)
 	if not ship.increment_passive_facedown_damage(1):
 		return {}
-	card.last_damaged_controls_execution_id = str(
-			payload["maneuver_execution_id"])
 	if bool(damage["destroyed"]):
 		ship.mark_destroyed()
 	return application_result.duplicate(true)
@@ -133,9 +129,19 @@ func validate(game_state: GameState) -> String:
 			str(payload["public_card_ref"]))
 	if card == null or card.effect_id != "damaged_controls" \
 			or not card.is_faceup \
-			or card.last_damaged_controls_execution_id \
-					== str(payload["maneuver_execution_id"]):
+			or (game_state.passive_damage_ledger == null \
+					and card.last_damaged_controls_execution_id \
+					== str(payload["maneuver_execution_id"])):
 		return "Damaged Controls occurrence is stale or inapplicable."
+	if game_state.passive_damage_ledger != null:
+		var view: Dictionary = ship.passive_maneuver_consequence_view_snapshot()
+		if view.get("kind") != "damaged_controls" \
+				or view.get("overlap_kind") != overlap_kind \
+				or (overlap_kind == "obstacle" \
+						and view.get("obstacle_id") != payload.get("obstacle_id")) \
+				or payload["public_card_ref"] not in view.get(
+						"public_card_refs", []):
+			return "Damaged Controls source is not in the installed view."
 	if game_state.passive_damage_ledger != null:
 		if not ship.is_passive_damage_bound() \
 				or not game_state.passive_damage_ledger \

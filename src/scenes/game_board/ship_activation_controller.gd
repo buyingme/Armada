@@ -1221,9 +1221,27 @@ func _maneuver_choice_descriptor(action: Dictionary,
 					"label":" → ".join(ordering)})
 		"resolve_thruster_fissure", "resolve_debris_overlap", \
 		"resolve_ruptured_engine":
+			var refs: Array = action.get("public_card_refs", []) as Array
 			for zone: Variant in action.get("hull_zones",
 					ship.current_shields.keys()):
-				options.append({"id":str(zone), "label":str(zone).capitalize()})
+				if command_type == "resolve_debris_overlap" or refs.size() < 2:
+					options.append({"id":str(zone),
+						"label":str(zone).capitalize()})
+				else:
+					for source_index: int in range(refs.size()):
+						options.append({"id":"source:%d|%s" % [
+							source_index, str(zone)],
+							"label":"Card %d — %s" % [
+								source_index + 1, str(zone).capitalize()]})
+		"resolve_damaged_controls":
+			var refs: Array = action.get("public_card_refs", []) as Array
+			for source_index: int in range(refs.size()):
+				var card: DamageCard = ship.faceup_card_for_public_ref(
+						str(refs[source_index]))
+				options.append({"id":"source:%d" % source_index,
+					"label":"Resolve %s %d" % [
+						card.title if card != null else "Damaged Controls",
+						source_index + 1]})
 		"resolve_station_overlap":
 			options.append({"id":"decline", "label":"Decline"})
 			for raw_ref: Variant in action.get("faceup_refs", []):
@@ -1286,12 +1304,31 @@ func _on_maneuver_consequence_choice(selection: Dictionary) -> void:
 			payload["obstacle_ids"] = obstacle_ids
 		"resolve_thruster_fissure", "resolve_debris_overlap", \
 		"resolve_ruptured_engine":
-			payload["hull_zone"] = selected_id
-			if command_type == "resolve_thruster_fissure":
+			var zone_id: String = selected_id
+			if command_type != "resolve_debris_overlap":
 				var refs: Array = action.get("public_card_refs", []) as Array
-				if refs.is_empty() or typeof(refs[0]) != TYPE_STRING:
+				if refs.is_empty():
 					return
-				payload["public_card_ref"] = refs[0]
+				var source_index: int = 0
+				if refs.size() > 1:
+					var parts: PackedStringArray = selected_id.split("|", false)
+					if parts.size() != 2 or not parts[0].begins_with(
+							"source:"):
+						return
+					source_index = int(parts[0].trim_prefix("source:"))
+					if source_index < 0 or source_index >= refs.size():
+						return
+					zone_id = parts[1]
+				payload["public_card_ref"] = refs[source_index]
+			payload["hull_zone"] = zone_id
+		"resolve_damaged_controls":
+			var refs: Array = action.get("public_card_refs", []) as Array
+			if not selected_id.begins_with("source:"):
+				return
+			var source_index: int = int(selected_id.trim_prefix("source:"))
+			if source_index < 0 or source_index >= refs.size():
+				return
+			payload["public_card_ref"] = refs[source_index]
 		"resolve_station_overlap":
 			if selected_id == "decline":
 				payload["action"] = "decline"

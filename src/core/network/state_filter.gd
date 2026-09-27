@@ -47,6 +47,19 @@ static func filter_for_player_checked(
 	if not identity_error.is_empty():
 		return _failure(identity_error)
 	var filtered: Dictionary = authority.serialize()
+	var consequence_replacement: Dictionary = \
+			ManeuverConsequenceProjection.capture_authority(authority)
+	if not ManeuverConsequenceProjection.is_closed_replacement(
+			consequence_replacement):
+		return _failure("Invalid authority Maneuver consequence projection.")
+	if not consequence_replacement.is_empty():
+		var projected_player: Dictionary = (filtered["player_states"] as Array)[
+				int(consequence_replacement["owner_player"])] as Dictionary
+		var projected_ship: Dictionary = (projected_player["ships"] as Array)[
+				int(consequence_replacement["ship_index"])] as Dictionary
+		(projected_ship["active_maneuver_execution"] as Dictionary)[
+				"consequence_view"] = (consequence_replacement[
+					"consequence_view"] as Dictionary).duplicate(true)
 	var objectives: Dictionary = filtered.get("objectives", {}) as Dictionary
 	var obstacle_data: Variant = objectives.get("obstacles", [])
 	if obstacle_data is Array:

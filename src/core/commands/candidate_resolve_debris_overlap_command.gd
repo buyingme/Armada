@@ -41,7 +41,7 @@ func execute(game_state: GameState) -> Dictionary:
 	if not ship.is_destroyed():
 		if not ship.complete_debris_resolution(str(payload["ship_activation_identity"]),str(payload["maneuver_execution_id"]),str(payload["obstacle_id"]),owner): return {}
 		game_state.mark_obstacle_resolved_for_maneuver(str(payload["obstacle_id"]),str(payload["maneuver_execution_id"]))
-		if not OVERLAP.open_next_purpose_resolution(game_state,owner,index): return {}
+		if not OVERLAP.open_next_purpose_resolution(game_state,owner,index,str(payload["obstacle_id"])): return {}
 	var changes: Array[Dictionary] = []
 	if int(ship.current_shields[zone]) != old_shields: changes.append({"zone":zone,"new_shields":int(ship.current_shields[zone])})
 	var result := payload.duplicate(true); result["damage_application"]={"owner_player":owner,"ship_index":index,"shield_changes":changes,"facedown_delta":ship.get_facedown_damage_count()-old_count,"faceup_additions":[],"faceup_removals":[],"public_discards":[],"new_hull":ship.ship_data.hull-ship.get_total_damage(),"destroyed":ship.is_destroyed()}; return result
@@ -65,7 +65,7 @@ func execute_with_application_result(game_state: GameState,result: Dictionary) -
 	else:
 		if not ship.complete_debris_resolution(str(payload["ship_activation_identity"]),str(payload["maneuver_execution_id"]),str(payload["obstacle_id"]),int(payload["owner_player"])): return {}
 		game_state.mark_obstacle_resolved_for_maneuver(str(payload["obstacle_id"]),str(payload["maneuver_execution_id"]))
-		if not OVERLAP.open_next_purpose_resolution(game_state,int(payload["owner_player"]),int(payload["ship_index"])): return {}
+		if not OVERLAP.open_next_purpose_resolution(game_state,int(payload["owner_player"]),int(payload["ship_index"]),str(payload["obstacle_id"])): return {}
 	return result.duplicate(true)
 
 static func _sequential_outcome(ship: ShipInstance, zone: String) -> Dictionary:

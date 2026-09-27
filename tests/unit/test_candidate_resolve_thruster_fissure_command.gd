@@ -148,6 +148,9 @@ func test_passive_application_consumes_aggregate_draw_and_suppresses_transform()
 		"yaw_clicks": [0], "yaw_bonus_joint": -1,
 		"pos_x": 0.5, "pos_y": 0.6, "rotation_deg": 15.0,
 	}, {"kind": "none"}))
+	mirror.install_validated_passive_maneuver_consequence_view({
+		"kind": "thruster_fissure", "public_card_refs": ["faceup:6:0"],
+	})
 	var command: GameCommand = COMMAND.new(0, authority.payload.duplicate(true))
 	assert_eq(command.execute_with_application_result(passive, result), result)
 	assert_true(mirror.is_destroyed())

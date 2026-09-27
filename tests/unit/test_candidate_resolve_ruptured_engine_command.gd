@@ -119,6 +119,10 @@ func test_lethal_hull_point_converges_on_passive_peer_and_cleans_execution() -> 
 			}, {"kind": "none"}))
 	assert_false(mirror.apply_maneuver_final_transform(
 			ACTIVATION_ID, EXECUTION_ID).is_empty())
+	mirror.install_validated_passive_maneuver_consequence_view({
+		"kind": "ruptured_engine",
+		"public_card_refs": ["faceup:source:0"],
+	})
 	var passive_command: GameCommand = COMMAND.new(
 			0, authority_command.payload.duplicate(true))
 	var projected: Dictionary = passive_command.project_application_result(

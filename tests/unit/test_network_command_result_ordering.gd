@@ -384,6 +384,7 @@ func _envelope(presentation: Dictionary) -> Dictionary:
 		"viewer_player": NetworkManager.get_local_player_index(),
 		"application_result": {},
 		"presentation_result": presentation,
+		"maneuver_consequence_view": {},
 	}
 
 

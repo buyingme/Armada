@@ -19,7 +19,10 @@ func validate(game_state:GameState)->String:
 	if str(execution.get("ship_activation_identity",""))!=str(payload["ship_activation_identity"]) or str(execution.get("maneuver_execution_id",""))!=str(payload["maneuver_execution_id"]) or not bool(execution.get("final_transform_applied",false)):return "Stale Ruptured Engine execution."
 	if ship.current_speed<=1 or ship.has_active_obstacle_resolution() or not OVERLAP.unresolved_overlaps(game_state,owner,index,str(payload["maneuver_execution_id"])).is_empty():return "Ruptured Engine is not currently applicable."
 	var card:=ship.faceup_card_for_public_ref(str(payload["public_card_ref"]))
-	if card==null or card.effect_id!="ruptured_engine" or card.last_ruptured_engine_execution_id==str(payload["maneuver_execution_id"]):return "Ruptured Engine source is stale or resolved."
+	if card==null or card.effect_id!="ruptured_engine" or (game_state.passive_damage_ledger==null and card.last_ruptured_engine_execution_id==str(payload["maneuver_execution_id"])):return "Ruptured Engine source is stale or resolved."
+	if game_state.passive_damage_ledger!=null:
+		var view:Dictionary=ship.passive_maneuver_consequence_view_snapshot()
+		if view.get("kind")!="ruptured_engine" or payload["public_card_ref"] not in view.get("public_card_refs",[]):return "Ruptured Engine source is not in the installed view."
 	var zone:=str(payload["hull_zone"]);if not ship.current_shields.has(zone):return "Invalid Ruptured Engine hull zone."
 	var draws:=0 if int(ship.current_shields[zone])>0 else 1
 	if game_state.passive_damage_ledger!=null:
@@ -49,7 +52,6 @@ func execute_with_application_result(game_state:GameState,result:Dictionary)->Di
 	if damage["shield_changes"]!=changes or int(damage["facedown_delta"])!=draws or int(damage["new_hull"])!=hull or bool(damage["destroyed"])!=(hull<=0):return {}
 	if old>0:ship.current_shields[zone]=old-1
 	elif not game_state.passive_damage_ledger.consume_hidden_draws(1) or not ship.increment_passive_facedown_damage(1):return {}
-	card.last_ruptured_engine_execution_id=str(payload["maneuver_execution_id"])
 	if bool(damage["destroyed"]):ship.mark_destroyed()
 	return result.duplicate(true)
 

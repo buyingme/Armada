@@ -43,7 +43,7 @@ func execute(game_state:GameState)->Dictionary:
 	application["new_hull"]=ship.ship_data.hull-ship.get_total_damage()
 	if not ship.complete_station_resolution(str(payload["ship_activation_identity"]),str(payload["maneuver_execution_id"]),str(payload["obstacle_id"]),owner):return {}
 	game_state.mark_obstacle_resolved_for_maneuver(str(payload["obstacle_id"]),str(payload["maneuver_execution_id"]))
-	if not OVERLAP.open_next_purpose_resolution(game_state,owner,index):return {}
+	if not OVERLAP.open_next_purpose_resolution(game_state,owner,index,str(payload["obstacle_id"])):return {}
 	var result:={}
 	for key in BASE:result[key]=payload[key]
 	result["damage_application"]=application;return result
@@ -64,7 +64,7 @@ func execute_with_application_result(game_state:GameState,result:Dictionary)->Di
 		var discarded:=PassiveDamageLedger.deserialize_public_card(damage["public_discards"][0]);if discarded==null or not game_state.passive_damage_ledger.append_public_discard(discarded):return {}
 	if not ship.complete_station_resolution(str(payload["ship_activation_identity"]),str(payload["maneuver_execution_id"]),str(payload["obstacle_id"]),owner):return {}
 	game_state.mark_obstacle_resolved_for_maneuver(str(payload["obstacle_id"]),str(payload["maneuver_execution_id"]))
-	if not OVERLAP.open_next_purpose_resolution(game_state,owner,index):return {}
+	if not OVERLAP.open_next_purpose_resolution(game_state,owner,index,str(payload["obstacle_id"])):return {}
 	return result.duplicate(true)
 
 static func _result_valid(result:Dictionary)->bool:

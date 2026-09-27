@@ -513,6 +513,7 @@ func test_bug_018_network_controller_waits_for_authoritative_skip_result() \
 		"viewer_player": 0,
 		"application_result": {},
 		"presentation_result": {},
+		"maneuver_consequence_view": {},
 	}, 0).is_empty())
 
 	assert_eq(skipped.attack_action_disposition,

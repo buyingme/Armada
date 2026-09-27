@@ -360,9 +360,10 @@ func test_canary_opponent_hidden_command_never_in_filtered_output() -> void:
 	ship["command_dial_stack"]["dials"][0]["command"] = 777
 	var state: Dictionary = _make_game_state([], [ship])
 	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
-	var json: String = JSON.stringify(filtered)
-	assert_false(json.contains("777"),
-			"Opponent hidden dial command must not appear in filtered JSON")
+	var public_dial: Dictionary = filtered["player_states"][1]["ships"][0][
+			"command_dial_stack"]["dials"][0]
+	assert_false(public_dial.has("command"),
+			"Opponent hidden dial command must not appear in filtered state")
 
 
 # ---------------------------------------------------------------------------

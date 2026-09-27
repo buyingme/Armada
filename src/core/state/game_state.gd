@@ -732,6 +732,10 @@ func obstacle_placement(obstacle_id: String) -> Dictionary:
 func mark_obstacle_resolved_for_maneuver(obstacle_id: String,
 		execution_id: String) -> bool:
 	var obstacle: Dictionary = obstacle_placement(obstacle_id)
+	if passive_damage_ledger != null:
+		# The accepted command retires the public purpose record. Passive state
+		# never manufactures the authority-only completion marker.
+		return not obstacle.is_empty() and not execution_id.is_empty()
 	if obstacle.is_empty() or execution_id.is_empty() \
 			or str(obstacle.get("last_maneuver_execution_id", "")) \
 					== execution_id:
@@ -871,6 +875,29 @@ static func deserialize_passive_network(data: Dictionary) -> GameState:
 					player_state.player_index, ship.roster_entry_id)
 			if not ship.bind_passive_damage_ledger(ledger, key):
 				return null
+	var installed_replacement: Dictionary = {}
+	for owner: int in range(state.player_states.size()):
+		var player: PlayerState = state.get_player_state(owner)
+		for index: int in range(player.ships.size()):
+			var ship: ShipInstance = player.ships[index] as ShipInstance
+			if ship != null and ship.has_active_maneuver_execution():
+				if not installed_replacement.is_empty():
+					return null
+				var execution: Dictionary = \
+						ship.active_maneuver_execution_snapshot()
+				installed_replacement = {
+					"owner_player": owner,
+					"ship_index": index,
+					"ship_activation_identity": execution[
+							"ship_activation_identity"],
+					"maneuver_execution_id": execution[
+							"maneuver_execution_id"],
+					"consequence_view": ship
+							.passive_maneuver_consequence_view_snapshot(),
+				}
+	if not ManeuverConsequenceProjection.public_state_error(
+			state, installed_replacement).is_empty():
+		return null
 	return state if state.validate_for_passive_network_installation() else null
 
 

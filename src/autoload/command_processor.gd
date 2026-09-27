@@ -70,6 +70,10 @@ var _next_sequence: int = 0
 ## Ordered history of all executed commands (for replay).
 var _history: Array[GameCommand] = []
 
+## Frozen at the accepted live command boundary and retained only until that
+## sequence has been distributed to both authorized viewers.
+var _frozen_maneuver_consequence_views: Dictionary = {}
+
 ## Observer-generated follow-up commands waiting for deferred submission.
 var _observer_followups: Array[GameCommand] = []
 
@@ -323,6 +327,7 @@ func _submit(command: GameCommand,
 		if not schema_reason.is_empty():
 			return _reject_command(command, schema_reason, game_state, execution_mode)
 	var application_result: Dictionary = {}
+	var consequence_replacement: Dictionary = {}
 	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_NETWORK_MIRROR:
 		var envelope_validation: Dictionary = _validate_result_envelope(
 				command, result_envelope, expected_viewer)
@@ -331,7 +336,9 @@ func _submit(command: GameCommand,
 					"reason", "Invalid result envelope.")), game_state,
 					execution_mode)
 		application_result = envelope_validation.get(
-				"application_result", {}) as Dictionary
+			"application_result", {}) as Dictionary
+		consequence_replacement = envelope_validation.get(
+				"maneuver_consequence_view", {}) as Dictionary
 	var flow_snapshot: InteractionFlow = _snapshot_flow(game_state)
 	var destruction_candidates: Array[Dictionary] = \
 			_capture_destruction_candidates(command, game_state)
@@ -341,8 +348,16 @@ func _submit(command: GameCommand,
 	var reason: String = command.validate(game_state)
 	if reason != "":
 		return _reject_command(command, reason, game_state, execution_mode)
+	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_NETWORK_MIRROR:
+		var consequence_error: String = ManeuverConsequenceProjection \
+				.pre_mutation_error(game_state, command,
+						application_result, consequence_replacement)
+		if not consequence_error.is_empty():
+			return _reject_command(command, consequence_error,
+					game_state, execution_mode)
 	var result: Dictionary = _execute_and_record(
-			command, game_state, execution_mode, application_result)
+			command, game_state, execution_mode, application_result,
+			consequence_replacement)
 	var execution_failure: String = _execution_failure_reason(result)
 	if not execution_failure.is_empty():
 		return _reject_command(
@@ -683,6 +698,7 @@ func restore_next_sequence(next_sequence: int) -> bool:
 ## Called at game start / new game.
 func reset() -> void:
 	_history.clear()
+	_frozen_maneuver_consequence_views.clear()
 	_observer_followups.clear()
 	_next_sequence = 0
 	_log.info("Command history reset.")
@@ -790,7 +806,8 @@ func _snapshot_flow(game_state: GameState) -> InteractionFlow:
 func _execute_and_record(command: GameCommand,
 		game_state: GameState,
 		execution_mode: String,
-		application_result: Dictionary = {}) -> Dictionary:
+		application_result: Dictionary = {},
+		consequence_replacement: Dictionary = {}) -> Dictionary:
 	var allocated_live_sequence: bool = execution_mode \
 			== TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY
 	if allocated_live_sequence:
@@ -806,6 +823,18 @@ func _execute_and_record(command: GameCommand,
 		if allocated_live_sequence:
 			command.sequence = -1
 		return result
+	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_NETWORK_MIRROR:
+		_install_validated_maneuver_consequence_view(
+				game_state, consequence_replacement)
+	elif allocated_live_sequence and PlayMode.is_network() \
+			and NetworkManager.is_server():
+		var frozen: Dictionary = ManeuverConsequenceProjection \
+				.capture_authority(game_state)
+		assert(ManeuverConsequenceProjection.is_closed_replacement(frozen))
+		assert(ManeuverConsequenceProjection.public_state_error(
+				game_state, frozen).is_empty())
+		_frozen_maneuver_consequence_views[command.sequence] = \
+				frozen.duplicate(true)
 	_log.info("Executed [%s] seq=%d player=%d." % [
 			command.command_type, command.sequence,
 			command.player_index])
@@ -814,12 +843,38 @@ func _execute_and_record(command: GameCommand,
 	return result
 
 
+func frozen_maneuver_consequence_view(sequence: int) -> Dictionary:
+	var frozen: Variant = _frozen_maneuver_consequence_views.get(sequence)
+	return (frozen as Dictionary).duplicate(true) \
+			if frozen is Dictionary else {}
+
+
+func release_frozen_maneuver_consequence_view(sequence: int) -> void:
+	_frozen_maneuver_consequence_views.erase(sequence)
+
+
+func _install_validated_maneuver_consequence_view(
+		state: GameState, replacement: Dictionary) -> void:
+	if replacement.is_empty():
+		for player: PlayerState in state.player_states:
+			for ship: ShipInstance in player.ships:
+				if ship != null:
+					ship.clear_passive_maneuver_consequence_view()
+		return
+	var ship: ShipInstance = state.get_ship(
+			int(replacement["owner_player"]), int(replacement["ship_index"]))
+	assert(ship != null and ship.has_active_maneuver_execution())
+	ship.install_validated_passive_maneuver_consequence_view(
+			replacement["consequence_view"] as Dictionary)
+
+
 func _validate_result_envelope(command: GameCommand, envelope: Dictionary,
 		expected_viewer: int) -> Dictionary:
 	var fields: Array[String] = [
 		"protocol_version", "application_contract",
 		"application_contract_version", "viewer_player",
 		"application_result", "presentation_result",
+		"maneuver_consequence_view",
 	]
 	if envelope.size() != fields.size():
 		return {"ok": false, "reason": "Malformed result envelope."}
@@ -834,7 +889,10 @@ func _validate_result_envelope(command: GameCommand, envelope: Dictionary,
 			or int(envelope.get("viewer_player")) != expected_viewer:
 		return {"ok": false, "reason": "Result viewer mismatch."}
 	if not envelope.get("application_result") is Dictionary \
-			or not envelope.get("presentation_result") is Dictionary:
+			or not envelope.get("presentation_result") is Dictionary \
+			or not envelope.get("maneuver_consequence_view") is Dictionary \
+			or not ManeuverConsequenceProjection.is_closed_replacement(
+					envelope["maneuver_consequence_view"] as Dictionary):
 		return {"ok": false, "reason": "Malformed result payload."}
 	var expected_contract: String = command.application_contract_id()
 	var received_contract: String = str(envelope.get("application_contract", ""))
@@ -852,6 +910,8 @@ func _validate_result_envelope(command: GameCommand, envelope: Dictionary,
 	return {
 		"ok": true,
 		"application_result": (envelope.get("application_result") as Dictionary),
+		"maneuver_consequence_view": (
+				envelope.get("maneuver_consequence_view") as Dictionary),
 	}
 
 

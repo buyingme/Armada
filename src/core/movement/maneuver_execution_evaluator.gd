@@ -28,6 +28,8 @@ static func next_action(game_state: GameState, owner_player: int,
 		"ship_activation_identity": execution["ship_activation_identity"],
 		"maneuver_execution_id": execution["maneuver_execution_id"],
 	}
+	if game_state.passive_damage_ledger != null:
+		return _next_passive_action(game_state, ship, base)
 	if not bool(execution["final_transform_applied"]):
 		var thrusters: Array[String] = PRE_MOVEMENT \
 				.unresolved_thruster_fissures(ship)
@@ -76,9 +78,11 @@ static func next_action(game_state: GameState, owner_player: int,
 			var controls_payload: Dictionary = base.duplicate(true)
 			controls_payload["public_card_ref"] = damaged_controls[0]
 			controls_payload["overlap_kind"] = "ship"
-			return {"kind": "command",
+			return {"kind": "decision" if damaged_controls.size() > 1 \
+					else "command",
 				"command_type": "resolve_damaged_controls",
-				"player_index": owner_player, "payload": controls_payload}
+				"player_index": owner_player, "payload": controls_payload,
+				"public_card_refs": damaged_controls}
 	var overlaps: Array[Dictionary] = OBSTACLES.unresolved_overlaps(
 			game_state, owner_player, ship_index,
 			str(execution["maneuver_execution_id"]))
@@ -91,9 +95,11 @@ static func next_action(game_state: GameState, owner_player: int,
 			controls_payload["public_card_ref"] = obstacle_controls[0]
 			controls_payload["overlap_kind"] = "obstacle"
 			controls_payload["obstacle_id"] = overlaps[0]["obstacle_id"]
-			return {"kind": "command",
+			return {"kind": "decision" if obstacle_controls.size() > 1 \
+					else "command",
 				"command_type": "resolve_damaged_controls",
-				"player_index": owner_player, "payload": controls_payload}
+				"player_index": owner_player, "payload": controls_payload,
+				"public_card_refs": obstacle_controls}
 	var order: Array = execution.get("obstacle_resolution_order", []) as Array
 	if order.is_empty() and not overlaps.is_empty():
 		var order_payload: Dictionary = base.duplicate(true)
@@ -169,6 +175,89 @@ static func next_action(game_state: GameState, owner_player: int,
 				"public_card_refs": ruptured}
 	return {"kind": "command", "command_type": "complete_maneuver",
 		"player_index": owner_player, "payload": base}
+
+
+static func _next_passive_action(state: GameState, ship: ShipInstance,
+		base: Dictionary) -> Dictionary:
+	var view: Dictionary = ship.passive_maneuver_consequence_view_snapshot()
+	if view.is_empty():
+		return {"kind": "waiting", "command_type": ""}
+	var owner: int = int(base["owner_player"])
+	var kind: String = str(view["kind"])
+	if kind in ["thruster_fissure", "ruptured_engine"]:
+		var refs: Array = view["public_card_refs"] as Array
+		var payload: Dictionary = base.duplicate(true)
+		payload["public_card_ref"] = refs[0]
+		return {"kind": "decision",
+			"command_type": "resolve_%s" % kind,
+			"player_index": owner, "payload": payload,
+			"public_card_refs": refs.duplicate(),
+			"hull_zones": ship.current_shields.keys()}
+	if kind == "damaged_controls":
+		var refs: Array = view["public_card_refs"] as Array
+		var payload: Dictionary = base.duplicate(true)
+		payload["public_card_ref"] = refs[0]
+		payload["overlap_kind"] = view["overlap_kind"]
+		if view["overlap_kind"] == "obstacle":
+			payload["obstacle_id"] = view["obstacle_id"]
+		return {"kind": "decision" if refs.size() > 1 else "command",
+			"command_type": "resolve_damaged_controls",
+			"player_index": owner, "payload": payload,
+			"public_card_refs": refs.duplicate()}
+	if kind == "obstacle_order":
+		var ids: Array = view["obstacle_ids"] as Array
+		var payload: Dictionary = base.duplicate(true)
+		payload["obstacle_ids"] = ids.duplicate()
+		var obstacles: Array[Dictionary] = []
+		for item: Dictionary in OBSTACLES.overlapping_obstacles(
+				state, owner, int(base["ship_index"])):
+			if item["obstacle_id"] in ids:
+				obstacles.append(item)
+		return {"kind": "decision" if ids.size() > 1 else "command",
+			"command_type": "commit_maneuver_obstacle_order",
+			"player_index": owner, "payload": payload,
+			"obstacles": obstacles}
+	if kind != "obstacle":
+		return {"kind": "waiting", "command_type": ""}
+	var obstacle_id: String = str(view["obstacle_id"])
+	var immediate: Dictionary = ship.active_immediate_resolution_snapshot()
+	if not immediate.is_empty():
+		return _immediate_action(ship, base)
+	var debris: Dictionary = ship.active_debris_resolution_snapshot()
+	if not debris.is_empty():
+		var debris_payload: Dictionary = base.duplicate(true)
+		debris_payload["obstacle_id"] = obstacle_id
+		return {"kind": "decision", "command_type": "resolve_debris_overlap",
+			"player_index": int(debris["controller_player"]),
+			"payload": debris_payload,
+			"hull_zones": ship.current_shields.keys()}
+	var station: Dictionary = ship.active_station_resolution_snapshot()
+	if not station.is_empty():
+		var station_payload: Dictionary = base.duplicate(true)
+		station_payload["obstacle_id"] = obstacle_id
+		var faceup_refs: Array[String] = []
+		for raw_card: Variant in ship.faceup_damage:
+			if raw_card is DamageCard and not (
+					raw_card as DamageCard).public_card_ref.is_empty():
+				faceup_refs.append((raw_card as DamageCard).public_card_ref)
+		if faceup_refs.is_empty() and ship.get_facedown_damage_count() == 0:
+			station_payload["action"] = "no_option"
+			return {"kind": "command", "command_type": "resolve_station_overlap",
+				"player_index": owner, "payload": station_payload}
+		return {"kind": "decision", "command_type": "resolve_station_overlap",
+			"player_index": int(station["controller_player"]),
+			"payload": station_payload, "faceup_refs": faceup_refs,
+			"facedown_count": ship.get_facedown_damage_count()}
+	for obstacle: Dictionary in OBSTACLES.overlapping_obstacles(
+			state, owner, int(base["ship_index"])):
+		if obstacle["obstacle_id"] == obstacle_id \
+				and obstacle["obstacle_type"] == "asteroid":
+			var asteroid_payload: Dictionary = base.duplicate(true)
+			asteroid_payload["obstacle_id"] = obstacle_id
+			return {"kind": "command",
+				"command_type": "resolve_asteroid_overlap",
+				"player_index": owner, "payload": asteroid_payload}
+	return {"kind": "waiting", "command_type": ""}
 
 
 static func _unresolved_card_refs(ship: ShipInstance, effect_id: String,

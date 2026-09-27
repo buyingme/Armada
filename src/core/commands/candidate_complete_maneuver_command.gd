@@ -87,6 +87,10 @@ func validate(game_state: GameState) -> String:
 	if not AUTHORITY.derive_affected_squadrons_from_canonical(
 			game_state, player_index, int(payload["ship_index"])).is_empty():
 		return "Squadron displacement remains unresolved."
+	if game_state.passive_damage_ledger != null:
+		return "A public Maneuver consequence remains unresolved." \
+				if not ship.passive_maneuver_consequence_view_snapshot().is_empty() \
+				else ""
 	if str(collision.get("kind", "")) == "closest_ship":
 		for raw_card: Variant in ship.faceup_damage:
 			if raw_card is DamageCard:

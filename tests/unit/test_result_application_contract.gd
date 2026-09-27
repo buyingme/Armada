@@ -25,6 +25,7 @@ func _envelope(application: Dictionary = {}) -> Dictionary:
 		"viewer_player": 1,
 		"application_result": application,
 		"presentation_result": {},
+		"maneuver_consequence_view": {},
 	}
 
 
@@ -59,6 +60,7 @@ func test_wrong_binding_and_unknown_envelope_fields_fail_closed() -> void:
 		{"viewer_player": 0},
 		{"protocol_version": NetworkManager.PROTOCOL_VERSION - 1},
 		{"unknown": true},
+		{"maneuver_consequence_view": "missing"},
 	]:
 		var envelope := _envelope()
 		envelope.merge(patch, true)
@@ -66,7 +68,7 @@ func test_wrong_binding_and_unknown_envelope_fields_fail_closed() -> void:
 		assert_eq(GameManager.current_game_state.current_round, 0)
 	assert_eq(CommandProcessor.get_next_sequence(), 0)
 	assert_eq(CommandProcessor.get_command_count(), 0)
-	assert_engine_error(5)
+	assert_engine_error(6)
 
 
 func test_malformed_application_result_does_not_mutate_or_record() -> void:

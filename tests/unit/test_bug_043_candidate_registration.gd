@@ -1,7 +1,7 @@
 extends GutTest
 
 
-func test_protocol7_candidate_routes_deserialize_to_purpose_specific_commands() -> void:
+func test_protocol8_candidate_routes_deserialize_to_purpose_specific_commands() -> void:
 	var expected: Dictionary = {
 		"execute_maneuver": CandidateExecuteManeuverCommand,
 		"apply_maneuver_transform": CandidateApplyManeuverTransformCommand,
@@ -34,12 +34,12 @@ func test_protocol7_candidate_routes_deserialize_to_purpose_specific_commands() 
 func test_coordinated_compatibility_versions_are_active_together() -> void:
 	assert_eq(SaveGameMetadata.CURRENT_VERSION, 7)
 	assert_eq(GameReplay.FORMAT_VERSION, 10)
-	assert_eq(NetworkManager.PROTOCOL_VERSION, 7)
+	assert_eq(NetworkManager.PROTOCOL_VERSION, 8)
 	assert_eq(GameCommand.APPLICATION_CONTRACT_VERSION, 2)
 	assert_eq(PassiveDamageLedger.SCHEMA_VERSION, 1)
 
 
-func test_protocol7_command_envelope_restores_only_declared_integer_fields() -> void:
+func test_protocol8_command_envelope_restores_only_declared_integer_fields() -> void:
 	var obstacle_order: GameCommand = GameCommand.deserialize({
 		"type": "commit_maneuver_obstacle_order", "player": 0.0,
 		"sequence": 4.0, "payload": {

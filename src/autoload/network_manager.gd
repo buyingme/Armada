@@ -26,7 +26,7 @@ extends Node
 # ---------------------------------------------------------------------------
 
 ## Current protocol version.  Incremented whenever the message format changes.
-const PROTOCOL_VERSION: int = 7
+const PROTOCOL_VERSION: int = 8
 
 ## Interval (seconds) between keepalive pings.
 const HEARTBEAT_INTERVAL_SEC: float = 5.0
@@ -1835,6 +1835,7 @@ func _distribute_command_result_data(command_data: Dictionary,
 			continue
 		_receive_command_result.rpc_id(peer_id, command_data,
 				_build_result_envelope(cmd, result, viewer))
+	CommandProcessor.release_frozen_maneuver_consequence_view(cmd.sequence)
 
 
 func _build_result_envelope(command: GameCommand, authority_result: Dictionary,
@@ -1850,6 +1851,8 @@ func _build_result_envelope(command: GameCommand, authority_result: Dictionary,
 				authority_result, viewer_player) if not contract.is_empty() else {},
 		"presentation_result": {} if not contract.is_empty() \
 				else authority_result.duplicate(true),
+		"maneuver_consequence_view": CommandProcessor \
+				.frozen_maneuver_consequence_view(command.sequence),
 	}
 
 

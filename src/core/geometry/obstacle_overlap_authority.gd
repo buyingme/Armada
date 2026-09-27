@@ -20,6 +20,31 @@ static func overlapping_obstacles(game_state: GameState,
 	var ship: ShipInstance = game_state.get_ship(owner_player, ship_index)
 	if ship == null or ship.is_destroyed() or ship.ship_data == null:
 		return []
+	var play_area: Vector2 = GameScale.play_area_size_px
+	var ship_base := ShipBase.new(ship.ship_data.ship_size,
+			Transform2D(deg_to_rad(ship.rotation_deg),
+					ship.get_pixel_position(play_area)))
+	return _overlapping_obstacles_for_base(game_state, ship_base)
+
+
+## Pure approved-contour check for an independently validated public transform.
+## Used by the protocol-8 pre-mutation compatibility check.
+static func overlapping_obstacles_at(game_state: GameState,
+		owner_player: int, ship_index: int, pos_x: float, pos_y: float,
+		rotation_deg: float) -> Array[Dictionary]:
+	var ship: ShipInstance = game_state.get_ship(owner_player, ship_index) \
+			if game_state != null else null
+	if ship == null or ship.ship_data == null:
+		return []
+	var play_area: Vector2 = GameScale.play_area_size_px
+	var ship_base := ShipBase.new(ship.ship_data.ship_size,
+			Transform2D(deg_to_rad(rotation_deg),
+					Vector2(pos_x * play_area.x, pos_y * play_area.y)))
+	return _overlapping_obstacles_for_base(game_state, ship_base)
+
+
+static func _overlapping_obstacles_for_base(game_state: GameState,
+		ship_base: ShipBase) -> Array[Dictionary]:
 	var raw_obstacles: Variant = game_state.objectives.get("obstacles", [])
 	if not raw_obstacles is Array:
 		return []
@@ -27,9 +52,6 @@ static func overlapping_obstacles(game_state: GameState,
 	if contours.size() != 6:
 		return []
 	var play_area: Vector2 = GameScale.play_area_size_px
-	var ship_base := ShipBase.new(ship.ship_data.ship_size,
-			Transform2D(deg_to_rad(ship.rotation_deg),
-					ship.get_pixel_position(play_area)))
 	var result: Array[Dictionary] = []
 	var seen: Dictionary = {}
 	for raw_obstacle: Variant in raw_obstacles as Array:
@@ -71,6 +93,25 @@ static func overlapping_obstacles(game_state: GameState,
 static func unresolved_overlaps(game_state: GameState, owner_player: int,
 		ship_index: int, execution_id: String) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
+	if game_state != null and game_state.passive_damage_ledger != null:
+		var ship: ShipInstance = game_state.get_ship(owner_player, ship_index)
+		if ship == null:
+			return result
+		var view: Dictionary = ship.passive_maneuver_consequence_view_snapshot()
+		var allowed: Array = []
+		match str(view.get("kind", "")):
+			"obstacle_order":
+				allowed = view.get("obstacle_ids", []) as Array
+			"obstacle":
+				allowed = [view.get("obstacle_id", "")]
+			"damaged_controls":
+				if view.get("overlap_kind") == "obstacle":
+					allowed = [view.get("obstacle_id", "")]
+		for obstacle: Dictionary in overlapping_obstacles(
+				game_state, owner_player, ship_index):
+			if obstacle["obstacle_id"] in allowed:
+				result.append(obstacle)
+		return result
 	for obstacle: Dictionary in overlapping_obstacles(
 			game_state, owner_player, ship_index):
 		if str(obstacle["last_maneuver_execution_id"]) != execution_id:
@@ -82,7 +123,8 @@ static func unresolved_overlaps(game_state: GameState, owner_player: int,
 ## committed obstacle order. Asteroid opens atomically with its draw command;
 ## debris and station persist their decision state here.
 static func open_next_purpose_resolution(game_state: GameState,
-		owner_player: int, ship_index: int) -> bool:
+		owner_player: int, ship_index: int,
+		after_obstacle_id: String = "") -> bool:
 	var ship: ShipInstance = game_state.get_ship(owner_player, ship_index) \
 			if game_state != null else null
 	if ship == null or ship.is_destroyed():
@@ -95,11 +137,19 @@ static func open_next_purpose_resolution(game_state: GameState,
 			"ship_activation_identity", ""))
 	var order: Array = execution.get("obstacle_resolution_order", []) as Array
 	var unresolved_by_id: Dictionary = {}
-	for item: Dictionary in unresolved_overlaps(
-			game_state, owner_player, ship_index, execution_id):
+	var available: Array[Dictionary] = overlapping_obstacles(
+			game_state, owner_player, ship_index) \
+			if game_state.passive_damage_ledger != null else unresolved_overlaps(
+					game_state, owner_player, ship_index, execution_id)
+	for item: Dictionary in available:
 		unresolved_by_id[str(item["obstacle_id"])] = item
+	var past_completed: bool = after_obstacle_id.is_empty()
 	for raw_id: Variant in order:
 		var obstacle_id: String = str(raw_id)
+		if game_state.passive_damage_ledger != null and not past_completed:
+			if obstacle_id == after_obstacle_id:
+				past_completed = true
+			continue
 		if not unresolved_by_id.has(obstacle_id):
 			continue
 		var obstacle: Dictionary = unresolved_by_id[obstacle_id]

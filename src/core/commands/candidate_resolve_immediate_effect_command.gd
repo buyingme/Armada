@@ -124,7 +124,8 @@ func execute_with_application_result(game_state: GameState,
 	elif str(payload["enclosing_kind"]) == "maneuver" \
 			and not ObstacleOverlapAuthority.open_next_purpose_resolution(
 					game_state, int(payload["owner_player"]),
-					int(payload["ship_index"])):
+					int(payload["ship_index"]),
+					str(payload["maneuver_source_id"])):
 		return {}
 	return application_result.duplicate(true)
 
@@ -373,7 +374,8 @@ func execute(game_state: GameState) -> Dictionary:
 	elif str(record["enclosing_kind"]) == "maneuver" \
 			and not ObstacleOverlapAuthority.open_next_purpose_resolution(
 					game_state, int(payload["owner_player"]),
-					int(payload["ship_index"])):
+					int(payload["ship_index"]),
+					str(record["maneuver_source_id"])):
 		_restore(game_state, ship, state_before)
 		return {}
 	var damage_application: Dictionary = _damage_application(

@@ -116,6 +116,10 @@ var squadron_command_activations_committed: int = 0
 ## below. An empty dictionary represents no committed Maneuver execution.
 var _active_maneuver_execution: Dictionary = {}
 
+## Installed viewer-authorized Network projection. It is never an authority
+## gameplay owner and is not part of the save-7 execution record.
+var _passive_maneuver_consequence_view: Dictionary = {}
+
 ## Narrow ADR-014 unresolved immediate faceup-card obligation. The record is
 ## private and references one physical card already owned in faceup_damage.
 var _active_immediate_resolution: Dictionary = {}
@@ -270,6 +274,7 @@ func has_finalized_destruction() -> bool:
 func mark_destroyed() -> void:
 	if has_active_ship_activation():
 		_reset_ship_activation_boundary_values()
+	_passive_maneuver_consequence_view.clear()
 	_active_immediate_resolution.clear()
 	_clear_active_obstacle_resolutions()
 	_destroyed = true
@@ -537,6 +542,22 @@ func active_maneuver_execution_snapshot() -> Dictionary:
 	return _active_maneuver_execution.duplicate(true)
 
 
+func passive_maneuver_consequence_view_snapshot() -> Dictionary:
+	return _passive_maneuver_consequence_view.duplicate(true)
+
+
+## Called only after the passive command boundary has validated the complete
+## frozen replacement. Installation has no new input-dependent failure point.
+func install_validated_passive_maneuver_consequence_view(
+		view: Dictionary) -> void:
+	assert(is_passive_damage_bound() and has_active_maneuver_execution())
+	_passive_maneuver_consequence_view = view.duplicate(true)
+
+
+func clear_passive_maneuver_consequence_view() -> void:
+	_passive_maneuver_consequence_view.clear()
+
+
 func active_asteroid_resolution_snapshot() -> Dictionary:
 	return _active_asteroid_resolution.duplicate(true)
 
@@ -767,6 +788,7 @@ func complete_maneuver_execution(expected_activation_identity: String,
 		return false
 	maneuver_opportunity_disposition = ACTIVATION_DISPOSITION_CONSUMED
 	_active_maneuver_execution.clear()
+	_passive_maneuver_consequence_view.clear()
 	return validate_ship_activation_boundary()
 
 
@@ -778,6 +800,7 @@ func clear_maneuver_execution_exceptionally(
 			expected_activation_identity, execution_id):
 		return false
 	_active_maneuver_execution.clear()
+	_passive_maneuver_consequence_view.clear()
 	return true
 
 
@@ -1534,6 +1557,7 @@ func _reset_ship_activation_boundary_values() -> void:
 	maneuver_opportunity_disposition = ACTIVATION_DISPOSITION_INACTIVE
 	squadron_command_activations_committed = 0
 	_active_maneuver_execution.clear()
+	_passive_maneuver_consequence_view.clear()
 	_clear_active_obstacle_resolutions()
 
 
@@ -1841,6 +1865,10 @@ func serialize() -> Dictionary:
 		"runtime_upgrades": _serialize_runtime_upgrades(),
 	}
 	if is_passive_damage_bound():
+		if not _active_maneuver_execution.is_empty():
+			(data["active_maneuver_execution"] as Dictionary)[
+					"consequence_view"] = \
+					_passive_maneuver_consequence_view.duplicate(true)
 		for card: DamageCard in faceup_damage:
 			data["faceup_damage"].append(card.public_faceup_damage_card())
 		data["facedown_count"] = get_facedown_damage_count()
@@ -1941,8 +1969,19 @@ static func deserialize(
 		if not raw_record is Dictionary:
 			return null
 		maneuver_data[key] = (raw_record as Dictionary).duplicate(true)
+	var passive_view: Dictionary = {}
+	var execution_data: Dictionary = maneuver_data[
+			"active_maneuver_execution"] as Dictionary
+	if passive and not execution_data.is_empty():
+		var raw_view: Variant = execution_data.get("consequence_view")
+		if not raw_view is Dictionary:
+			return null
+		passive_view = (raw_view as Dictionary).duplicate(true)
+		execution_data.erase("consequence_view")
 	if not _normalize_save7_maneuver_integers(maneuver_data): return null
 	if not inst.install_maneuver_execution_for_save7(maneuver_data): return null
+	if passive:
+		inst._passive_maneuver_consequence_view = passive_view
 	if passive:
 		if not inst._active_immediate_resolution.is_empty() \
 				and not inst._filtered_immediate_resolution_is_valid(

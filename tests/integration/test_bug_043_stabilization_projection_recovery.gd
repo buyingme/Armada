@@ -228,9 +228,14 @@ func test_v5_production_save_install_and_filtered_reconnect_preserve_owners() \
 			NetworkManager._local_player_index = 1
 			assert_true(GameManager.start_new_game_from_state(
 					passive, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 0), kind)
-			_assert_action_equivalent(
-					ManeuverExecutionEvaluator.next_action(passive, 0, 0),
-					expected_action, "filtered:%s" % kind)
+			var passive_action: Dictionary = \
+					ManeuverExecutionEvaluator.next_action(passive, 0, 0)
+			if kind in ["committed_pre_movement", "displacement"]:
+				assert_eq(passive_action.get("kind"), "waiting",
+						"Passive recovery must await authority for %s." % kind)
+			else:
+				_assert_action_equivalent(passive_action, expected_action,
+						"filtered:%s" % kind)
 			assert_true(CommandProcessor.get_history().is_empty(),
 					"Filtered reconnect must not synthesize work for %s." % kind)
 		PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
@@ -401,6 +406,560 @@ func test_bug055_automatic_immediate_edges_match_canonical_union() -> void:
 			assert_eq(command.validate(state), "", str(spec["branch"]))
 
 
+func test_bug058_two_ruptured_sources_advance_on_passive_and_reconnect() -> void:
+	var authority: GameState = _plain_maneuver_state("applied")
+	var ship: ShipInstance = authority.get_ship(0, 0)
+	ship.current_speed = 2
+	_add_faceup(authority, ship, "ruptured_engine")
+	_add_faceup(authority, ship, "ruptured_engine")
+	var host_before: Dictionary = StateFilter.filter_for_player(
+			authority.serialize(), 0)
+	var before: Dictionary = StateFilter.filter_for_player(
+			authority.serialize(), 1)
+	var passive: GameState = GameState.deserialize_passive_network(before)
+	assert_not_null(passive)
+	if passive == null:
+		return
+	var refs: Array = ship.faceup_damage.map(func(card: DamageCard) -> String:
+		return card.public_card_ref)
+	assert_eq(passive.get_ship(0, 0)
+			.passive_maneuver_consequence_view_snapshot().get(
+					"public_card_refs", []), refs)
+	var command := CandidateResolveRupturedEngineCommand.new(0, {
+		"owner_player": 0, "ship_index": 0,
+		"ship_activation_identity": ACTIVATION_ID,
+		"maneuver_execution_id": EXECUTION_ID,
+		"public_card_ref": refs[0], "hull_zone": "FRONT",
+	})
+	assert_eq(command.validate(authority), "")
+	var result: Dictionary = command.execute(authority)
+	assert_false(result.is_empty())
+	var replacement: Dictionary = \
+			ManeuverConsequenceProjection.capture_authority(authority)
+	assert_eq((replacement["consequence_view"] as Dictionary)[
+			"public_card_refs"], [refs[1]])
+	GameManager.current_game_state = passive
+	CommandProcessor.reset()
+	command.sequence = 0
+	var envelope: Dictionary = {
+		"protocol_version": NetworkManager.PROTOCOL_VERSION,
+		"application_contract": command.application_contract_id(),
+		"application_contract_version": 2,
+		"viewer_player": 1,
+		"application_result": result,
+		"presentation_result": {},
+		"maneuver_consequence_view": replacement,
+	}
+	var mirrored: Dictionary = CommandProcessor.submit_mirror(
+			command, envelope, 1)
+	assert_false(mirrored.is_empty())
+	assert_eq(passive.get_ship(0, 0)
+			.passive_maneuver_consequence_view_snapshot().get(
+					"public_card_refs", []), [refs[1]])
+	assert_eq((passive.get_ship(0, 0).faceup_damage[0] as DamageCard)
+			.last_ruptured_engine_execution_id, "")
+	var resumed: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(authority.serialize(), 1))
+	assert_not_null(resumed)
+	if resumed != null:
+		assert_eq(resumed.get_ship(0, 0)
+				.passive_maneuver_consequence_view_snapshot(),
+				passive.get_ship(0, 0)
+						.passive_maneuver_consequence_view_snapshot())
+	var stale := CandidateResolveRupturedEngineCommand.new(0,
+			command.payload.duplicate(true))
+	assert_ne(stale.validate(passive), "")
+	var host_passive: GameState = GameState.deserialize_passive_network(
+			host_before)
+	assert_not_null(host_passive)
+	if host_passive != null:
+		GameManager.current_game_state = host_passive
+		CommandProcessor.reset()
+		var host_envelope: Dictionary = envelope.duplicate(true)
+		host_envelope["viewer_player"] = 0
+		assert_false(CommandProcessor.submit_mirror(
+				command, host_envelope, 0).is_empty())
+		assert_eq(host_passive.get_ship(0, 0)
+				.passive_maneuver_consequence_view_snapshot(),
+				passive.get_ship(0, 0)
+						.passive_maneuver_consequence_view_snapshot())
+		var host_reconnect: GameState = GameState.deserialize_passive_network(
+				StateFilter.filter_for_player(authority.serialize(), 0))
+		assert_not_null(host_reconnect)
+		if host_reconnect != null:
+			assert_eq(host_reconnect.get_ship(0, 0)
+					.passive_maneuver_consequence_view_snapshot(),
+					host_passive.get_ship(0, 0)
+							.passive_maneuver_consequence_view_snapshot())
+
+
+func test_bug058_three_ruptured_sources_preserve_nonfirst_choice() -> void:
+	var authority: GameState = _plain_maneuver_state("applied")
+	var ship: ShipInstance = authority.get_ship(0, 0)
+	ship.current_speed = 2
+	for source_index: int in range(3):
+		_add_faceup(authority, ship, "ruptured_engine")
+	var refs: Array = ship.faceup_damage.map(func(card: DamageCard) -> String:
+		return card.public_card_ref)
+	var passive: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(authority.serialize(), 1))
+	assert_not_null(passive)
+	if passive == null:
+		return
+	GameManager.current_game_state = passive
+	CommandProcessor.reset()
+	for selected_index: int in [1, 2]:
+		var command := CandidateResolveRupturedEngineCommand.new(0, {
+			"owner_player": 0, "ship_index": 0,
+			"ship_activation_identity": ACTIVATION_ID,
+			"maneuver_execution_id": EXECUTION_ID,
+			"public_card_ref": refs[selected_index], "hull_zone": "FRONT",
+		})
+		command.sequence = CommandProcessor.get_next_sequence()
+		assert_eq(command.validate(authority), "")
+		var result: Dictionary = command.execute(authority)
+		assert_false(result.is_empty())
+		var replacement: Dictionary = \
+				ManeuverConsequenceProjection.capture_authority(authority)
+		var expected_refs: Array = [refs[0], refs[2]] \
+				if selected_index == 1 else [refs[0]]
+		assert_eq((replacement["consequence_view"] as Dictionary)[
+				"public_card_refs"], expected_refs)
+		var envelope: Dictionary = {
+			"protocol_version": NetworkManager.PROTOCOL_VERSION,
+			"application_contract": command.application_contract_id(),
+			"application_contract_version": 2,
+			"viewer_player": 1,
+			"application_result": result,
+			"presentation_result": {},
+			"maneuver_consequence_view": replacement,
+		}
+		assert_false(CommandProcessor.submit_mirror(
+				command, envelope, 1).is_empty())
+		assert_eq(passive.get_ship(0, 0)
+				.passive_maneuver_consequence_view_snapshot().get(
+						"public_card_refs"), expected_refs)
+		var reconnect: GameState = GameState.deserialize_passive_network(
+				StateFilter.filter_for_player(authority.serialize(), 1))
+		assert_not_null(reconnect)
+		if reconnect != null:
+			assert_eq(reconnect.get_ship(0, 0)
+					.passive_maneuver_consequence_view_snapshot(),
+					passive.get_ship(0, 0)
+							.passive_maneuver_consequence_view_snapshot())
+	assert_eq(CommandProcessor.get_next_sequence(), 2)
+
+
+func test_bug058_replacement_rejection_precedes_canonical_mutation() -> void:
+	var authority: GameState = _plain_maneuver_state("applied")
+	var ship: ShipInstance = authority.get_ship(0, 0)
+	ship.current_speed = 2
+	_add_faceup(authority, ship, "ruptured_engine")
+	_add_faceup(authority, ship, "ruptured_engine")
+	var refs: Array = ship.faceup_damage.map(func(card: DamageCard) -> String:
+		return card.public_card_ref)
+	var passive: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(authority.serialize(), 1))
+	assert_not_null(passive)
+	if passive == null:
+		return
+	var command := CandidateResolveRupturedEngineCommand.new(0, {
+		"owner_player": 0, "ship_index": 0,
+		"ship_activation_identity": ACTIVATION_ID,
+		"maneuver_execution_id": EXECUTION_ID,
+		"public_card_ref": refs[0], "hull_zone": "FRONT",
+	})
+	command.sequence = 0
+	var result: Dictionary = command.execute(authority)
+	var replacement: Dictionary = \
+			ManeuverConsequenceProjection.capture_authority(authority)
+	var valid_envelope: Dictionary = {
+		"protocol_version": NetworkManager.PROTOCOL_VERSION,
+		"application_contract": command.application_contract_id(),
+		"application_contract_version": 2,
+		"viewer_player": 1,
+		"application_result": result,
+		"presentation_result": {},
+		"maneuver_consequence_view": replacement,
+	}
+	GameManager.current_game_state = passive
+	CommandProcessor.reset()
+	var before: Dictionary = passive.serialize()
+	var observations: Array[Dictionary] = []
+	var observer: Callable = func(_accepted: GameCommand,
+			_accepted_result: Dictionary) -> void:
+		observations.append({
+			"view": passive.get_ship(0, 0)
+					.passive_maneuver_consequence_view_snapshot(),
+			"cursor": CommandProcessor.get_next_sequence(),
+		})
+	CommandProcessor.command_executed.connect(observer)
+	var invalid: Array[Dictionary] = []
+	var missing: Dictionary = valid_envelope.duplicate(true)
+	missing.erase("maneuver_consequence_view")
+	invalid.append(missing)
+	var old_protocol: Dictionary = valid_envelope.duplicate(true)
+	old_protocol["protocol_version"] = 7
+	invalid.append(old_protocol)
+	var wrong_viewer: Dictionary = valid_envelope.duplicate(true)
+	wrong_viewer["viewer_player"] = 0
+	invalid.append(wrong_viewer)
+	var wrong_execution: Dictionary = valid_envelope.duplicate(true)
+	wrong_execution["maneuver_consequence_view"][
+			"maneuver_execution_id"] = "maneuver:wrong"
+	invalid.append(wrong_execution)
+	var nonpublic_ref: Dictionary = valid_envelope.duplicate(true)
+	nonpublic_ref["maneuver_consequence_view"]["consequence_view"][
+			"public_card_refs"] = ["faceup:missing"]
+	invalid.append(nonpublic_ref)
+	var already_resolved: Dictionary = valid_envelope.duplicate(true)
+	already_resolved["maneuver_consequence_view"]["consequence_view"][
+			"public_card_refs"] = refs
+	invalid.append(already_resolved)
+	for envelope: Dictionary in invalid:
+		assert_true(CommandProcessor.submit_mirror(
+				command, envelope, 1).is_empty())
+		assert_eq(passive.serialize(), before)
+		assert_eq(CommandProcessor.get_next_sequence(), 0)
+		assert_true(CommandProcessor.get_history().is_empty())
+		assert_eq(CommandProcessor.get_pending_observer_followup_count(), 0)
+		assert_true(observations.is_empty())
+	var bad_application: Dictionary = valid_envelope.duplicate(true)
+	bad_application["application_result"]["damage_application"][
+			"facedown_delta"] = 9
+	assert_true(CommandProcessor.submit_mirror(
+			command, bad_application, 1).is_empty())
+	assert_eq(passive.serialize(), before)
+	assert_eq(CommandProcessor.get_next_sequence(), 0)
+	assert_true(CommandProcessor.get_history().is_empty())
+	assert_true(observations.is_empty())
+	assert_engine_error(invalid.size() + 1)
+	assert_false(CommandProcessor.submit_mirror(
+			command, valid_envelope, 1).is_empty())
+	assert_eq(observations.size(), 1)
+	if not observations.is_empty():
+		assert_eq(observations[0]["view"], replacement["consequence_view"])
+		assert_eq(observations[0]["cursor"], 1)
+	CommandProcessor.command_executed.disconnect(observer)
+
+
+func test_bug043_nonfixture_replay_preserves_partial_maneuver_consequence() \
+		-> void:
+	var authority: GameState = _plain_maneuver_state("applied")
+	var ship: ShipInstance = authority.get_ship(0, 0)
+	ship.current_speed = 2
+	_add_faceup(authority, ship, "ruptured_engine")
+	_add_faceup(authority, ship, "ruptured_engine")
+	var initial: Dictionary = authority.serialize()
+	var refs: Array = ship.faceup_damage.map(func(card: DamageCard) -> String:
+		return card.public_card_ref)
+	GameManager.current_game_state = authority
+	CommandProcessor.reset()
+	var command := CandidateResolveRupturedEngineCommand.new(0, {
+		"owner_player": 0, "ship_index": 0,
+		"ship_activation_identity": ACTIVATION_ID,
+		"maneuver_execution_id": EXECUTION_ID,
+		"public_card_ref": refs[1], "hull_zone": "FRONT",
+	})
+	assert_false(CommandProcessor.submit(command).is_empty())
+	var authority_final: Dictionary = authority.serialize()
+	var replay_file: GameReplay = CommandProcessor.create_replay()
+	assert_not_null(replay_file)
+	if replay_file == null:
+		return
+	var loaded: GameReplay = GameReplay.deserialize(
+			JSON.parse_string(JSON.stringify(replay_file.serialize())))
+	assert_not_null(loaded)
+	if loaded == null:
+		return
+	assert_eq(loaded.header["format_version"], 10)
+	assert_eq(loaded.commands.size(), 1)
+	var replay_state: GameState = GameState.deserialize(initial)
+	assert_not_null(replay_state)
+	if replay_state == null:
+		return
+	GameManager.current_game_state = replay_state
+	CommandProcessor.reset()
+	for recorded: Dictionary in loaded.commands:
+		var replay_command: GameCommand = GameCommand.deserialize(recorded)
+		assert_not_null(replay_command)
+		if replay_command != null:
+			assert_false(CommandProcessor.submit_replay(
+					replay_command).is_empty())
+	assert_eq(replay_state.serialize(), authority_final)
+	assert_eq(ManeuverConsequenceProjection.capture_authority(replay_state),
+			ManeuverConsequenceProjection.capture_authority(authority))
+	assert_eq(CommandProcessor.get_next_sequence(), 1)
+
+
+func test_bug058_result_envelopes_keep_each_committed_frozen_view() -> void:
+	var authority: GameState = _plain_maneuver_state("applied")
+	var ship: ShipInstance = authority.get_ship(0, 0)
+	ship.current_speed = 2
+	for source_index: int in range(3):
+		_add_faceup(authority, ship, "ruptured_engine")
+	var refs: Array = ship.faceup_damage.map(func(card: DamageCard) -> String:
+		return card.public_card_ref)
+	GameManager.current_game_state = authority
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.SERVER
+	CommandProcessor.reset()
+	var first := CandidateResolveRupturedEngineCommand.new(0, {
+		"owner_player": 0, "ship_index": 0,
+		"ship_activation_identity": ACTIVATION_ID,
+		"maneuver_execution_id": EXECUTION_ID,
+		"public_card_ref": refs[0], "hull_zone": "FRONT",
+	})
+	var first_result: Dictionary = CommandProcessor.submit_deferred_followups(
+			first)
+	assert_false(first_result.is_empty())
+	var first_view: Dictionary = CommandProcessor \
+			.frozen_maneuver_consequence_view(first.sequence)
+	assert_eq((first_view["consequence_view"] as Dictionary)[
+			"public_card_refs"], [refs[1], refs[2]])
+	var second := CandidateResolveRupturedEngineCommand.new(0, {
+		"owner_player": 0, "ship_index": 0,
+		"ship_activation_identity": ACTIVATION_ID,
+		"maneuver_execution_id": EXECUTION_ID,
+		"public_card_ref": refs[2], "hull_zone": "FRONT",
+	})
+	var second_result: Dictionary = CommandProcessor.submit_deferred_followups(
+			second)
+	assert_false(second_result.is_empty())
+	var second_view: Dictionary = CommandProcessor \
+			.frozen_maneuver_consequence_view(second.sequence)
+	assert_eq((second_view["consequence_view"] as Dictionary)[
+			"public_card_refs"], [refs[1]])
+	assert_eq(NetworkManager._build_result_envelope(
+			first, first_result, 0)["maneuver_consequence_view"], first_view)
+	assert_eq(NetworkManager._build_result_envelope(
+			first, first_result, 1)["maneuver_consequence_view"], first_view)
+	assert_eq(NetworkManager._build_result_envelope(
+			second, second_result, 1)["maneuver_consequence_view"], second_view)
+	CommandProcessor.release_frozen_maneuver_consequence_view(first.sequence)
+	CommandProcessor.release_frozen_maneuver_consequence_view(second.sequence)
+
+
+func test_bug058_obstacle_order_and_return_reject_public_skips() -> void:
+	var authority: GameState = _decision_state("obstacle_order")
+	var passive: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(authority.serialize(), 1))
+	assert_not_null(passive)
+	if passive == null:
+		return
+	var base: Dictionary = {
+		"owner_player": 0, "ship_index": 0,
+		"ship_activation_identity": ACTIVATION_ID,
+		"maneuver_execution_id": EXECUTION_ID,
+	}
+	var order := CandidateCommitManeuverObstacleOrderCommand.new(0,
+			base.merged({"obstacle_ids": ["obstacle:0", "obstacle:1"]}))
+	order.sequence = 0
+	var order_result: Dictionary = order.execute(authority)
+	assert_false(order_result.is_empty())
+	var order_replacement: Dictionary = \
+			ManeuverConsequenceProjection.capture_authority(authority)
+	assert_eq(order_replacement["consequence_view"]["obstacle_id"],
+			"obstacle:0")
+	GameManager.current_game_state = passive
+	CommandProcessor.reset()
+	var order_envelope: Dictionary = {
+		"protocol_version": NetworkManager.PROTOCOL_VERSION,
+		"application_contract": order.application_contract_id(),
+		"application_contract_version": 2,
+		"viewer_player": 1,
+		"application_result": order.project_application_result(
+				order_result, 1),
+		"presentation_result": {},
+		"maneuver_consequence_view": order_replacement,
+	}
+	var before: Dictionary = passive.serialize()
+	var skipped_order: Dictionary = order_envelope.duplicate(true)
+	skipped_order["maneuver_consequence_view"]["consequence_view"][
+			"obstacle_id"] = "obstacle:1"
+	assert_true(CommandProcessor.submit_mirror(
+			order, skipped_order, 1).is_empty())
+	assert_eq(passive.serialize(), before)
+	assert_eq(CommandProcessor.get_next_sequence(), 0)
+	assert_engine_error(1)
+	assert_false(CommandProcessor.submit_mirror(
+			order, order_envelope, 1).is_empty())
+	assert_eq(passive.get_ship(0, 0)
+			.passive_maneuver_consequence_view_snapshot()["obstacle_id"],
+			"obstacle:0")
+	var hull_zone: String = str(authority.get_ship(0, 0)
+			.current_shields.keys()[0])
+	var debris := CandidateResolveDebrisOverlapCommand.new(0,
+			base.merged({"obstacle_id": "obstacle:0", "hull_zone": hull_zone}))
+	debris.sequence = 1
+	var debris_result: Dictionary = debris.execute(authority)
+	assert_false(debris_result.is_empty())
+	var next_replacement: Dictionary = \
+			ManeuverConsequenceProjection.capture_authority(authority)
+	assert_eq(next_replacement["consequence_view"]["obstacle_id"],
+			"obstacle:1")
+	var debris_envelope: Dictionary = {
+		"protocol_version": NetworkManager.PROTOCOL_VERSION,
+		"application_contract": debris.application_contract_id(),
+		"application_contract_version": 2,
+		"viewer_player": 1,
+		"application_result": debris.project_application_result(
+				debris_result, 1),
+		"presentation_result": {},
+		"maneuver_consequence_view": next_replacement,
+	}
+	before = passive.serialize()
+	var stale_current: Dictionary = debris_envelope.duplicate(true)
+	stale_current["maneuver_consequence_view"]["consequence_view"][
+			"obstacle_id"] = "obstacle:0"
+	assert_true(CommandProcessor.submit_mirror(
+			debris, stale_current, 1).is_empty())
+	assert_eq(passive.serialize(), before)
+	assert_eq(CommandProcessor.get_next_sequence(), 1)
+	assert_engine_error(2)
+	assert_false(CommandProcessor.submit_mirror(
+			debris, debris_envelope, 1).is_empty())
+	assert_eq(passive.get_ship(0, 0)
+			.passive_maneuver_consequence_view_snapshot()["obstacle_id"],
+			"obstacle:1")
+	assert_eq(CommandProcessor.get_next_sequence(), 2)
+
+
+func test_bug058_damaged_controls_nonfirst_sources_survive_recovery() -> void:
+	var authority: GameState = _plain_maneuver_state("applied")
+	var data: ShipData = AssetLoader.load_ship_data(
+			"victory_ii_class_star_destroyer")
+	var ship := ShipInstance.create_from_data(
+			"victory_ii_class_star_destroyer", data, 1, 0)
+	ship.roster_entry_id = "v5:ship"
+	ship.pos_x = 0.5
+	ship.pos_y = 0.5
+	assert_true(ship.establish_ship_activation(ACTIVATION_ID))
+	assert_true(ship.open_maneuver_opportunity(ACTIVATION_ID))
+	assert_true(ship.commit_maneuver_execution(
+			ACTIVATION_ID, EXECUTION_ID, false, {
+				"yaw_clicks": [0], "yaw_bonus_joint": -1,
+				"pos_x": 0.5, "pos_y": 0.5, "rotation_deg": 0.0,
+			}, {"kind": "none"}))
+	assert_false(ship.apply_maneuver_final_transform(
+			ACTIVATION_ID, EXECUTION_ID).is_empty())
+	authority.get_player_state(0).ships[0] = ship
+	ship.current_speed = 0
+	authority.objectives["obstacles"] = [
+		_obstacle("obstacle:0", "asteroid_1", 0)]
+	for source_index: int in range(3):
+		_add_faceup(authority, ship, "damaged_controls")
+	var refs: Array = ship.faceup_damage.map(func(card: DamageCard) -> String:
+		return card.public_card_ref)
+	var initial: Dictionary = authority.serialize()
+	var alternate: GameState = GameState.deserialize(initial)
+	assert_not_null(alternate)
+	if alternate == null:
+		return
+	(alternate.get_ship(0, 0).faceup_damage[2] as DamageCard) \
+			.last_damaged_controls_execution_id = EXECUTION_ID
+	assert_eq(alternate.get_ship(0, 0).faceup_damage.map(
+			func(card: DamageCard) -> Dictionary:
+				return card.public_faceup_damage_card()),
+			ship.faceup_damage.map(func(card: DamageCard) -> Dictionary:
+				return card.public_faceup_damage_card()))
+	assert_eq((ManeuverConsequenceProjection.capture_authority(
+			authority)["consequence_view"] as Dictionary)[
+				"public_card_refs"], refs)
+	assert_eq((ManeuverConsequenceProjection.capture_authority(
+			alternate)["consequence_view"] as Dictionary)[
+				"public_card_refs"], [refs[0], refs[1]])
+	var passive: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(initial, 1))
+	assert_not_null(passive)
+	if passive == null:
+		return
+	GameManager.current_game_state = passive
+	CommandProcessor.reset()
+	for selected_index: int in [2, 1]:
+		var command := CandidateResolveDamagedControlsCommand.new(0, {
+			"owner_player": 0, "ship_index": 0,
+			"ship_activation_identity": ACTIVATION_ID,
+			"maneuver_execution_id": EXECUTION_ID,
+			"public_card_ref": refs[selected_index],
+			"overlap_kind": "obstacle", "obstacle_id": "obstacle:0",
+		})
+		command.sequence = CommandProcessor.get_next_sequence()
+		assert_eq(command.validate(authority), "")
+		var result: Dictionary = command.execute(authority)
+		assert_false(result.is_empty())
+		var replacement: Dictionary = \
+				ManeuverConsequenceProjection.capture_authority(authority)
+		var expected_refs: Array = [refs[0], refs[1]] \
+				if selected_index == 2 else [refs[0]]
+		assert_eq((replacement["consequence_view"] as Dictionary)[
+				"public_card_refs"], expected_refs)
+		var envelope: Dictionary = {
+			"protocol_version": NetworkManager.PROTOCOL_VERSION,
+			"application_contract": command.application_contract_id(),
+			"application_contract_version": 2,
+			"viewer_player": 1,
+			"application_result": command.project_application_result(
+					result, 1),
+			"presentation_result": {},
+			"maneuver_consequence_view": replacement,
+		}
+		assert_false(CommandProcessor.submit_mirror(
+				command, envelope, 1).is_empty())
+		assert_eq(passive.get_ship(0, 0)
+				.passive_maneuver_consequence_view_snapshot()[
+						"public_card_refs"], expected_refs)
+		var saved: GameState = GameState.deserialize(authority.serialize())
+		assert_not_null(saved)
+		if saved != null:
+			assert_eq((ManeuverConsequenceProjection.capture_authority(
+					saved)["consequence_view"] as Dictionary)[
+						"public_card_refs"], expected_refs)
+		var reconnect: GameState = GameState.deserialize_passive_network(
+				StateFilter.filter_for_player(authority.serialize(), 1))
+		assert_not_null(reconnect)
+		if reconnect != null:
+			assert_eq(reconnect.get_ship(0, 0)
+					.passive_maneuver_consequence_view_snapshot(),
+					passive.get_ship(0, 0)
+							.passive_maneuver_consequence_view_snapshot())
+	assert_eq(CommandProcessor.get_next_sequence(), 2)
+
+
+func test_bug058_filtered_install_rejects_obsolete_and_invalid_view() -> void:
+	var authority: GameState = _plain_maneuver_state("applied")
+	var ship: ShipInstance = authority.get_ship(0, 0)
+	ship.current_speed = 2
+	_add_faceup(authority, ship, "ruptured_engine")
+	var filtered: Dictionary = StateFilter.filter_for_player(
+			authority.serialize(), 1)
+	assert_false(filtered["player_states"][0]["ships"][0][
+			"faceup_damage"][0].has("last_ruptured_engine_execution_id"))
+	assert_not_null(GameState.deserialize_passive_network(filtered))
+	var missing: Dictionary = filtered.duplicate(true)
+	var missing_execution: Dictionary = missing["player_states"][0][
+			"ships"][0]["active_maneuver_execution"]
+	missing_execution.erase("consequence_view")
+	assert_null(GameState.deserialize_passive_network(missing),
+			"Protocol-7 filtered snapshots cannot install under protocol 8.")
+	var extra: Dictionary = filtered.duplicate(true)
+	extra["player_states"][0]["ships"][0][
+			"active_maneuver_execution"]["consequence_view"][
+				"private_marker"] = "forbidden"
+	assert_null(GameState.deserialize_passive_network(extra))
+	var wrong_source: Dictionary = filtered.duplicate(true)
+	wrong_source["player_states"][0]["ships"][0][
+			"active_maneuver_execution"]["consequence_view"][
+				"public_card_refs"] = ["faceup:nonpublic"]
+	assert_null(GameState.deserialize_passive_network(wrong_source))
+	var duplicate_source: Dictionary = filtered.duplicate(true)
+	var refs: Array = duplicate_source["player_states"][0]["ships"][0][
+			"active_maneuver_execution"]["consequence_view"][
+				"public_card_refs"]
+	refs.append(refs[0])
+	assert_null(GameState.deserialize_passive_network(duplicate_source))
+
+
 func test_r1_automatic_immediate_uses_authority_submission_across_principals() \
 		-> void:
 	var state: GameState = _recovery_state("automatic_boundary")
@@ -437,7 +996,7 @@ func test_r1_host_player_gate_rejects_automatic_immediate_branch() -> void:
 		"ship_activation_identity": ACTIVATION_ID,
 		"maneuver_execution_id": EXECUTION_ID,
 		"maneuver_source_kind": "asteroid",
-		"maneuver_source_id": "obstacle:asteroid",
+		"maneuver_source_id": "obstacle:0",
 	})
 	assert_eq(command.validate(state), "")
 	var before: Dictionary = state.serialize()
@@ -462,7 +1021,7 @@ func test_r2_v2_comm_noise_result_refreshes_speed_visual_consumer() -> void:
 		"ship_activation_identity": ACTIVATION_ID,
 		"maneuver_execution_id": EXECUTION_ID,
 		"maneuver_source_kind": "asteroid",
-		"maneuver_source_id": "obstacle:asteroid",
+		"maneuver_source_id": "obstacle:0",
 		"comm_noise_action": "speed",
 	})
 	assert_eq(command.validate(state), "")
@@ -695,13 +1254,21 @@ func _decision_state(shape: String) -> GameState:
 				_obstacle("obstacle:1", "station", 1),
 			]
 		"hull_zone":
+			state.objectives["obstacles"] = [
+				_obstacle("obstacle:0", "debris_1", 0)]
+			assert_true(ship.commit_maneuver_obstacle_order(
+					ACTIVATION_ID, EXECUTION_ID, ["obstacle:0"]))
 			assert_true(ship.open_debris_resolution(
-					ACTIVATION_ID, EXECUTION_ID, "obstacle:debris", 0))
+					ACTIVATION_ID, EXECUTION_ID, "obstacle:0", 0))
 		"station_union":
+			state.objectives["obstacles"] = [
+				_obstacle("obstacle:0", "station", 0)]
+			assert_true(ship.commit_maneuver_obstacle_order(
+					ACTIVATION_ID, EXECUTION_ID, ["obstacle:0"]))
 			_add_faceup(state, ship, "ordinary")
 			ship.add_facedown_damage(_take_card(state, "ordinary", false))
 			assert_true(ship.open_station_resolution(
-					ACTIVATION_ID, EXECUTION_ID, "obstacle:station", 0))
+					ACTIVATION_ID, EXECUTION_ID, "obstacle:0", 0))
 		"immediate_single":
 			_open_immediate(state, ship, "injured_crew", 0)
 		"shield_multi":
@@ -715,6 +1282,10 @@ func _decision_state(shape: String) -> GameState:
 
 func _open_immediate(state: GameState, ship: ShipInstance,
 		effect: String, actor: int) -> void:
+	state.objectives["obstacles"] = [
+		_obstacle("obstacle:0", "asteroid_1", 0)]
+	assert_true(ship.commit_maneuver_obstacle_order(
+			ACTIVATION_ID, EXECUTION_ID, ["obstacle:0"]))
 	var public_ref: String = "faceup:v4:%s" % effect
 	var card: DamageCard = _take_card(state, effect, true)
 	var physical_id: String = card.physical_card_id
@@ -722,7 +1293,7 @@ func _open_immediate(state: GameState, ship: ShipInstance,
 	ship.add_faceup_damage(card)
 	var immediate_id: String = "immediate:%s" % public_ref
 	assert_true(ship.open_asteroid_resolution(
-			ACTIVATION_ID, EXECUTION_ID, "obstacle:asteroid", immediate_id))
+			ACTIVATION_ID, EXECUTION_ID, "obstacle:0", immediate_id))
 	assert_true(ship.establish_immediate_resolution({
 		"immediate_resolution_id": immediate_id,
 		"public_card_ref": public_ref,
@@ -735,7 +1306,7 @@ func _open_immediate(state: GameState, ship: ShipInstance,
 		"ship_activation_identity": ACTIVATION_ID,
 		"maneuver_execution_id": EXECUTION_ID,
 		"maneuver_source_kind": "asteroid",
-		"maneuver_source_id": "obstacle:asteroid",
+		"maneuver_source_id": "obstacle:0",
 	}))
 
 

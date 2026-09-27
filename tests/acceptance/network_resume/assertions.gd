@@ -48,7 +48,7 @@ func _assert_fresh_and_reconnect(shared: String) -> bool:
 			var record := _load_record(path)
 			if record.is_empty():
 				return false
-			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 7 \
+			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 8 \
 					or not bool(record.get("admission", false)) \
 					or int(record.get("canonical_installs", 0)) != 1 \
 					or int(record.get("board_releases", 0)) != 1 \
@@ -135,7 +135,7 @@ func _assert_bug043_stabilization(shared: String) -> bool:
 			shared.path_join("bug043-reconnect.json"))
 	for record: Dictionary in [host, initial, reconnect]:
 		if record.is_empty() or not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 7:
+				or int(record.get("protocol", 0)) != 8:
 			_fail("BUG-043 process evidence is incomplete")
 			return false
 	var host_evidence: Dictionary = host.get("bug043", {}) as Dictionary
@@ -180,7 +180,7 @@ func _assert_commanded_squadron_ordering(shared: String) -> bool:
 		if record.is_empty():
 			return false
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 7 \
+				or int(record.get("protocol", 0)) != 8 \
 				or not bool(record.get("admission", false)) \
 				or int(record.get("player_index", -1)) \
 						!= (0 if role == "host" else 1) \
@@ -270,7 +270,7 @@ func _assert_bug031_commanded_decline(shared: String) -> bool:
 		if record.is_empty():
 			return false
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 7 \
+				or int(record.get("protocol", 0)) != 8 \
 				or not bool(record.get("admission", false)) \
 				or int(record.get("canonical_installs", 0)) != 1 \
 				or int(record.get("board_releases", 0)) != 1 \
@@ -323,7 +323,7 @@ func _assert_bug031_activation_gate(shared: String) -> bool:
 		var path := shared.path_join("activation-gate-" + role + ".json")
 		var record := _load_record(path)
 		if record.is_empty() or not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 7:
+				or int(record.get("protocol", 0)) != 8:
 			_fail("BUG-031 activation gate process failed: " + path)
 			return false
 		var evidence: Dictionary = record.get("activation_gate", {}) as Dictionary
@@ -377,7 +377,7 @@ func _assert_client_end_activation(shared: String) -> bool:
 		if record.is_empty():
 			return false
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 7 \
+				or int(record.get("protocol", 0)) != 8 \
 				or not bool(record.get("admission", false)) \
 				or int(record.get("player_index", -1)) \
 						!= (0 if role == "host" else 1) \
@@ -426,7 +426,7 @@ func _assert_network_same_live_compatibility(shared: String) -> bool:
 			return false
 		var compatibility: Dictionary = record.get("compatibility", {}) as Dictionary
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 7 \
+				or int(record.get("protocol", 0)) != 8 \
 				or int(record.get("canonical_installs", 0)) != 3 \
 				or int(record.get("board_releases", 0)) != 3 \
 				or bool(record.get("resume_attempt_active", true)) \
@@ -496,9 +496,9 @@ func _assert_network_replay_compatibility(
 		_fail("Network replay host log is missing.")
 		return false
 	var log_text := FileAccess.get_file_as_string(host_log)
-	if log_text.find("protocol v7") == -1 or log_text.find("Handshake from peer") == -1 \
+	if log_text.find("protocol v8") == -1 or log_text.find("Handshake from peer") == -1 \
 			or log_text.find(" v7,") == -1:
-		_fail("Network replay did not negotiate protocol 7 over live ENet.")
+		_fail("Network replay did not negotiate protocol 8 over live ENet.")
 		return false
 	if log_text.to_lower().find("fresh resume") != -1 \
 			or log_text.to_lower().find("explicit side assignment") != -1:

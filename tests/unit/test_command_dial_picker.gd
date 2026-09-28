@@ -197,7 +197,12 @@ func test_confirm_emits_signal_and_closes() -> void:
 	_ship.command_dial_stack.spend_revealed()
 	_picker.open(_ship, 2) # Needs 1 dial.
 	_picker._on_command_selected(Constants.CommandType.CONCENTRATE_FIRE)
+	# This tests the picker signal, not a live Command Phase submission.
+	# Earlier suite tests may leave GameManager active in another phase.
+	var was_game_active: bool = GameManager.is_game_active
+	GameManager.is_game_active = false
 	_picker._on_confirm_pressed()
+	GameManager.is_game_active = was_game_active
 
 	assert_eq(received_ship.size(), 1,
 			"Signal should emit exactly once")

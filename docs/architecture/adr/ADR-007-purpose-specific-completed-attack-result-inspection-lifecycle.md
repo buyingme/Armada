@@ -105,6 +105,18 @@ derived from authoritative `ShipInstance` or `SquadronInstance` state.
 
 ## 2. Decision
 
+> **Draft UX-010 amendment — proposed, not accepted:** Item 5 below would
+> also admit authority-owned terminal match completion as a context-specific
+> consumer of a **satisfied** completed-attack inspection. Where canonical
+> post-transaction facts detect terminal match completion, further ordinary
+> enclosing gameplay is inapplicable. After required faceup inspection,
+> still-valid immediate effects, and Attack terminal cleanup, the terminal
+> match transaction would validate and atomically consume the matching
+> satisfied completed-attack inspection while installing one canonical result.
+> It could not waive acknowledgments or delegate release to a timer, UI, or
+> `InteractionFlow`. The accepted text below remains authoritative until Owner
+> acceptance of this narrow amendment.
+
 `GameState` SHALL own zero or one canonical pending completed-attack result
 inspection.
 
@@ -129,6 +141,14 @@ FSM, or canonical presentation lifecycle.
 ## 3. Ownership
 
 ### 3.1 Canonical Lifecycle Owner
+
+> **Draft UX-010 amendment — proposed, not accepted:** The existing enclosing
+> gameplay path remains the ordinary consumer. After terminal-condition
+> detection, the purpose-specific authority-owned match-completion transaction
+> would instead consume the matching satisfied inspection atomically with its
+> canonical result. `GameState` would retain sole inspection ownership; the
+> inspection would still contain no continuation descriptor or outcome owner.
+> Failed completion would leave the inspection unconsumed and the result absent.
 
 `GameState` is the sole authoritative owner of the pending completed-attack
 inspection and its acknowledgement sets. No second writable representation is

@@ -7,28 +7,27 @@ Derived From: ADR-007 and PAC-OD-001 through PAC-OD-007
 Related ADRs: ADR-001, ADR-006, ADR-007
 Related Contracts: CON-001, CON-006
 Related Decision Workbooks: ODR-001, accepted ODR-002
-Related Implementation Workbooks: accepted BUG-031 Squadron Move decline repair
+Related Implementation Workbooks: accepted BUG-031 Squadron Move decline repair; accepted UX-006–UX-012 UX integration workbook
 Related Evidence: MA-ATTACK-001
 
 Accepted by: Project Owner
 Accepted date: 2026-08-18
 Accepted update date: 2026-08-22
 Accepted second update date: 2026-09-05
+Accepted UX-010/UX-011 update date: 2026-09-29
 Supersedes: None
 Superseded by: None
 
-## Draft Note
+## Acceptance Note
 
 This Contract translates the accepted Project Owner direction recorded in
 `UX-005-post-attack-continuation-ownership-workbook.md` into the narrow
-implementation obligations needed for ADR-007 Entry Gate B. Until the Project
-Owner accepts this Contract, it is not normative implementation authority.
+implementation obligations needed for ADR-007 Entry Gate B. It and the
+UX-010/UX-011 updates are accepted implementation authority.
 
-The Owner decisions resolve the intended ownership model. They do not establish
-the per-context implementation proof required for Entry Gate B and do not
-authorize UX-005 implementation. ADR-007 remains the architecture authority;
-this Contract neither amends it nor introduces a new lifecycle, command family,
-or canonical owner.
+The Owner decisions resolve the intended ownership model. Per-context
+implementation proof remains required. ADR-007 remains the architecture
+authority; this Contract introduces no generic lifecycle or continuation owner.
 
 ## 1. Purpose And Scope
 
@@ -210,21 +209,13 @@ replay, save/load, reconnect, and future non-human-controller execution.
 Canonical disposition and accepted command history, not modal state or scene
 position, SHALL determine recovery.
 
-CON-007-SQMOVE-008: Presentation SHALL NOT expose the current Squadron
-Activation's action controls before authoritative `ActivateSquadronCommand`
-acceptance. It SHALL NOT expose another squadron as actionable or report the
-current activation complete before authoritative completion succeeds. A
-rejected activation or completion SHALL recover from canonical state without
-consuming command capacity or abandoning the current canonical owner.
+### Accepted UX-011 refinement to CON-007-SQMOVE-008
 
-### Draft UX-011 replacement for CON-007-SQMOVE-008 — not yet accepted
+This replacement changes only the precommit-intent distinction selected for
+UX-011; all other CON-007 clauses and Squadron Activation ownership remain
+unchanged.
 
-The accepted clause above remains in force until the Owner accepts this
-replacement through repository governance. This proposal changes only the
-precommit-intent distinction selected for UX-011; all other CON-007 clauses
-and Squadron Activation ownership remain unchanged.
-
-**Proposed CON-007-SQMOVE-008:** Before an `ActivateSquadronCommand` is accepted,
+CON-007-SQMOVE-008: Before an `ActivateSquadronCommand` is accepted,
 presentation MAY let the controlling player transiently inspect and switch
 between eligible squadrons and their ranges and prospective legal Move, Attack,
 or Skip **intents**. Such inspection and intent SHALL derive eligibility from
@@ -240,7 +231,7 @@ legal **UX-011 whole-activation Skip intent** SHALL consume all remaining
 legal action opportunities and mark the squadron activated through existing
 authoritative transitions; this differs from CON-006 §11.2 declaration
 `SkipAttackCommand`, which MAY preserve independent Rogue or commanded Move.
-This proposal does not make Skip legal for an engaged squadron where existing
+This refinement does not make Skip legal for an engaged squadron where existing
 gameplay rules prohibit it. A rejected action after activation acceptance
 SHALL NOT refund committed activation or Squadron Command capacity. While an
 activation is committed, presentation SHALL NOT expose another squadron as
@@ -248,15 +239,15 @@ actionable or report the current activation complete before authoritative
 completion succeeds. A rejected completion SHALL recover from canonical state
 without consuming command capacity or abandoning the current canonical owner.
 
-### Draft UX-010 terminal-release amendment — not yet accepted
+### Accepted UX-010 terminal-release amendment
 
-The accepted RELEASE, context, seam, BOUNDARY-003/004, and XO clauses
-remain in force until Owner acceptance. This proposal changes only the case
+The RELEASE, context, seam, BOUNDARY-003/004, and XO clauses remain in force.
+This amendment changes only the case
 where authoritative match termination makes ordinary enclosing gameplay
 inapplicable; it does not waive completed-result acknowledgment or introduce a
 generic continuation, terminal-work owner, or match FSM.
 
-**Proposed CON-007-RELEASE-003 addition:** After canonical post-transaction
+**CON-007-RELEASE-003 accepted UX-010 addition:** After canonical post-transaction
 terminal-condition detection, a satisfied completed-attack inspection MAY be
 released only through the context-specific `CompleteMatchCommand` transaction.
 That command SHALL validate terminal readiness and consume the matching
@@ -264,7 +255,7 @@ inspection atomically with installation of the single `GameState` terminal
 result. Failure SHALL leave both unchanged. This is an additional semantic
 transaction at this boundary, not a generic post-attack command.
 
-**Proposed §4 context mapping addition:** For each supported Attack context
+**§4 accepted UX-010 context mapping addition:** For each supported Attack context
 listed below, when terminal match completion is detected, required faceup
 inspection and valid immediate effects precede `CompleteAttackCommand`; its
 completed-result inspection is acknowledged, then `CompleteMatchCommand`
@@ -274,13 +265,13 @@ ship-activation progression is inapplicable. BOUNDARY-004 still prevents
 premature anti-squadron iteration closure; it does not require a further
 ordinary `squadron_done` continuation after the match is terminal.
 
-**Proposed CON-007-BOUNDARY-004 qualifier:** Its `squadron_done` transaction
+**CON-007-BOUNDARY-004 accepted UX-010 qualifier:** Its `squadron_done` transaction
 remains mandatory for an exhausted anti-squadron iteration when ordinary
 enclosing gameplay continues. Once canonical terminal-match detection makes
 that gameplay inapplicable, the satisfied inspection is consumed by the
 terminal transaction instead; no anti-squadron completion is fabricated.
 
-**Proposed CON-007-SEAM-001/005 addition:** The existing `CommandProcessor`
+**CON-007-SEAM-001/005 accepted UX-010 addition:** The existing `CommandProcessor`
 live-authority release evaluator MAY select that terminal transaction from
 canonical readiness and then stop ordinary enclosing convergence at the
 terminal result. It SHALL own no terminal workflow or new canonical fact.

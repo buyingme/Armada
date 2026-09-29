@@ -1,8 +1,6 @@
 # UX-006–UX-012: UX Integration Implementation Workbook
 
-Status: **Draft — focused independent re-audit found no blocker; F1/F2
-refinements incorporated; Owner acceptance pending. No implementation
-authorization.**
+Status: **Accepted by Project Owner — 2026-09-29. Implementation pending.**
 
 The seven linked UX issues below are the requirements. This workbook records
 the Owner's four decisions as implementation boundaries; it does not mark any
@@ -16,14 +14,14 @@ activation ownership, ADR-007/CON-007 completed-attack inspection and Squadron
 Action ownership, ADR-010 decision-equivalent recovery, ADR-014 immediate
 faceup-card ownership, and the committed BUG-043/058 and BUG-063/064 boundaries.
 The Owner decisions in Section 2 settle the four previously open UX design
-questions; the proposed CON-007-SQMOVE-008 replacement and the narrow
-ADR-007/CON-007 terminal-release amendments remain **Draft** until accepted.
+questions; the CON-007-SQMOVE-008 replacement and the narrow ADR-007/CON-007
+terminal-release amendments are accepted authority.
 The [original pre-implementation audit](../evidence/UX-006-UX-012-pre-implementation-architecture-audit.md)
 is the complete B1/B2 and R1–R5 evidence; its
 [follow-up blocker-resolution analysis](../evidence/UX-006-UX-012-blocker-resolution-analysis.md)
 supplies the accepted B1/B2 resolution path only. The focused re-audit found
-only F1/F2, now refined below; explicit Owner acceptance remains required
-before production or test implementation.
+only F1/F2, now refined below. The Owner accepted the workbook and affected
+authority amendments after independent closure verification.
 
 The separately authorized dial-picker isolation repair is complete:
 `test_command_dial_picker.gd` passes 18/18 alone and the full suite passes
@@ -49,7 +47,7 @@ distinct from the A/B/C implementation-risk classification in Section 3.
 | **UX-006 A: source-independent faceup inspection** | One purpose-specific lifecycle applies to each newly dealt faceup card, whatever accepted command dealt it. It owns only inspection, acknowledgment, and release. Network requires both principals; Hot-Seat requires one shared-screen principal. Deal → inspect/acknowledge → that card's immediate effect, if any → next card/consequence. | A damage result must be visible before its effect or further gameplay. Card assignment, damage/deck mutation, and immediate effect remain with their existing owners. Do not reuse/expand ADR-007's completed-attack inspection or introduce a generic barrier. |
 | **UX-008 A: Maneuver/obstacle pre-effect acknowledgment** | Once order is established, each obstacle occurrence receives its own recoverable context/acknowledgment before any consequence mutation. Network requires both principals; Hot-Seat one. Finish one obstacle, including any UX-006 faceup inspection and immediate effect, before the next occurrence. | The notice conveys cause and upcoming effect, not a gameplay choice. Existing obstacle legality and consequence commands remain authoritative. Repeated effects must have distinct occurrence identities, not a UI counter or generic work queue. |
 | **UX-010 A: canonical terminal match result** | At authoritative match completion, one durable terminal result owns winner/result identity and presentation facts. Both Network peers project that same result; clients do not establish an outcome. Hot-Seat orients to winner and shows `VICTORY`; Network shows winner `VICTORY` and loser `DEFEAT`; Result follows a presentation-only two-second delay. | A local `game_ended` event cannot by itself prove cross-peer identity or recovery. The result is terminal-match-specific, not a match FSM. Ordinary Ship/Squadron banners remain suppressed; Hot-Seat Command Phase private handoff remains. |
-| **UX-011 A: precommit action intent** | Clicking/cycling is transient. Existing authoritative legality supplies prospective ranges and legal Move/Attack/Skip intent. Choosing a legal intent requests `ActivateSquadronCommand`; only acceptance commits activation/capacity, then the existing action path executes. Rejection executes no action. Legal Skip consumes activation and marks the squadron activated. Engaged-squadron Skip restrictions remain. | Precommit information must be inspectable without spending capacity, while the accepted activation command remains the commitment boundary. The exact proposed CON-007-SQMOVE-008 replacement is adjacent to the still-binding accepted clause in `CON-007`; it is not yet normative. |
+| **UX-011 A: precommit action intent** | Clicking/cycling is transient. Existing authoritative legality supplies prospective ranges and legal Move/Attack/Skip intent. Choosing a legal intent requests `ActivateSquadronCommand`; only acceptance commits activation/capacity, then the existing action path executes. Rejection executes no action. Legal Skip consumes activation and marks the squadron activated. Engaged-squadron Skip restrictions remain. | Precommit information must be inspectable without spending capacity, while the accepted activation command remains the commitment boundary. The accepted CON-007-SQMOVE-008 refinement governs this distinction. |
 
 ## 3. Requirement trace and existing production seams
 
@@ -280,8 +278,8 @@ this terminal transaction is its context-specific release consumer: it
 validates and consumes that inspection atomically with result installation.
 Failure leaves both inspection and result unchanged, with no second
 acknowledgment. Normal post-attack branches offering another attack or Rogue
-Move are inapplicable after terminal detection. This requires the narrow
-proposed ADR-007/CON-007 amendments; BOUNDARY-003 and XO-002 remain substantive
+Move are inapplicable after terminal detection. This follows the narrow
+accepted ADR-007/CON-007 amendments; BOUNDARY-003 and XO-002 remain substantive
 gates, not waivers. Reject premature/duplicate completion and subsequent
 gameplay commands. Remaining turn/opportunity facts cannot authorize play
 after the result. `CommandProcessor` selects eligible transitions at its
@@ -363,9 +361,9 @@ completion.
 
 ## 5. Ordered implementation slices
 
-Entry gate for *all* slices: review of the F1/F2 Draft refinements, acceptance
-of the narrow ADR-007/CON-007 terminal-release amendments and CON-007-SQMOVE-008
-replacement, and explicit Owner acceptance of this workbook. The
+Entry gate for *all* slices: the independently verified F1/F2 refinements,
+the accepted narrow ADR-007/CON-007 terminal-release amendments and
+CON-007-SQMOVE-008 replacement, and Owner acceptance of this workbook. The
 following order reflects actual production dependencies; no slice authorizes
 another architecture or gameplay rule.
 
@@ -412,8 +410,8 @@ another architecture or gameplay rule.
    after accepted destruction and on reconstruction. Repair an actual card
    transfer defect through the existing ship/deck cleanup owner operations;
    missing card ownership is a STOP.
-6. **UX-011 precommit inspection.** After acceptance of the proposed
-   CON-007-SQMOVE-008, move activation submission from token click to legal
+6. **UX-011 precommit inspection.** Under accepted CON-007-SQMOVE-008, move
+   activation submission from token click to legal
    Move/Attack/Skip intent in both Squadron Phase and Squadron Command.
    Reuse authoritative legality and add the missing engaged-Skip command guard
    described in Section 4.4; hold intended action transiently until the
@@ -578,7 +576,7 @@ atomic lethal cleanup with existing owners/transactions, if an obstacle effect m
 its pre-effect gate, if existing accepted legality cannot supply prospective
 Squadron intent, if terminal result cannot be authority-owned and passively
 installed, if private state would leak, if new compatibility policy is needed,
-or if any accepted ADR/Contract beyond the proposed narrow ADR-007/CON-007
+or if any accepted ADR/Contract beyond the accepted narrow ADR-007/CON-007
 amendments must change. UI/`InteractionFlow` must never own legality, acknowledgments,
 effects, activation, outcome, or continuation. The two acknowledgment records
 remain separate and purpose-specific; the terminal result is not a match FSM.
@@ -602,15 +600,15 @@ relabel, promote, or replace replay fixtures.
 
 ### Audit disposition and remaining gate
 
-The original audit's **B1** closes in this Draft through atomic lethal-source
+The original audit's **B1** closes in this workbook through atomic lethal-source
 cleanup plus immutable public inspection and canonical exceptional Ship Phase
 outcome; **B2** closes through post-transaction detection, restricted admission,
 ordered cleanup, final-round proof, and atomic terminal release. Its **R1**
 source/recovery mapping is in §§4.1–4.3; **R2** Skip semantics are in §4.4 and
-the proposed SQMOVE-008; **R3** closed passive replacement and real transport
+the accepted SQMOVE-008; **R3** closed passive replacement and real transport
 proof are in §§6–7; **R4** concrete Owner captures and post-capture convergence
-are above; **R5** Rule Capability Package updates are in §5. These are Draft
-dispositions for focused independent re-audit, not implementation acceptance.
+are above; **R5** Rule Capability Package updates are in §5. These dispositions
+were independently verified before Owner acceptance.
 No new Owner decision is identified by the accepted B1/B2 resolution path.
 The focused independent re-audit verified B1/B2 and closed R2–R5 with no
 blocker or remaining Owner decision; it left only R1's **F1** non-immediate
@@ -618,6 +616,6 @@ asteroid release mapping and **F2** destruction-producer coverage. F1 is
 specified in §4.2, §4.5, Slice 2, and §§6–7 using the explicit
 `CompleteAsteroidOverlapCommand` and Maneuver-owned outstanding fact. F2 is
 specified in §4.1, Slice 1, and §§6–7 for every existing producer, including
-zero-card out-of-play Maneuver destruction. These Draft refinements now await
-Owner acceptance; they do not reopen the verified boundaries or authorize
-implementation.
+zero-card out-of-play Maneuver destruction. Independent closure verification
+preceded Owner acceptance; these refinements do not reopen the verified
+boundaries.

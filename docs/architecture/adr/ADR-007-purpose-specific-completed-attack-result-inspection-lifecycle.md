@@ -1,6 +1,6 @@
 # ADR-007: Purpose-Specific Completed-Attack Result Inspection Lifecycle
 
-Status: Accepted
+Status: Accepted, Accepted UX-010 Amendment
 
 ADR-ID: ADR-007
 Title: Purpose-Specific Completed-Attack Result Inspection Lifecycle
@@ -8,6 +8,7 @@ Title: Purpose-Specific Completed-Attack Result Inspection Lifecycle
 Accepted by: Project Owner
 
 Accepted date: 2026-08-15
+Accepted UX-010 amendment date: 2026-09-29
 
 Decision owner: Project Owner
 
@@ -22,6 +23,7 @@ None
 
 Related:
 - UX-005
+- UX-010
 - ADR-001
 - ADR-005
 - ADR-006
@@ -63,15 +65,14 @@ Inputs:
 - `docs/architecture/implementation_workbooks/TWI-003-authoritative-current-attack-state-implementation-workbook.md`
 - `docs/architecture/tests/TEST-003-interactive-rule-timing-window-verification.md`
 
-## Draft Note
+## Acceptance Note
 
 This ADR records the narrow architecture decision selected by the Project Owner
-for UX-005. It has no accepted authority until the Project Owner accepts it
-under the repository document-authority model.
+for UX-005 and the accepted UX-010 terminal-release amendment. It is
+authoritative under the repository document-authority model.
 
-It authorizes no implementation by itself. A later implementation workbook
-must translate the accepted decision into a cutover, compatibility allocation,
-and verification plan.
+Implementation remains governed by the applicable accepted implementation
+workbook's cutover, compatibility allocation, and verification gates.
 
 ## 1. Context
 
@@ -105,17 +106,16 @@ derived from authoritative `ShipInstance` or `SquadronInstance` state.
 
 ## 2. Decision
 
-> **Draft UX-010 amendment — proposed, not accepted:** Item 5 below would
-> also admit authority-owned terminal match completion as a context-specific
+> **Accepted UX-010 amendment:** Item 5 below also admits authority-owned
+> terminal match completion as a context-specific
 > consumer of a **satisfied** completed-attack inspection. Where canonical
 > post-transaction facts detect terminal match completion, further ordinary
 > enclosing gameplay is inapplicable. After required faceup inspection,
 > still-valid immediate effects, and Attack terminal cleanup, the terminal
-> match transaction would validate and atomically consume the matching
+> match transaction validates and atomically consumes the matching
 > satisfied completed-attack inspection while installing one canonical result.
-> It could not waive acknowledgments or delegate release to a timer, UI, or
-> `InteractionFlow`. The accepted text below remains authoritative until Owner
-> acceptance of this narrow amendment.
+> It cannot waive acknowledgments or delegate release to a timer, UI, or
+> `InteractionFlow`.
 
 `GameState` SHALL own zero or one canonical pending completed-attack result
 inspection.
@@ -132,7 +132,9 @@ For each applicable UX-005 attack result:
    `AcknowledgeAttackResultCommand`; and
 5. once all required acknowledgements are received, the existing
    `ShipInstance`- or `SquadronInstance`-derived continuation becomes eligible
-   and executes exactly once through its accepted path.
+   and executes exactly once through its accepted path, or, after canonical
+   terminal-match detection, the authority-owned match-completion transaction
+   consumes the satisfied inspection atomically with the terminal result.
 
 This is one purpose-specific lifecycle. It is not a generic acknowledgement
 framework, continuation-barrier abstraction, voting system, interaction/gameplay
@@ -142,13 +144,13 @@ FSM, or canonical presentation lifecycle.
 
 ### 3.1 Canonical Lifecycle Owner
 
-> **Draft UX-010 amendment — proposed, not accepted:** The existing enclosing
+> **Accepted UX-010 amendment:** The existing enclosing
 > gameplay path remains the ordinary consumer. After terminal-condition
 > detection, the purpose-specific authority-owned match-completion transaction
-> would instead consume the matching satisfied inspection atomically with its
-> canonical result. `GameState` would retain sole inspection ownership; the
-> inspection would still contain no continuation descriptor or outcome owner.
-> Failed completion would leave the inspection unconsumed and the result absent.
+> instead consumes the matching satisfied inspection atomically with its
+> canonical result. `GameState` retains sole inspection ownership; the
+> inspection still contains no continuation descriptor or outcome owner.
+> Failed completion leaves the inspection unconsumed and the result absent.
 
 `GameState` is the sole authoritative owner of the pending completed-attack
 inspection and its acknowledgement sets. No second writable representation is
@@ -163,8 +165,10 @@ retirement out of their existing command and state owners.
 received acknowledgements.
 
 The existing enclosing continuation path remains the owner of the next
-gameplay transition. It consumes the satisfied inspection as a precondition;
-the inspection does not own or describe the continuation itself.
+ordinary gameplay transition. It consumes the satisfied inspection as a
+precondition. After terminal-match detection, the authority-owned
+match-completion transaction is the context-specific consumer. The inspection
+does not own or describe either continuation.
 
 ### 3.2 Non-Owners
 
@@ -721,8 +725,7 @@ rather than restating TEST-003.
 ## 17. Open Questions
 
 OD-001 through OD-015 resolve ownership and product semantics. No further
-Project Owner product decision is currently required to make this Draft
-reviewable.
+Project Owner product decision is required for this accepted ADR.
 
 Semantic implementation remains conditional on the Section 13 pre-implementation Entry Gate proving both the authoritative human-principal source and sufficient accepted continuation-release ownership, transaction boundaries, and integration seams for every applicable context. The Entry Gate establishes implementation readiness; it does not require behavior explicitly authorized for implementation by this ADR to already exist. Post-implementation verification must then prove the resulting production behavior, including atomic exact-once release and the required replay, mirror, save/load, and reconnect semantics. Failure of the readiness proof is an architecture stop, not permission for local invention. This evidence condition does not reopen or weaken the resolved Owner decisions.
 

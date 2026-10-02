@@ -894,19 +894,9 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 		_log.info("Phase already advanced past SQUADRON — skip re-open.")
 		EventBus.squadron_activation_ended.emit(instance)
 		return
-	if game_state != null \
-			and game_state.squadron_phase_controller_player \
-					== instance.owner_player \
-			and _squadron_activation_count \
-					< Constants.SQUADRONS_PER_ACTIVATION:
-		var next_num: int = _squadron_activation_count + 1
-		if _squadron_modal:
-			_squadron_modal.open_for_turn(
-					next_num, Constants.SQUADRONS_PER_ACTIVATION)
-	else:
-		_log.info("All squadron activations done for player %d." %
-				GameManager.active_player)
-		hide_ui()
+	# The accepted completion has already projected the next canonical
+	# Squadron decision (possibly for the other controller). This retiring
+	# callback must neither close nor reopen that newly projected surface.
 	EventBus.squadron_activation_ended.emit(instance)
 
 

@@ -453,6 +453,9 @@ func test_bug_018_modal_skip_commits_action_then_allows_next_squadron() -> void:
 	assert_false(_history_types().has(
 			CompleteSquadronActivationCommand.TYPE),
 			"Accepted declaration Skip completes this non-Rogue row atomically.")
+	# This isolated controller composition has no GameBoard command-result
+	# router. Drive the same canonical selection projection the board applies.
+	assert_true(controller.restore_phase_selection_from_interaction_state(state))
 	assert_eq(modal.get_state(),
 			SquadronActivationModal.State.WAITING_FOR_SELECTION)
 
@@ -522,6 +525,8 @@ func test_bug_018_network_controller_waits_for_authoritative_skip_result() \
 	assert_eq(skipped.attack_action_disposition,
 			SquadronInstance.ATTACK_ACTION_DECLINED)
 	assert_true(skipped.activated_this_round)
+	# The standalone controller fixture omits GameBoard result projection.
+	assert_true(controller.restore_phase_selection_from_interaction_state(state))
 	assert_eq(modal.get_state(),
 			SquadronActivationModal.State.WAITING_FOR_SELECTION)
 	assert_eq(_history_types(), ["activate_squadron", "skip_attack"])

@@ -110,3 +110,150 @@ Cancellation is suggested by existing UI branches, but those branches are incons
 **11. Recommended model/reasoning for implementation**
 
 **GPT-6 Astra, high reasoning, single agent** for the combined work. BUG-069 alone is bounded enough for **GPT-6 Sol, high**. This is a task-specific recommendation; the key quality gate is complete transition evidence, consistent with [OpenAI’s model-selection guidance](https://developers.openai.com/api/docs/guides/model-selection).
+
+## Owner Resolution — BUG-070 Zero-Dice Attack Semantics
+
+**Status:** Owner decision resolved after diagnosis.
+
+The BUG-070 diagnosis stopped before implementation because the authoritative outcome
+of mandatory pre-roll processing reducing an attack pool to zero required explicit
+gameplay semantics.
+
+The following decisions resolve that stop.
+
+### Q1 — Zero-dice outcome
+
+**Decision: Cancel the individual attack.**
+
+If, after completion of the applicable **GATHER ATTACK DICE** step, the resulting
+attack pool contains zero dice, the individual attack is canceled.
+
+The attack does not continue into later attack-resolution steps with an empty attack
+pool.
+
+This interpretation follows the Armada FAQ ruling that an attack is canceled when
+the ship does not gather any dice during the Roll Attack Dice step.
+
+### Q2 — Anti-squadron continuation
+
+Cancellation applies only to the affected individual squadron attack.
+
+For an anti-squadron attack, cancellation of the individual attack against one
+squadron does not cancel the enclosing anti-squadron attack. The existing
+authoritative anti-squadron continuation must re-evaluate the remaining eligible
+squadron targets.
+
+A later squadron may therefore still be attacked if its independently determined
+attack pool can contain one or more dice.
+
+Example: an obstructed squadron attack may be canceled because its final gathered
+pool is empty while an unobstructed attack against another eligible squadron remains
+legal.
+
+### Q3 — Cancellation evaluation point
+
+Cancellation is evaluated only **after all applicable effects belonging to the
+GATHER ATTACK DICE step have resolved**.
+
+A temporary zero-dice pool during processing does not itself cancel the attack.
+
+The authoritative sequence is:
+
+1. establish the attack and enter GATHER ATTACK DICE;
+2. resolve all applicable effects belonging to GATHER ATTACK DICE;
+3. evaluate the resulting attack pool when that step is complete;
+4. if the final pool is empty, cancel the individual attack;
+5. if one or more dice remain, continue to the next attack step.
+
+Effects belonging to later attack steps cannot rescue an attack already canceled at
+the completion of GATHER ATTACK DICE.
+
+### Q4 — Commitment and attack history
+
+Cancellation is a **forward transition, not rollback**.
+
+Once the attack has been committed, cancellation does not undo its declaration.
+
+The affected target remains recorded as attacked and the corresponding committed
+attack opportunity/history remains consumed. Cancellation does not permit retrying
+the same individual attack unless another game rule explicitly provides otherwise.
+
+Existing enclosing Attack/anti-squadron continuation determines the next legal
+opportunity.
+
+### Q5 — Previously consumed resources and effects
+
+Any resource, effect, or other authoritative commitment legally consumed before
+cancellation remains consumed.
+
+Cancellation does not refund or roll back previously committed gameplay state.
+
+Effects belonging to later attack steps are never reached and therefore cannot be
+used or consumed as part of the canceled attack.
+
+### Q6 — Empty pool versus ineffective results
+
+Cancellation depends on the **absence of attack dice**, not on whether the remaining
+dice currently produce useful results.
+
+If one or more dice remain after GATHER ATTACK DICE completes, the attack continues
+normally even if the rolled results are blank or otherwise currently ineffective.
+
+Therefore:
+
+- empty final attack pool → cancel the individual attack;
+- non-empty final attack pool → continue normally.
+
+### Q7 — Cancellation authority
+
+Cancellation belongs to the existing authoritative attack lifecycle.
+
+Individual card effects, obstruction handling, or other GATHER ATTACK DICE effects
+must not independently cancel an attack merely because their own application reduces
+the pool to zero.
+
+**All applicable GATHER ATTACK DICE effects must first be resolved.**
+
+Only at completion of that step may the authoritative attack lifecycle evaluate the
+resulting pool and establish cancellation.
+
+This means a BUG-070 repair must not merely replace an intermediate
+`after_count <= 0` rejection with immediate cancellation if that check occurs before
+the GATHER ATTACK DICE step has completed.
+
+### Related finding — BUG-071
+
+During BUG-070 Owner clarification, a separate rules-timing issue was identified for
+Concentrate Fire and recorded as **BUG-071**.
+
+Concentrate Fire belongs to the later **Resolve Attack Effects** step rather than
+GATHER ATTACK DICE. It therefore cannot rescue an attack that has already been
+canceled when GATHER ATTACK DICE completes with an empty pool.
+
+BUG-071 remains a separate issue because it concerns the timing/integration of
+Concentrate Fire rather than the zero-dice cancellation semantics themselves.
+
+The two issues may share attack-pool production seams and should be considered
+together during read-only diagnosis, while retaining separate issue identities and
+repair obligations.
+
+### Disposition
+
+The BUG-070 Owner-decision stop recorded by this evidence report is **resolved**.
+
+No generic rollback, generic continuation mechanism, or effect-owned cancellation is
+authorized by these decisions.
+
+Before implementation, perform a bounded read-only diagnosis of BUG-070 and BUG-071
+against the production attack sequence to determine:
+
+- the actual authoritative GATHER ATTACK DICE boundary;
+- every applicable effect currently participating in that step;
+- where final-pool cancellation should be evaluated;
+- the current Concentrate Fire dial/token timing;
+- whether existing ADR-001 / CON-001 / CON-007 documentation represents the attack-step
+  boundaries precisely enough for implementation.
+
+If the repository lacks a sufficiently explicit authoritative boundary or the required
+repair conflicts with accepted attack architecture, stop for architecture refinement
+rather than inventing a new lifecycle mechanism during bug repair.

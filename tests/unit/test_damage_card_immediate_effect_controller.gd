@@ -35,6 +35,8 @@ func before_each() -> void:
 	_saved_submitter = GameManager.get_command_submitter()
 	_state = GameState.new()
 	_state.initialize()
+	assert_true(_state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	_state.current_phase = Constants.GamePhase.SHIP
 	GameManager.current_game_state = _state
 	_submitter = DirectSubmitter.new()
@@ -123,11 +125,15 @@ func test_v2_automatic_branch_resolves_without_legacy_array_index() -> void:
 	var fixture: Dictionary = _debug_result("structural_damage", 14)
 	var result: Dictionary = fixture["result"]
 	_controller.react_to_debug_damage_result(fixture["command"], result)
-	assert_eq(_submitter.submitted.size(), 1)
-	assert_true(_submitter.submitted[0] \
-			is CandidateResolveImmediateEffectCommand)
-	assert_false(_submitter.submitted[0].payload.has("card_index"))
-	assert_false(_submitter.submitted[0].payload.has("choice"))
+	assert_eq(_submitter.submitted.size(), 0,
+			"Presentation must leave automatic resolution with authority.")
+	var automatic: GameCommand = CommandProcessor \
+			.derive_reconstructed_faceup_automatic_immediate(_state)
+	assert_not_null(automatic)
+	if automatic != null:
+		assert_false(_submitter.submit_authoritative(automatic).is_empty())
+		assert_false(automatic.payload.has("card_index"))
+		assert_false(automatic.payload.has("choice"))
 	assert_false((fixture["ship"] as ShipInstance) \
 			.has_active_immediate_resolution())
 	assert_eq((fixture["ship"] as ShipInstance).get_facedown_damage_count(), 2)
@@ -146,6 +152,12 @@ func _debug_result(effect_id: String, sequence: int) -> Dictionary:
 	assert_false(result.is_empty())
 	assert_true(result.has("damage_application"))
 	assert_false(result.has("card_index"))
+	var inspection: FaceupDamageInspection = _state.faceup_damage_inspection
+	assert_not_null(inspection)
+	if inspection != null:
+		assert_false(_state.apply_faceup_damage_acknowledgment(
+				inspection.inspection_id(),
+				_state.principal_id_for_player(0)).is_empty())
 	return {"ship": ship, "command": command, "result": result}
 
 

@@ -17,6 +17,8 @@ const MATCH_PLAYER_CONTROL_BINDING: GDScript = preload(
 		"res://src/core/state/match_player_control_binding.gd")
 const COMPLETED_ATTACK_INSPECTION: GDScript = preload(
 		"res://src/core/state/completed_attack_inspection.gd")
+const FACEUP_DAMAGE_INSPECTION: GDScript = preload(
+		"res://src/core/state/faceup_damage_inspection.gd")
 
 const SQUADRON_PHASE_CONTROLLER_INACTIVE: int = -1
 
@@ -35,6 +37,20 @@ var initiative_player: int = 0
 ## Canonical Squadron Phase turn progress.
 var squadron_phase_controller_player: int = SQUADRON_PHASE_CONTROLLER_INACTIVE
 var squadron_phase_activations_committed: int = 0
+
+## Narrow canonical owner of the next Ship Phase selection after a turn
+## transition, including exceptional destruction return. -1 outside it.
+var ship_phase_selection_controller: int = -1
+
+## Proof that the final Status cleanup transaction ran in this round.
+var final_status_cleanup_round: int = -1
+
+## One installed authority result. Empty until CompleteMatchCommand accepts.
+var _terminal_match_result: Dictionary = {}
+
+var terminal_match_result: Dictionary:
+	get:
+		return _terminal_match_result.duplicate(true)
 
 ## The selected objective cards for this game.
 var objectives: Dictionary = {}
@@ -80,6 +96,16 @@ var completed_attack_inspection: CompletedAttackInspection:
 	get:
 		return _clone_completed_attack_inspection(_completed_attack_inspection)
 
+## One public faceup-card inspection, independent of card ownership/location.
+var _faceup_damage_inspection: FaceupDamageInspection = null
+
+var faceup_damage_inspection: FaceupDamageInspection:
+	get:
+		if _faceup_damage_inspection == null:
+			return null
+		return FACEUP_DAMAGE_INSPECTION.deserialize(
+				_faceup_damage_inspection.serialize())
+
 ## Immutable match-lifetime player-to-principal authority.
 var _match_player_control_binding: MatchPlayerControlBinding = null
 
@@ -93,6 +119,7 @@ func _init() -> void:
 	_timing_window_state = _new_timing_window_state()
 	_current_attack_state = _new_current_attack_state()
 	_completed_attack_inspection = null
+	_faceup_damage_inspection = null
 
 
 ## Initializes a new game state with default values.
@@ -102,12 +129,16 @@ func initialize() -> void:
 	initiative_player = 0
 	squadron_phase_controller_player = SQUADRON_PHASE_CONTROLLER_INACTIVE
 	squadron_phase_activations_committed = 0
+	ship_phase_selection_controller = -1
+	final_status_cleanup_round = -1
+	_terminal_match_result = {}
 	if rng == null:
 		rng = GameRng.new()
 	interaction_flow = InteractionFlow.new()
 	_timing_window_state = _new_timing_window_state()
 	_current_attack_state = _new_current_attack_state()
 	_completed_attack_inspection = null
+	_faceup_damage_inspection = null
 	_match_player_control_binding = null
 	objectives.clear()
 	ship_target_attack_counts.clear()
@@ -429,8 +460,13 @@ func validate_for_full_authority_installation() -> bool:
 	return rng != null and damage_deck != null \
 			and passive_damage_ledger == null \
 			and has_valid_match_player_control_binding() \
+			and validate_ship_phase_selection_controller() \
+			and validate_finalized_destruction_cleanup() \
+			and validate_obstacle_pre_effects() \
 			and validate_declaration_adjacent_state() \
-			and validate_completed_attack_inspection()
+			and validate_completed_attack_inspection() \
+			and validate_faceup_damage_inspection() \
+			and validate_terminal_match_result()
 
 
 ## Dormant save-7 aggregate identity/location validator. Current save-6 live
@@ -479,9 +515,14 @@ func validate_damage_state_for_save7() -> bool:
 func validate_for_passive_network_installation() -> bool:
 	if rng != null or damage_deck != null or passive_damage_ledger == null \
 			or not has_valid_match_player_control_binding() \
+			or not validate_ship_phase_selection_controller() \
+			or not validate_finalized_destruction_cleanup() \
+			or not validate_obstacle_pre_effects() \
 			or not stable_ship_identity_error().is_empty() \
 			or not validate_declaration_adjacent_state() \
-			or not validate_completed_attack_inspection():
+			or not validate_completed_attack_inspection() \
+			or not validate_faceup_damage_inspection() \
+			or not validate_terminal_match_result():
 		return false
 	for player_state: PlayerState in player_states:
 		if player_state == null:
@@ -553,6 +594,225 @@ func get_distinct_controlling_principal_ids(kind: String = "") -> Array[String]:
 	if _match_player_control_binding == null:
 		return []
 	return _match_player_control_binding.distinct_principal_ids(kind)
+
+
+func required_faceup_inspection_principals() -> Array[String]:
+	if _match_player_control_binding == null:
+		return []
+	var ids: Array[String] = []
+	for player_index: int in range(Constants.PLAYER_COUNT):
+		var principal_id: String = principal_id_for_player(player_index)
+		if _match_player_control_binding.principal_kind(principal_id) \
+				!= MatchPlayerControlBinding.KIND_HUMAN:
+			return []
+		if not ids.has(principal_id):
+			ids.append(principal_id)
+	ids.sort()
+	return ids if ids.size() in [1, 2] else []
+
+
+func required_obstacle_acknowledgment_principals() -> Array[String]:
+	return required_faceup_inspection_principals()
+
+
+func validate_obstacle_pre_effects() -> bool:
+	var count: int = 0
+	for player_state: PlayerState in player_states:
+		if player_state == null:
+			return false
+		for raw_ship: Variant in player_state.ships:
+			if not raw_ship is ShipInstance:
+				return false
+			var ship: ShipInstance = raw_ship as ShipInstance
+			var record: Dictionary = ship.pending_obstacle_pre_effect_snapshot()
+			if not record.is_empty():
+				count += 1
+				if record.get("required_principal_ids") \
+						!= required_obstacle_acknowledgment_principals():
+					return false
+			var outstanding: Dictionary = \
+					ship.asteroid_completion_outstanding_snapshot()
+			if not outstanding.is_empty() \
+					and not bool(outstanding.get(
+							"inspection_released", false)):
+				if _faceup_damage_inspection == null \
+						or _faceup_damage_inspection.inspection_id() \
+								!= str(outstanding.get("inspection_id", "")):
+					return false
+	return count <= 1
+
+
+func validate_ship_phase_selection_controller() -> bool:
+	if ship_phase_selection_controller not in [-1, 0, 1]:
+		return false
+	if current_phase != Constants.GamePhase.SHIP:
+		return ship_phase_selection_controller == -1
+	return true
+
+
+func detected_terminal_reason() -> String:
+	if not validate_finalized_destruction_cleanup():
+		return ""
+	var scoring: Variant = load(
+			"res://src/core/state/scoring_calculator.gd").new()
+	var eliminated_zero: bool = scoring.is_fleet_eliminated(0, self)
+	var eliminated_one: bool = scoring.is_fleet_eliminated(1, self)
+	if eliminated_zero and eliminated_one:
+		return "mutual_destruction"
+	if eliminated_zero or eliminated_one:
+		return "elimination"
+	if current_phase == Constants.GamePhase.STATUS \
+			and current_round == Constants.MAX_ROUNDS \
+			and final_status_cleanup_round == current_round \
+			and not (load("res://src/core/effects/rules/upgrades/"
+				+ "defensive_retrofit/electronic_countermeasures.gd") \
+				as GDScript).call(
+					"has_unresolved_status_ready_cost_choices", self):
+		return "round_6"
+	return ""
+
+
+func terminal_result_ready() -> bool:
+	if detected_terminal_reason().is_empty() \
+			or _faceup_damage_inspection != null \
+			or (_current_attack_state != null and _current_attack_state.active) \
+			or (_timing_window_state != null and _timing_window_state.active):
+		return false
+	if _completed_attack_inspection != null \
+			and not _completed_attack_inspection.is_satisfied():
+		return false
+	for player_state: PlayerState in player_states:
+		for ship: ShipInstance in player_state.ships:
+			if ship.has_active_immediate_resolution():
+				return false
+	return true
+
+
+func expected_terminal_match_result(sequence: int) -> Dictionary:
+	if sequence < 0 or not terminal_result_ready():
+		return {}
+	var reason: String = detected_terminal_reason()
+	var eliminated: int = -1
+	if reason == "elimination":
+		var scoring: Variant = load(
+				"res://src/core/state/scoring_calculator.gd").new()
+		eliminated = 0 if scoring.is_fleet_eliminated(0, self) else 1
+	var scorer: Variant = load(
+			"res://src/core/state/scoring_calculator.gd").new()
+	var details: Dictionary = scorer.determine_winner(self, reason,
+			eliminated)
+	return {"result_id": "match-result:%d" % sequence,
+		"reason": reason, "winner_index": details["winner_index"],
+		"scores": details["scores"], "round": current_round}
+
+
+func install_terminal_match_result(result: Dictionary,
+		sequence: int) -> bool:
+	if not _terminal_match_result.is_empty() \
+			or result != expected_terminal_match_result(sequence):
+		return false
+	_terminal_match_result = result.duplicate(true)
+	return true
+
+
+func validate_terminal_match_result() -> bool:
+	if final_status_cleanup_round != -1 and (
+			final_status_cleanup_round != current_round \
+			or current_phase != Constants.GamePhase.STATUS):
+		return false
+	if _terminal_match_result.is_empty():
+		return true
+	if _terminal_match_result.size() != 5 \
+			or typeof(_terminal_match_result.get("result_id")) != TYPE_STRING \
+			or not str(_terminal_match_result["result_id"]).begins_with(
+					"match-result:"):
+		return false
+	var sequence_text: String = str(_terminal_match_result[
+			"result_id"]).trim_prefix("match-result:")
+	if not sequence_text.is_valid_int():
+		return false
+	return _terminal_match_result == expected_terminal_match_result(
+			sequence_text.to_int())
+
+
+func validate_finalized_destruction_cleanup() -> bool:
+	for player_state: PlayerState in player_states:
+		if player_state == null:
+			return false
+		for raw_ship: Variant in player_state.ships:
+			if not raw_ship is ShipInstance:
+				return false
+			var ship: ShipInstance = raw_ship as ShipInstance
+			if ship.has_finalized_destruction() and (
+					ship.get_total_damage() != 0 \
+					or ship.has_active_ship_activation() \
+					or ship.has_active_immediate_resolution() \
+					or ship.has_active_obstacle_resolution()):
+				return false
+	return true
+
+
+func install_faceup_damage_inspection(
+		inspection: FaceupDamageInspection) -> bool:
+	if _faceup_damage_inspection != null or inspection == null:
+		return false
+	var canonical: FaceupDamageInspection = FACEUP_DAMAGE_INSPECTION.deserialize(
+			inspection.serialize())
+	if canonical == null:
+		return false
+	_faceup_damage_inspection = canonical
+	if validate_faceup_damage_inspection():
+		return true
+	_faceup_damage_inspection = null
+	return false
+
+
+func apply_faceup_damage_acknowledgment(inspection_id: String,
+		principal_id: String) -> Dictionary:
+	if _faceup_damage_inspection == null \
+			or _faceup_damage_inspection.inspection_id() != inspection_id \
+			or not validate_faceup_damage_inspection() \
+			or not validate_obstacle_pre_effects():
+		return {}
+	var replacement: FaceupDamageInspection = \
+			_faceup_damage_inspection.acknowledged_by(principal_id)
+	if replacement == null:
+		return {}
+	var released: bool = replacement.is_satisfied()
+	var matching_asteroid: ShipInstance = null
+	if released:
+		for player_state: PlayerState in player_states:
+			for ship: ShipInstance in player_state.ships:
+				var outstanding: Dictionary = \
+						ship.asteroid_completion_outstanding_snapshot()
+				if outstanding.get("inspection_id") == inspection_id:
+					if matching_asteroid != null \
+							or bool(outstanding.get("inspection_released", true)):
+						return {}
+					matching_asteroid = ship
+		if matching_asteroid != null \
+				and not matching_asteroid.mark_asteroid_inspection_released(
+					inspection_id):
+			return {}
+	_faceup_damage_inspection = null if released else replacement
+	return {"inspection_id": inspection_id, "principal_id": principal_id,
+		"released": released}
+
+
+func validate_faceup_damage_inspection() -> bool:
+	if _faceup_damage_inspection == null:
+		return true
+	var canonical: FaceupDamageInspection = FACEUP_DAMAGE_INSPECTION.deserialize(
+			_faceup_damage_inspection.serialize())
+	if canonical == null \
+			or canonical.required_principal_ids() \
+				!= required_faceup_inspection_principals():
+		return false
+	var data: Dictionary = canonical.serialize()
+	var ship: ShipInstance = get_ship(int(data["owner_player"]),
+			int(data["ship_index"]))
+	return ship != null \
+			and ship.roster_entry_id == str(data["roster_entry_id"])
 
 
 func has_completed_attack_inspection() -> bool:
@@ -791,6 +1051,7 @@ func serialize() -> Dictionary:
 				squadron_phase_controller_player,
 		"squadron_phase_activations_committed":
 				squadron_phase_activations_committed,
+		"ship_phase_selection_controller": ship_phase_selection_controller,
 		"objectives": objectives.duplicate(true),
 		"player_states": [],
 		"interaction_flow": interaction_flow.serialize() if interaction_flow else {},
@@ -800,6 +1061,10 @@ func serialize() -> Dictionary:
 					if _current_attack_state else _new_current_attack_state().serialize(),
 		"completed_attack_inspection": _completed_attack_inspection.serialize()
 					if _completed_attack_inspection else {},
+		"faceup_damage_inspection": _faceup_damage_inspection.serialize()
+					if _faceup_damage_inspection else {},
+		"final_status_cleanup_round": final_status_cleanup_round,
+		"terminal_match_result": _terminal_match_result.duplicate(true),
 		"ship_target_attack_counts": ship_target_attack_counts.duplicate(true),
 		"match_player_control_binding": _match_player_control_binding.serialize()
 					if _match_player_control_binding else {},
@@ -920,6 +1185,18 @@ static func _deserialize_representation(data: Dictionary,
 			data["squadron_phase_controller_player"])
 	state.squadron_phase_activations_committed = int(
 			data["squadron_phase_activations_committed"])
+	if not _is_exact_json_integer(data.get(
+			"ship_phase_selection_controller")):
+		return null
+	state.ship_phase_selection_controller = int(
+			data["ship_phase_selection_controller"])
+	if not _is_exact_json_integer(data.get(
+			"final_status_cleanup_round")) \
+			or not data.get("terminal_match_result") is Dictionary:
+		return null
+	state.final_status_cleanup_round = int(data["final_status_cleanup_round"])
+	state._terminal_match_result = (data["terminal_match_result"] \
+			as Dictionary).duplicate(true)
 	var objective_data: Variant = data.get("objectives", {})
 	if objective_data is Dictionary:
 		var normalized_objectives: Dictionary = \
@@ -975,6 +1252,16 @@ static func _deserialize_representation(data: Dictionary,
 		if inspection == null:
 			return null
 		state._completed_attack_inspection = inspection
+	if not data.has("faceup_damage_inspection") \
+			or not data["faceup_damage_inspection"] is Dictionary:
+		return null
+	var faceup_data: Dictionary = data["faceup_damage_inspection"] as Dictionary
+	if not faceup_data.is_empty():
+		var faceup: FaceupDamageInspection = \
+			FACEUP_DAMAGE_INSPECTION.deserialize(faceup_data)
+		if faceup == null:
+			return null
+		state._faceup_damage_inspection = faceup
 	if state.interaction_flow != null \
 			and state.interaction_flow.flow_type == Constants.InteractionFlow.ATTACK \
 			and not state._current_attack_state.active \
@@ -991,8 +1278,12 @@ static func _deserialize_representation(data: Dictionary,
 	if not state.validate_current_attack_references():
 		return null
 	if not passive and (not state.has_valid_match_player_control_binding() \
+			or not state.validate_ship_phase_selection_controller() \
+			or not state.validate_finalized_destruction_cleanup() \
 			or not state.validate_declaration_adjacent_state() \
 			or not state.validate_completed_attack_inspection() \
+			or not state.validate_faceup_damage_inspection() \
+			or not state.validate_terminal_match_result() \
 			or not state.validate_damage_state_for_save7()):
 		return null
 	if not bool(TIMING_WINDOW_ORCHESTRATOR.validate_reconstructed_state(
@@ -1042,11 +1333,21 @@ static func _normalize_integral_field(record: Dictionary,
 	return true
 
 
+static func _is_exact_json_integer(value: Variant) -> bool:
+	return typeof(value) in [TYPE_INT, TYPE_FLOAT] \
+			and is_finite(float(value)) \
+			and float(value) == float(int(value))
+
+
 static func _serialized_declaration_fields_are_complete(
 		data: Dictionary) -> bool:
 	if not data.has("squadron_phase_controller_player") \
 			or not data.has("squadron_phase_activations_committed") \
-			or not data.has("completed_attack_inspection"):
+			or not data.has("ship_phase_selection_controller") \
+			or not data.has("completed_attack_inspection") \
+			or not data.has("faceup_damage_inspection") \
+			or not data.has("final_status_cleanup_round") \
+			or not data.has("terminal_match_result"):
 		return false
 	var raw_players: Variant = data.get("player_states", [])
 	if not (raw_players is Array):

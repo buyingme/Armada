@@ -341,7 +341,8 @@ func resume_current_attack(
 ## Rebuild its existing modal without publishing flow or submitting work.
 func _reconstruct_resolved_attack_immediate_choice(
 		game_state: GameState, attack: CurrentAttackState) -> void:
-	if attack.defender_kind != CurrentAttackState.KIND_SHIP:
+	if attack.defender_kind != CurrentAttackState.KIND_SHIP \
+			or game_state.faceup_damage_inspection != null:
 		return
 	var ship: ShipInstance = game_state.get_ship(
 			attack.defender_player, attack.defender_index)
@@ -3221,7 +3222,12 @@ func apply_damage_result(result: Dictionary) -> void:
 			presentation_result.get("hull_damage", 0)))
 	# Phase I3c: publish final damage so UIProjector can render the
 	# damage summary on the defender's screen.
-	_fsm_patch_payload({"final_damage": final_damage})
+	# The accepted deal owns the faceup inspection now. Publishing another
+	# Attack flow snapshot before acknowledgment would be rejected by the
+	# canonical gate and could expose a local-only flow patch.
+	if GameManager.current_game_state == null \
+			or GameManager.current_game_state.faceup_damage_inspection == null:
+		_fsm_patch_payload({"final_damage": final_damage})
 	# Brace is already applied during Step 4 (canonical order before
 	# Redirect), so _state.modified_damage is already halved.
 	_log.info("Resolving damage: %d total." % final_damage)
@@ -3290,6 +3296,9 @@ func _resolve_zero_damage() -> void:
 ## proceeds into the immediate-effect choice flow / standard delay.
 func _continue_ship_damage_resolution(result: Dictionary) -> void:
 	_apply_ship_damage_result(result)
+	if GameManager.current_game_state != null \
+			and GameManager.current_game_state.faceup_damage_inspection != null:
+		return
 	# If the damage summary overlay is being shown, wait for the player
 	# to dismiss it before resolving immediate effects and finalising.
 	if _state.awaiting_damage_summary:
@@ -3662,12 +3671,20 @@ func _emit_card_events(def_inst: ShipInstance,
 	var dealt_faceup_cards: Array = []
 	# Retrieve newly added faceup cards from the ship.
 	if faceup_count > 0:
-		var start: int = def_inst.faceup_damage.size() - faceup_count
-		for i: int in range(start, def_inst.faceup_damage.size()):
-			var card: DamageCard = def_inst.faceup_damage[i] as DamageCard
-			_post_process_faceup_card(card, def_inst)
-			faceup_card_name = card.title
-			dealt_faceup_cards.append(card)
+		var inspection: FaceupDamageInspection = \
+				GameManager.current_game_state.faceup_damage_inspection \
+				if GameManager.current_game_state != null else null
+		if inspection != null:
+			faceup_card_name = str((inspection.serialize()["public_card"] \
+					as Dictionary).get("title", ""))
+			EventBus.damage_card_dealt.emit(def_inst, null, true)
+		else:
+			var start: int = def_inst.faceup_damage.size() - faceup_count
+			for i: int in range(maxi(start, 0), def_inst.faceup_damage.size()):
+				var card: DamageCard = def_inst.faceup_damage[i] as DamageCard
+				_post_process_faceup_card(card, def_inst)
+				faceup_card_name = card.title
+				dealt_faceup_cards.append(card)
 	# Retrieve newly added facedown cards from the ship.
 	if facedown_count > 0:
 		for _i: int in range(facedown_count):
@@ -3675,7 +3692,7 @@ func _emit_card_events(def_inst: ShipInstance,
 			_log.info("Dealt facedown damage card to %s."
 					% def_inst.ship_data.ship_name)
 	_log.info("Card loop done: %d card(s) dealt." % cards_dealt)
-	if cards_dealt > 0:
+	if cards_dealt > 0 and faceup_count == 0:
 		_state.awaiting_damage_summary = true
 		EventBus.damage_summary_requested.emit(
 				def_inst, dealt_faceup_cards, facedown_count,
@@ -3801,6 +3818,42 @@ func _on_damage_summary_dismissed_continue() -> void:
 		_start_immediate_choice_flow()
 		return
 	_attack_exec_finalize_after_delay()
+
+
+## Rebuilds only a still-valid, choice-bearing Attack immediate effect after
+## the independent faceup-card inspection has released.
+func apply_faceup_damage_inspection_release(result: Dictionary) -> void:
+	if not bool(result.get("released", false)):
+		return
+	var game_state: GameState = GameManager.current_game_state
+	var attack: CurrentAttackState = game_state.current_attack_state \
+			if game_state != null else null
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_RESOLVED \
+			or attack.defender_kind != CurrentAttackState.KIND_SHIP:
+		return
+	var ship: ShipInstance = game_state.get_ship(
+			attack.defender_player, attack.defender_index)
+	if ship == null:
+		return
+	var record: Dictionary = ship.active_immediate_resolution_snapshot()
+	var public_ref: String = str(result.get("inspection_id", "")) \
+			.trim_prefix("faceup-inspection:")
+	if record.get("public_card_ref") != public_ref \
+			or record.get("enclosing_kind") != "attack" \
+			or record.get("attack_id") != attack.attack_id:
+		return
+	var card: DamageCard = ship.faceup_card_for_public_ref(public_ref)
+	if card == null:
+		return
+	var choice: Dictionary = _immediate_resolver.get_required_choice(
+			card, ship)
+	if choice.is_empty():
+		return
+	_pending_immediate_card = card
+	_pending_immediate_ship = ship
+	_pending_immediate_choice = choice
+	_start_immediate_choice_flow()
 
 # ---------------------------------------------------------------------------
 # Phase 10a — Immediate Effect Choice Modal Flow (DM-011)

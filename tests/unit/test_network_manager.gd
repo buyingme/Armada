@@ -51,8 +51,8 @@ func test_protocol_version_is_positive() -> void:
 			"Protocol version should be positive.")
 
 
-func test_protocol_version_is_bug_058_cutover_eight() -> void:
-	assert_eq(NetworkManager.PROTOCOL_VERSION, 8)
+func test_protocol_version_is_ux_integration_cutover_nine() -> void:
+	assert_eq(NetworkManager.PROTOCOL_VERSION, 9)
 
 
 func test_heartbeat_interval_is_positive() -> void:

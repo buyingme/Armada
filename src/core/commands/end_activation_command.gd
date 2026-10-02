@@ -78,6 +78,7 @@ func execute(game_state: GameState) -> Dictionary:
 		if not spent.is_empty():
 			spent_command = int(spent.get("command", -1))
 	var next_active_player: int = Constants.PLAYER_COUNT - 1 - player_index
+	game_state.ship_phase_selection_controller = next_active_player
 	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,

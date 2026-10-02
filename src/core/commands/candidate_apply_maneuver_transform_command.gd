@@ -1,8 +1,7 @@
-## Dormant protocol-7 final Maneuver transform application candidate.
+## Final Maneuver transform application at the accepted command boundary.
 ##
 ## Authority generates this command only after all post-commitment/
-## pre-movement obligations have converged. It is intentionally unregistered
-## before the coordinated WP6 cutover.
+## pre-movement obligations have converged.
 class_name CandidateApplyManeuverTransformCommand
 extends GameCommand
 
@@ -28,7 +27,7 @@ func application_contract_id() -> String:
 
 
 func application_contract_version() -> int:
-	return 2
+	return 3
 
 
 func project_application_result(authority_result: Dictionary,
@@ -52,10 +51,37 @@ func execute_with_application_result(game_state: GameState,
 	expected["pos_y"] = committed["pos_y"]
 	expected["rotation_deg"] = committed["rotation_deg"]
 	expected["final_transform_applied"] = true
+	var outside: bool = not AUTHORITY.ship_transform_is_inside_play_area(
+			ship, float(committed["pos_x"]), float(committed["pos_y"]),
+			float(committed["rotation_deg"]))
+	expected["destroyed"] = outside
+	var cleanup: Dictionary = application_result["destruction_cleanup"] \
+			as Dictionary
+	var interrupted: bool = outside and ship.has_active_ship_activation()
+	var next_controller: int = DestroyUnitCommand.next_controller_after_source(
+			game_state, player_index, [{"owner_player": player_index,
+				"ship_index": int(payload["ship_index"])}]) \
+			if interrupted else -1
+	if (outside and not DestroyUnitCommand.prevalidate_source_cleanup(
+			cleanup, ship.get_facedown_damage_count(), interrupted,
+			next_controller)) \
+			or (not outside and not cleanup.is_empty()):
+		return {}
+	expected["destruction_cleanup"] = cleanup
 	if application_result != expected:
 		return {}
-	var applied: Dictionary = execute(game_state)
-	return application_result.duplicate(true) if applied == expected else {}
+	var applied: Dictionary = ship.apply_maneuver_final_transform(
+			str(payload["ship_activation_identity"]),
+			str(payload["maneuver_execution_id"]))
+	if applied.is_empty():
+		return {}
+	if outside:
+		ship.mark_destroyed()
+		if not DestroyUnitCommand.install_cleanup_in_source(game_state,
+				player_index, int(payload["ship_index"]), interrupted,
+				cleanup):
+			return {}
+	return application_result.duplicate(true)
 
 
 func validate(game_state: GameState) -> String:
@@ -104,11 +130,18 @@ func execute(game_state: GameState) -> Dictionary:
 			str(payload["maneuver_execution_id"]))
 	if applied.is_empty():
 		return {}
+	var outside: bool = not AUTHORITY.canonical_ship_is_inside_play_area(
+			game_state, player_index, int(payload["ship_index"]))
+	var interrupted: bool = outside and ship.has_active_ship_activation()
 	# SMI-065 is evaluated from the actual applied result. Its exceptional
 	# cleanup preserves the final transform and never fabricates completion.
-	if not AUTHORITY.canonical_ship_is_inside_play_area(
-			game_state, player_index, int(payload["ship_index"])):
+	assert(outside == not AUTHORITY.canonical_ship_is_inside_play_area(
+			game_state, player_index, int(payload["ship_index"])))
+	if outside:
 		ship.mark_destroyed()
+	var cleanup: Dictionary = DestroyUnitCommand.cleanup_in_source(
+			game_state, player_index, int(payload["ship_index"]),
+			interrupted) if outside else {}
 	return {
 		"owner_player": player_index,
 		"ship_index": int(payload["ship_index"]),
@@ -118,6 +151,8 @@ func execute(game_state: GameState) -> Dictionary:
 		"pos_y": applied["pos_y"],
 		"rotation_deg": applied["rotation_deg"],
 		"final_transform_applied": true,
+		"destroyed": outside,
+		"destruction_cleanup": cleanup,
 	}
 
 
@@ -134,7 +169,8 @@ static func _has_exact_keys(value: Dictionary,
 static func _result_is_valid(result: Dictionary) -> bool:
 	var keys: Array[String] = EXACT_PAYLOAD_KEYS.duplicate()
 	keys.append_array([
-		"pos_x", "pos_y", "rotation_deg", "final_transform_applied"])
+		"pos_x", "pos_y", "rotation_deg", "final_transform_applied",
+		"destroyed", "destruction_cleanup"])
 	if not _has_exact_keys(result, keys) \
 			or typeof(result.get("owner_player")) != TYPE_INT \
 			or int(result["owner_player"]) not in [0, 1] \
@@ -145,6 +181,9 @@ static func _result_is_valid(result: Dictionary) -> bool:
 			or typeof(result.get("maneuver_execution_id")) != TYPE_STRING \
 			or str(result["maneuver_execution_id"]).is_empty() \
 			or result.get("final_transform_applied") != true:
+		return false
+	if typeof(result.get("destroyed")) != TYPE_BOOL \
+			or not result.get("destruction_cleanup") is Dictionary:
 		return false
 	for key: String in ["pos_x", "pos_y", "rotation_deg"]:
 		if typeof(result.get(key)) != TYPE_FLOAT \

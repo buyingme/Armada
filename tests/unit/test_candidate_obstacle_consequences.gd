@@ -36,6 +36,7 @@ var _saved_submitter: CommandSubmitter
 var _saved_game_active: bool
 var _saved_active_player: int
 var _saved_registry: Dictionary
+var _binding_data: Dictionary
 
 
 func before_each() -> void:
@@ -44,6 +45,7 @@ func before_each() -> void:
 	_saved_game_active = GameManager.is_game_active
 	_saved_active_player = GameManager.active_player
 	_saved_registry = GameCommand._registry.duplicate()
+	_binding_data = MatchPlayerControlBinding.create_hot_seat_human().serialize()
 
 
 func after_each() -> void:
@@ -71,12 +73,13 @@ func test_asteroid_delegates_every_legal_immediate_card_and_returns_once() -> vo
 		var overlaps: Array[Dictionary] = OVERLAP.overlapping_obstacles(
 				state, 0, 0)
 		assert_false(overlaps.is_empty(), "%s %s" % [effect, overlaps])
-		assert_false(_commit_order(state).execute(state).is_empty(), effect)
+		assert_true(_commit_and_ack(state), effect)
 		var asteroid: GameCommand = ASTEROID.new(0, _base("obstacle:0"))
 		asteroid.sequence = 71
 		assert_eq(asteroid.validate(state), "", effect)
 		var dealt: Dictionary = asteroid.execute(state)
 		assert_false(dealt.is_empty(), effect)
+		_assert_acknowledge_faceup(state)
 		assert_true(ship.has_active_immediate_resolution(), effect)
 		assert_true(not ship.active_asteroid_resolution_snapshot().is_empty(),
 				effect)
@@ -128,17 +131,137 @@ func test_asteroid_non_immediate_card_completes_without_fabricated_prompt() -> v
 	var state: GameState = fixture["state"]
 	var ship: ShipInstance = fixture["ship"]
 	ship.current_speed = 0
-	assert_false(_commit_order(state).execute(state).is_empty())
+	assert_true(_commit_and_ack(state))
 	var command: GameCommand = ASTEROID.new(0, _base("obstacle:0"))
 	command.sequence = 73
 	var result: Dictionary = command.execute(state)
 	assert_eq(result["immediate_resolution_id"], "")
 	assert_false(ship.has_active_immediate_resolution())
 	assert_true(ship.active_asteroid_resolution_snapshot().is_empty())
+	assert_false(ship.asteroid_completion_outstanding_snapshot().is_empty())
+	assert_ne(state.obstacle_placement("obstacle:0")[
+			"last_maneuver_execution_id"], EXECUTION_ID)
+	_assert_acknowledge_faceup(state)
+	var completion := CompleteAsteroidOverlapCommand.new(0,
+			_base("obstacle:0").merged({
+				"ordered_ordinal": 0,
+				"occurrence_id": result[
+					"asteroid_completion_outstanding"]["occurrence_id"],
+				"inspection_id": result[
+					"faceup_damage_inspection"]["inspection_id"],
+			}))
+	assert_false(completion.execute(state).is_empty())
 	assert_eq(state.obstacle_placement("obstacle:0")[
 			"last_maneuver_execution_id"], EXECUTION_ID)
 	assert_eq(EVALUATOR.next_action(state, 0, 0)["command_type"],
 			"complete_maneuver")
+
+
+func test_two_principal_obstacle_and_faceup_gates_release_in_order() -> void:
+	_binding_data = MatchPlayerControlBinding.create_two_human().serialize()
+	var fixture: Dictionary = _fixture("asteroid_1", [
+		_card("damage:ordinary", "ordinary", "persistent"),
+	])
+	var state: GameState = fixture["state"]
+	var ship: ShipInstance = fixture["ship"]
+	_add_flow_ship(state, 1, false)
+	var processor: Node = _game_flow_processor(state)
+	assert_false(_commit_order(state).execute(state).is_empty())
+	var occurrence: Dictionary = ship.pending_obstacle_pre_effect_snapshot()
+	var occurrence_id: String = str(occurrence["occurrence_id"])
+	var asteroid: GameCommand = ASTEROID.new(0, _base("obstacle:0"))
+	asteroid.sequence = 71
+	assert_ne(processor.preflight(asteroid, state), "")
+	assert_ne(AcknowledgeObstaclePreEffectCommand.new(0, {
+		"occurrence_id": "wrong",
+	}).validate(state), "")
+	var obstacle_ack_zero := AcknowledgeObstaclePreEffectCommand.new(0, {
+		"occurrence_id": occurrence_id,
+	})
+	assert_false(obstacle_ack_zero.execute(state).is_empty())
+	assert_eq(ship.pending_obstacle_pre_effect_snapshot()[
+			"received_principal_ids"].size(), 1)
+	assert_ne(obstacle_ack_zero.validate(state), "")
+	assert_ne(processor.preflight(asteroid, state), "")
+	assert_false(AcknowledgeObstaclePreEffectCommand.new(1, {
+		"occurrence_id": occurrence_id,
+	}).execute(state).is_empty())
+	assert_eq(processor.preflight(asteroid, state), "")
+	var dealt: Dictionary = asteroid.execute(state)
+	assert_false(dealt.is_empty())
+	assert_false(ship.asteroid_completion_outstanding_snapshot().is_empty())
+	var inspection_id: String = state.faceup_damage_inspection.inspection_id()
+	var completion := CompleteAsteroidOverlapCommand.new(0,
+			_base("obstacle:0").merged({
+				"ordered_ordinal": 0,
+				"occurrence_id": occurrence_id,
+				"inspection_id": inspection_id,
+			}))
+	assert_ne(processor.preflight(completion, state), "")
+	assert_ne(AcknowledgeFaceupDamageCommand.new(0, {
+		"inspection_id": "wrong",
+	}).validate(state), "")
+	var faceup_ack_zero := AcknowledgeFaceupDamageCommand.new(0, {
+		"inspection_id": inspection_id,
+	})
+	assert_false(faceup_ack_zero.execute(state).is_empty())
+	assert_ne(faceup_ack_zero.validate(state), "")
+	assert_ne(processor.preflight(completion, state), "")
+	assert_false(AcknowledgeFaceupDamageCommand.new(1, {
+		"inspection_id": inspection_id,
+	}).execute(state).is_empty())
+	assert_null(state.faceup_damage_inspection)
+	assert_true(bool(ship.asteroid_completion_outstanding_snapshot()[
+			"inspection_released"]))
+	assert_eq(processor.preflight(completion, state), "")
+	assert_false(completion.execute(state).is_empty())
+	assert_true(ship.asteroid_completion_outstanding_snapshot().is_empty())
+	assert_ne(completion.validate(state), "")
+
+
+func test_nonfixture_replay_preserves_obstacle_faceup_and_f1_order() -> void:
+	var authority_fixture: Dictionary = _fixture("asteroid_1", [
+		_card("damage:replay-ordinary", "ordinary", "persistent"),
+	])
+	var authority: GameState = authority_fixture["state"]
+	var initial_rng: Dictionary = authority.rng.serialize()
+	_add_flow_ship(authority, 1, false)
+	var processor: Node = _game_flow_processor(authority)
+	assert_false(processor.submit(_commit_order(authority)).is_empty())
+	var occurrence: Dictionary = (authority_fixture["ship"] as ShipInstance) \
+			.pending_obstacle_pre_effect_snapshot()
+	assert_false(processor.submit(AcknowledgeObstaclePreEffectCommand.new(
+			0, {"occurrence_id": occurrence["occurrence_id"]})).is_empty())
+	assert_eq(_history_types(processor)[-1], "resolve_asteroid_overlap")
+	var inspection_id: String = \
+			authority.faceup_damage_inspection.inspection_id()
+	assert_false(processor.submit(AcknowledgeFaceupDamageCommand.new(
+			0, {"inspection_id": inspection_id})).is_empty())
+	assert_eq(_history_types(processor), [
+		"commit_maneuver_obstacle_order",
+		"acknowledge_obstacle_pre_effect",
+		"resolve_asteroid_overlap",
+		"acknowledge_faceup_damage",
+		"complete_asteroid_overlap",
+		"complete_maneuver",
+	])
+	var replay: GameReplay = processor.create_replay()
+	assert_not_null(replay)
+	var loaded: GameReplay = GameReplay.deserialize(
+			JSON.parse_string(JSON.stringify(replay.serialize())))
+	assert_not_null(loaded)
+	var replay_fixture: Dictionary = _fixture("asteroid_1", [
+		_card("damage:replay-ordinary", "ordinary", "persistent"),
+	])
+	var replay_state: GameState = replay_fixture["state"]
+	replay_state.rng = GameRng.deserialize(initial_rng)
+	_add_flow_ship(replay_state, 1, false)
+	var replay_processor: Node = _game_flow_processor(replay_state)
+	for recorded: Dictionary in loaded.commands:
+		var command: GameCommand = GameCommand.deserialize(recorded)
+		assert_not_null(command)
+		assert_false(replay_processor.submit_replay(command).is_empty())
+	assert_eq(replay_state.serialize(), authority.serialize())
 
 
 func test_production_debug_damage_does_not_poison_later_asteroid_authority() \
@@ -154,9 +277,10 @@ func test_production_debug_damage_does_not_poison_later_asteroid_authority() \
 	var debug_result: Dictionary = GameManager.submit_debug_deal_damage(
 			ship, "capacitor_failure")
 	assert_false(debug_result.is_empty())
+	_assert_acknowledge_faceup(state)
 	assert_true(debug_result.has("damage_application"))
 	assert_true(state.validate_damage_state_for_save7())
-	assert_false(_commit_order(state).execute(state).is_empty())
+	assert_true(_commit_and_ack(state))
 	var asteroid: GameCommand = ASTEROID.new(0, _base("obstacle:0"))
 	asteroid.sequence = 902
 	assert_eq(asteroid.validate(state), "")
@@ -174,9 +298,11 @@ func test_lethal_asteroid_after_speed_three_displacement_is_terminal_and_converg
 	var result: Dictionary = authority_command.execute(authority_state)
 	assert_false(result.is_empty())
 	assert_true(bool(result["damage_application"]["destroyed"]))
-	assert_eq(authority_ship.get_total_damage(), 4)
-	assert_eq(authority_ship.faceup_damage.size(), 1)
-	assert_eq(authority_state.damage_deck.get_total_count(), 0)
+	assert_eq(authority_ship.get_total_damage(), 0)
+	assert_eq(authority_ship.faceup_damage.size(), 0)
+	assert_eq(authority_state.damage_deck.get_discard_count(), 4)
+	assert_eq((result["destruction_cleanup"][
+			"facedown_discards"] as Array).size(), 3)
 	_assert_lethal_maneuver_cleanup(authority_state, authority_ship)
 
 	# The same accepted result must terminate the passive peer at the same
@@ -189,9 +315,10 @@ func test_lethal_asteroid_after_speed_three_displacement_is_terminal_and_converg
 			result, 1)
 	assert_eq(passive_command.execute_with_application_result(
 			passive_state, projected), projected)
-	assert_eq(passive_ship.get_total_damage(), 4)
-	assert_eq(passive_ship.faceup_damage.size(), 1)
+	assert_eq(passive_ship.get_total_damage(), 0)
+	assert_eq(passive_ship.faceup_damage.size(), 0)
 	assert_eq(passive_state.passive_damage_ledger.draw_count, 0)
+	assert_eq(passive_state.passive_damage_ledger.discard_pile.size(), 4)
 	_assert_lethal_maneuver_cleanup(passive_state, passive_ship)
 
 	# Exact-once: neither side can apply the Asteroid consequence again.
@@ -200,25 +327,19 @@ func test_lethal_asteroid_after_speed_three_displacement_is_terminal_and_converg
 	assert_ne(passive_command.validate(passive_state), "")
 	assert_true(passive_command.execute_with_application_result(
 			passive_state, projected).is_empty())
-	assert_eq(authority_ship.get_total_damage(), 4)
-	assert_eq(passive_ship.get_total_damage(), 4)
+	assert_eq(authority_ship.get_total_damage(), 0)
+	assert_eq(passive_ship.get_total_damage(), 0)
 
-	# The accepted cleanup command carries the exceptional composed return to
-	# both authority and passive peers without reviving the dead Maneuver.
+	# Cleanup and exceptional return are part of the lethal source transaction.
 	var authority_cleanup := DestroyUnitCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": 0,
 		"terminate_ship_phase_turn": true,
 	})
-	assert_eq(authority_cleanup.validate(authority_state), "")
-	var cleanup_result: Dictionary = authority_cleanup.execute(authority_state)
+	assert_ne(authority_cleanup.validate(authority_state), "")
 	var passive_cleanup := DestroyUnitCommand.new(0,
 			authority_cleanup.payload.duplicate(true))
-	var cleanup_projection: Dictionary = authority_cleanup \
-			.project_application_result(cleanup_result, 1)
-	assert_eq(passive_cleanup.validate(passive_state), "")
-	assert_false(passive_cleanup.execute_with_application_result(
-			passive_state, cleanup_projection).is_empty())
+	assert_ne(passive_cleanup.validate(passive_state), "")
 	for converged_state: GameState in [authority_state, passive_state]:
 		assert_eq(converged_state.interaction_flow.flow_type,
 				Constants.InteractionFlow.SHIP_ACTIVATION)
@@ -244,10 +365,18 @@ func test_lethal_asteroid_last_ship_composes_cleanup_and_existing_end_game() \
 	assert_false(destroyed_ship.has_active_ship_activation())
 	assert_false(destroyed_ship.has_active_maneuver_execution())
 	assert_eq(_history_types(processor), [
-		"resolve_asteroid_overlap", "destroy_unit",
+		"resolve_asteroid_overlap",
 	])
-	assert_false(GameManager.is_game_active,
-			"The existing elimination owner must end the match after cleanup.")
+	assert_true(GameManager.is_game_active,
+			"The dealt faceup card still requires acknowledgment.")
+	assert_not_null(state.faceup_damage_inspection)
+	var inspection_id: String = state.faceup_damage_inspection.inspection_id()
+	assert_false(processor.submit(AcknowledgeFaceupDamageCommand.new(0,
+			{"inspection_id": inspection_id})).is_empty())
+	assert_eq(_history_types(processor), ["resolve_asteroid_overlap",
+		"acknowledge_faceup_damage", "complete_match"])
+	assert_eq(state.terminal_match_result["reason"], "elimination")
+	assert_false(GameManager.is_game_active)
 	assert_eq(destroyed_ship.get_total_damage(), 0)
 
 
@@ -264,7 +393,7 @@ func test_lethal_asteroid_non_last_ship_returns_to_legal_selection_once() \
 	assert_false(processor.submit(asteroid).is_empty())
 	assert_true(GameManager.is_game_active)
 	assert_eq(_history_types(processor), [
-		"resolve_asteroid_overlap", "destroy_unit",
+		"resolve_asteroid_overlap",
 	], "No Maneuver completion or duplicate continuation may follow death.")
 	assert_false(destroyed_ship.has_active_ship_activation())
 	assert_eq(state.interaction_flow.flow_type,
@@ -287,7 +416,7 @@ func test_debris_applies_two_points_to_one_zone_and_returns() -> void:
 	var state: GameState = fixture["state"]
 	var ship: ShipInstance = fixture["ship"]
 	ship.current_shields["front"] = 0
-	assert_false(_commit_order(state).execute(state).is_empty())
+	assert_true(_commit_and_ack(state))
 	assert_true(not ship.active_debris_resolution_snapshot().is_empty())
 	var command: GameCommand = DEBRIS.new(0, _base("obstacle:0").merged({
 		"hull_zone": "front",
@@ -310,7 +439,7 @@ func test_debris_stops_after_first_damage_point_destroys_ship() -> void:
 	var ship: ShipInstance = fixture["ship"]
 	ship.ship_data.hull = 1
 	ship.current_shields["front"] = 0
-	assert_false(_commit_order(state).execute(state).is_empty())
+	assert_true(_commit_and_ack(state))
 	var command: GameCommand = DEBRIS.new(0, _base("obstacle:0").merged({
 		"hull_zone": "front",
 	}))
@@ -319,8 +448,8 @@ func test_debris_stops_after_first_damage_point_destroys_ship() -> void:
 	assert_true(bool(result["damage_application"]["destroyed"]))
 	assert_eq(result["damage_application"]["facedown_delta"], 1,
 			"The second debris point must not draw after point one destroys.")
-	assert_eq(ship.get_facedown_damage_count(), 1)
-	assert_eq(state.damage_deck.get_total_count(), 1)
+	assert_eq(ship.get_facedown_damage_count(), 0)
+	assert_eq(state.damage_deck.get_discard_count(), 1)
 	assert_false(ship.has_active_maneuver_execution())
 
 
@@ -333,7 +462,7 @@ func test_debris_passive_application_matches_lethal_first_point_result() -> void
 	var authority_ship: ShipInstance = authority_fixture["ship"]
 	authority_ship.ship_data.hull = 1
 	authority_ship.current_shields["front"] = 0
-	assert_false(_commit_order(authority_state).execute(authority_state).is_empty())
+	assert_true(_commit_and_ack(authority_state))
 	var authority_command: GameCommand = DEBRIS.new(
 			0, _base("obstacle:0").merged({"hull_zone": "front"}))
 	var result: Dictionary = authority_command.execute(authority_state)
@@ -356,7 +485,7 @@ func test_debris_passive_application_matches_lethal_first_point_result() -> void
 	passive_ship.install_validated_passive_maneuver_consequence_view({
 		"kind": "obstacle_order", "obstacle_ids": ["obstacle:0"],
 	})
-	assert_false(_commit_order(passive_state).execute(passive_state).is_empty())
+	assert_true(_commit_and_ack(passive_state))
 	passive_ship.install_validated_passive_maneuver_consequence_view({
 		"kind": "obstacle", "obstacle_id": "obstacle:0",
 	})
@@ -367,7 +496,8 @@ func test_debris_passive_application_matches_lethal_first_point_result() -> void
 	assert_eq(passive_command.execute_with_application_result(
 			passive_state, projected), projected)
 	assert_true(passive_ship.is_destroyed())
-	assert_eq(passive_ship.get_facedown_damage_count(), 1)
+	assert_eq(passive_ship.get_facedown_damage_count(), 0)
+	assert_eq(passive_state.passive_damage_ledger.discard_pile.size(), 1)
 	assert_eq(passive_state.passive_damage_ledger.draw_count, 1)
 	assert_false(passive_ship.has_active_maneuver_execution())
 
@@ -380,7 +510,7 @@ func test_debris_second_point_can_destroy_after_first_point_removes_shield() -> 
 	var ship: ShipInstance = fixture["ship"]
 	ship.ship_data.hull = 1
 	ship.current_shields["front"] = 1
-	assert_false(_commit_order(state).execute(state).is_empty())
+	assert_true(_commit_and_ack(state))
 	var result: Dictionary = DEBRIS.new(
 			0, _base("obstacle:0").merged({"hull_zone": "front"})).execute(state)
 	assert_true(bool(result["damage_application"]["destroyed"]))
@@ -399,7 +529,7 @@ func test_station_use_decline_no_option_and_unsupported_objective() -> void:
 	source.flip_faceup()
 	source.public_card_ref = "faceup:station:0"
 	ship.add_faceup_damage(source)
-	assert_false(_commit_order(state).execute(state).is_empty())
+	assert_true(_commit_and_ack(state))
 	var use_command: GameCommand = STATION.new(0, _base("obstacle:0").merged({
 		"action": "use_faceup",
 		"public_card_ref": "faceup:station:0",
@@ -414,7 +544,7 @@ func test_station_use_decline_no_option_and_unsupported_objective() -> void:
 	fixture = _fixture("station", [])
 	state = fixture["state"]
 	ship = fixture["ship"]
-	assert_false(_commit_order(state).execute(state).is_empty())
+	assert_true(_commit_and_ack(state))
 	var no_option: GameCommand = STATION.new(0, _base("obstacle:0").merged({
 		"action": "no_option",
 	}))
@@ -439,7 +569,7 @@ func test_station_decline_preserves_damage_and_completes_exactly_once() -> void:
 	source.flip_faceup()
 	source.public_card_ref = "faceup:station:decline"
 	ship.add_faceup_damage(source)
-	assert_false(_commit_order(state).execute(state).is_empty())
+	assert_true(_commit_and_ack(state))
 	var command: GameCommand = STATION.new(0, _base("obstacle:0").merged({
 		"action": "decline",
 	}))
@@ -457,7 +587,10 @@ func test_v2_live_composed_return_rederives_each_obligation_and_completes_once()
 		-> void:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.deserialize(_binding_data)))
 	state.current_phase = Constants.GamePhase.SHIP
+	state.ship_phase_selection_controller = 0
 	state.damage_deck = _deck([
 		_card("damage:v2:0", "shield_failure", "immediate"),
 		_card("damage:v2:1", "shield_failure", "immediate"),
@@ -533,18 +666,36 @@ func test_v2_live_composed_return_rederives_each_obligation_and_completes_once()
 	assert_false(processor.submit(ORDER.new(0, identity.merged({
 		"obstacle_ids": ["obstacle:0", "obstacle:1", "obstacle:2"],
 	}))).is_empty())
+	assert_false(processor.submit(AcknowledgeObstaclePreEffectCommand.new(
+			0, {"occurrence_id": ship.pending_obstacle_pre_effect_snapshot()[
+				"occurrence_id"]})).is_empty())
+	var waiting_for_inspection: Dictionary = EVALUATOR.next_action(state, 0, 0)
+	assert_eq(waiting_for_inspection.get("kind"), "waiting")
+	assert_eq(waiting_for_inspection.get("command_type"),
+			AcknowledgeFaceupDamageCommand.TYPE,
+			"Asteroid immediate effect must wait for faceup inspection release.")
+	assert_eq(_history_types(processor).count("resolve_immediate_effect"), 0)
+	assert_false(processor.submit(AcknowledgeFaceupDamageCommand.new(
+			0, {"inspection_id": state.faceup_damage_inspection \
+				.inspection_id()})).is_empty())
 	var immediate_action: Dictionary = EVALUATOR.next_action(state, 0, 0)
 	assert_eq(immediate_action.get("choice"), "shield_zones")
 	var immediate_payload: Dictionary = immediate_action["payload"].duplicate(true)
 	immediate_payload["shield_zones"] = []
 	assert_false(processor.submit(IMMEDIATE.new(
 			int(immediate_action["player_index"]), immediate_payload)).is_empty())
+	assert_false(processor.submit(AcknowledgeObstaclePreEffectCommand.new(
+			0, {"occurrence_id": ship.pending_obstacle_pre_effect_snapshot()[
+				"occurrence_id"]})).is_empty())
 	var debris_action: Dictionary = EVALUATOR.next_action(state, 0, 0)
 	assert_eq(debris_action.get("command_type"), "resolve_debris_overlap")
 	assert_false(processor.submit(DEBRIS.new(0,
 			(debris_action["payload"] as Dictionary).merged({
 				"hull_zone": "front",
 			}))).is_empty())
+	assert_false(processor.submit(AcknowledgeObstaclePreEffectCommand.new(
+			0, {"occurrence_id": ship.pending_obstacle_pre_effect_snapshot()[
+				"occurrence_id"]})).is_empty())
 	var station_action: Dictionary = EVALUATOR.next_action(state, 0, 0)
 	assert_eq(station_action.get("command_type"), "resolve_station_overlap")
 	assert_false(processor.submit(STATION.new(0,
@@ -575,8 +726,7 @@ func test_station_facedown_selection_converges_on_passive_peer() -> void:
 	var authority_ship: ShipInstance = authority_fixture["ship"]
 	authority_ship.add_facedown_damage(_card(
 			"damage:station:hidden", "ordinary", "persistent"))
-	assert_false(_commit_order(authority_state).execute(
-			authority_state).is_empty())
+	assert_true(_commit_and_ack(authority_state))
 	var authority_command: GameCommand = STATION.new(
 			0, _base("obstacle:0").merged({
 				"action": "use_facedown", "facedown_ordinal": 0,
@@ -601,7 +751,7 @@ func test_station_facedown_selection_converges_on_passive_peer() -> void:
 	passive_ship.install_validated_passive_maneuver_consequence_view({
 		"kind": "obstacle_order", "obstacle_ids": ["obstacle:0"],
 	})
-	assert_false(_commit_order(passive_state).execute(passive_state).is_empty())
+	assert_true(_commit_and_ack(passive_state))
 	passive_ship.install_validated_passive_maneuver_consequence_view({
 		"kind": "obstacle", "obstacle_id": "obstacle:0",
 	})
@@ -621,7 +771,7 @@ func test_nested_asteroid_state_round_trips_and_mismatches_fail_closed() -> void
 		_card("damage:save:0", "shield_failure", "immediate")])
 	var state: GameState = fixture["state"]
 	var ship: ShipInstance = fixture["ship"]
-	assert_false(_commit_order(state).execute(state).is_empty())
+	assert_true(_commit_and_ack(state))
 	var asteroid: GameCommand = ASTEROID.new(0, _base("obstacle:0"))
 	asteroid.sequence = 72
 	assert_eq(asteroid.validate(state), "")
@@ -646,7 +796,7 @@ func test_debris_and_station_pending_recovery_and_completed_non_reopening() -> v
 		var fixture: Dictionary = _fixture(obstacle_key, cards)
 		var state: GameState = fixture["state"]
 		var ship: ShipInstance = fixture["ship"]
-		assert_false(_commit_order(state).execute(state).is_empty(), obstacle_key)
+		assert_true(_commit_and_ack(state), obstacle_key)
 		var pending: Dictionary = ship.active_debris_resolution_snapshot() \
 				if obstacle_key == "debris_1" \
 				else ship.active_station_resolution_snapshot()
@@ -674,7 +824,10 @@ func _fixture(obstacle_key: String,
 		deck_cards: Array[DamageCard]) -> Dictionary:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.deserialize(_binding_data)))
 	state.current_phase = Constants.GamePhase.SHIP
+	state.ship_phase_selection_controller = 0
 	state.damage_deck = _deck(deck_cards)
 	var ship := ShipInstance.create_from_data("obstacle", _ship_data(), 1, 0)
 	ship.roster_entry_id = "obstacle-ship"
@@ -707,7 +860,10 @@ func _fixture(obstacle_key: String,
 func _lethal_asteroid_sequence(passive: bool) -> Dictionary:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.deserialize(_binding_data)))
 	state.current_phase = Constants.GamePhase.SHIP
+	state.ship_phase_selection_controller = 0
 	var ship := ShipInstance.create_from_data("obstacle", _lethal_ship_data(), 3, 0)
 	ship.roster_entry_id = "lethal-obstacle-ship"
 	ship.pos_x = 0.5
@@ -802,6 +958,7 @@ func _lethal_asteroid_sequence(passive: bool) -> Dictionary:
 			"kind": "obstacle_order", "obstacle_ids": ["obstacle:0"],
 		})
 	assert_false(order.execute(state).is_empty())
+	_assert_acknowledge_obstacle(state)
 	if passive:
 		ship.install_validated_passive_maneuver_consequence_view({
 			"kind": "obstacle", "obstacle_id": "obstacle:0",
@@ -822,6 +979,7 @@ func _resolve_debug_immediate(state: GameState, ship: ShipInstance,
 	})
 	debug.sequence = sequence
 	assert_false(debug.execute(state).is_empty())
+	_assert_acknowledge_faceup(state)
 	var record: Dictionary = ship.active_immediate_resolution_snapshot()
 	var payload: Dictionary = {
 		"owner_player": 0,
@@ -847,7 +1005,11 @@ func _assert_lethal_maneuver_cleanup(
 	assert_false(ship.has_active_maneuver_execution())
 	assert_false(ship.has_active_obstacle_resolution())
 	assert_false(ship.has_active_immediate_resolution())
-	assert_eq(state.interaction_flow.flow_type, Constants.InteractionFlow.NONE)
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT)
+	assert_eq(state.interaction_flow.controller_player, 0)
 	assert_true(EVALUATOR.next_action(state, 0, 0).is_empty())
 	var complete := CandidateCompleteManeuverCommand.new(0, {
 		"owner_player": 0,
@@ -870,7 +1032,7 @@ func _game_flow_processor(state: GameState) -> Node:
 	add_child_autofree(processor)
 	processor.command_executed.connect(
 			GameManager._on_ship_phase_turn_terminated)
-	processor.command_executed.connect(GameManager._on_destroy_unit_committed)
+	processor.command_executed.connect(GameManager._on_complete_match_committed)
 	return processor
 
 
@@ -907,6 +1069,32 @@ func _commit_order(state: GameState) -> GameCommand:
 	return ORDER.new(0, _identity_base().merged({
 		"obstacle_ids": ["obstacle:0"],
 	}))
+
+
+func _commit_and_ack(state: GameState) -> bool:
+	var result: Dictionary = _commit_order(state).execute(state)
+	if result.is_empty():
+		return false
+	_assert_acknowledge_obstacle(state)
+	return true
+
+
+func _assert_acknowledge_obstacle(state: GameState) -> void:
+	var ship: ShipInstance = state.get_active_ship_activation()
+	assert_not_null(ship)
+	var record: Dictionary = ship.pending_obstacle_pre_effect_snapshot()
+	assert_false(record.is_empty())
+	assert_false(AcknowledgeObstaclePreEffectCommand.new(0, {
+		"occurrence_id": record["occurrence_id"],
+	}).execute(state).is_empty())
+
+
+func _assert_acknowledge_faceup(state: GameState) -> void:
+	var inspection: FaceupDamageInspection = state.faceup_damage_inspection
+	assert_not_null(inspection)
+	assert_false(AcknowledgeFaceupDamageCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	}).execute(state).is_empty())
 
 
 func _base(obstacle_id: String) -> Dictionary:

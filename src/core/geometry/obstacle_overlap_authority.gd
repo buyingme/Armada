@@ -129,6 +129,9 @@ static func open_next_purpose_resolution(game_state: GameState,
 			if game_state != null else null
 	if ship == null or ship.is_destroyed():
 		return false
+	if not ship.pending_obstacle_pre_effect_snapshot().is_empty() \
+			or not ship.asteroid_completion_outstanding_snapshot().is_empty():
+		return true
 	if ship.has_active_obstacle_resolution():
 		return true
 	var execution: Dictionary = ship.active_maneuver_execution_snapshot()
@@ -144,8 +147,8 @@ static func open_next_purpose_resolution(game_state: GameState,
 	for item: Dictionary in available:
 		unresolved_by_id[str(item["obstacle_id"])] = item
 	var past_completed: bool = after_obstacle_id.is_empty()
-	for raw_id: Variant in order:
-		var obstacle_id: String = str(raw_id)
+	for ordinal: int in range(order.size()):
+		var obstacle_id: String = str(order[ordinal])
 		if game_state.passive_damage_ledger != null and not past_completed:
 			if obstacle_id == after_obstacle_id:
 				past_completed = true
@@ -153,19 +156,76 @@ static func open_next_purpose_resolution(game_state: GameState,
 		if not unresolved_by_id.has(obstacle_id):
 			continue
 		var obstacle: Dictionary = unresolved_by_id[obstacle_id]
-		match str(obstacle["obstacle_type"]):
+		var obstacle_type: String = str(obstacle["obstacle_type"])
+		var opened: bool = false
+		match obstacle_type:
 			"asteroid":
-				return true
+				opened = true
 			"debris":
-				return ship.open_debris_resolution(
+				opened = ship.open_debris_resolution(
 						activation_id, execution_id, obstacle_id, owner_player)
 			"station":
 				if game_state.selected_objective_key() \
 						== "obj_def_contested_outpost":
 					return false
-				return ship.open_station_resolution(
+				opened = ship.open_station_resolution(
 						activation_id, execution_id, obstacle_id, owner_player)
+		if not opened:
+			return false
+		if ship.open_obstacle_pre_effect(ordinal, obstacle_id,
+				obstacle_type,
+				game_state.required_obstacle_acknowledgment_principals()):
+			return true
+		if obstacle_type != "asteroid":
+			ship.clear_active_obstacle_resolutions_exceptionally()
+		return false
 	return true
+
+
+## Pure public prediction for the next ordered pre-effect occurrence. Used by
+## the Asteroid completion result check before passive state changes.
+static func next_pre_effect_after(game_state: GameState,
+		owner_player: int, ship_index: int, after_ordinal: int) -> Dictionary:
+	var ship: ShipInstance = game_state.get_ship(owner_player, ship_index) \
+			if game_state != null else null
+	if ship == null or ship.is_destroyed():
+		return {}
+	var execution: Dictionary = ship.active_maneuver_execution_snapshot()
+	var order: Array = execution.get("obstacle_resolution_order", []) as Array
+	var by_id: Dictionary = {}
+	for obstacle: Dictionary in overlapping_obstacles(
+			game_state, owner_player, ship_index):
+		by_id[str(obstacle["obstacle_id"])] = obstacle
+	for ordinal: int in range(after_ordinal + 1, order.size()):
+		var obstacle_id: String = str(order[ordinal])
+		if not by_id.has(obstacle_id):
+			continue
+		var obstacle: Dictionary = by_id[obstacle_id] as Dictionary
+		var obstacle_type: String = str(obstacle["obstacle_type"])
+		var effect_id: String = ""
+		match obstacle_type:
+			"asteroid": effect_id = "asteroid_faceup_damage"
+			"debris": effect_id = "debris_damage"
+			"station": effect_id = "station_repair_choice"
+		if effect_id.is_empty():
+			return {}
+		var execution_id: String = str(execution.get(
+				"maneuver_execution_id", ""))
+		return {
+			"occurrence_id": "obstacle-pre-effect:%s:%d:%s:%s" % [
+				execution_id, ordinal, obstacle_id, effect_id],
+			"ship_activation_identity": execution.get(
+				"ship_activation_identity", ""),
+			"maneuver_execution_id": execution_id,
+			"ordered_ordinal": ordinal,
+			"obstacle_id": obstacle_id,
+			"obstacle_type": obstacle_type,
+			"effect_id": effect_id,
+			"required_principal_ids": game_state \
+				.required_obstacle_acknowledgment_principals(),
+			"received_principal_ids": [],
+		}
+	return {}
 static func has_positive_overlap(ship_base: ShipBase,
 		contour: RefCounted, obstacle_transform: Transform2D,
 		area_epsilon: float) -> bool:

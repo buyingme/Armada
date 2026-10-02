@@ -125,6 +125,8 @@ func create_ui(layer: CanvasLayer, register_resizable: Callable) -> void:
 			_on_squadron_move_commit)
 	_squadron_modal.attack_requested.connect(
 			_on_squadron_attack_requested)
+	_squadron_modal.activation_intent_requested.connect(
+			_on_squadron_activation_intent_requested)
 	_squadron_modal.declaration_skip_requested.connect(
 			_on_squadron_declaration_skip_requested)
 	_squadron_modal.move_decline_requested.connect(
@@ -217,27 +219,40 @@ func try_handle_squadron_click(token: SquadronToken) -> bool:
 	if _squadron_modal.is_activation_acceptance_pending():
 		return true
 	if _squadron_modal.handle_squadron_click(token):
-		var instance: SquadronInstance = token.get_squadron_instance()
-		if _squadron_modal.is_command_mode() and instance != null \
-				and not instance.has_activation_action_state():
-			if not _squadron_modal.begin_activation_acceptance_pending():
-				return true
-			var resolver: SquadronCommandResolver = \
-					_squadron_modal.get_command_resolver()
-			var result: Dictionary = GameManager.activate_commanded_squadron(
-					instance, resolver.get_ship() if resolver != null else null)
-			if result.is_empty():
-				_squadron_modal.apply_activation_acceptance_rejection(
-						"Squadron activation was rejected.")
-			elif not bool(result.get("awaiting_remote", false)) \
-					and _squadron_modal.is_activation_acceptance_pending():
-				if _squadron_modal.apply_authoritative_activation_acceptance(
-						instance):
-					_on_squadron_selected_in_modal(token)
-			return true
 		_on_squadron_selected_in_modal(token)
 		return true
 	return false
+
+
+func _on_squadron_activation_intent_requested(token: SquadronToken,
+		intent: String) -> void:
+	if _squadron_modal == null or token == null:
+		return
+	var instance: SquadronInstance = token.get_squadron_instance()
+	if instance == null \
+			or not _squadron_modal.begin_activation_acceptance_pending(intent):
+		return
+	var result: Dictionary = {}
+	if _squadron_modal.is_command_mode():
+		var resolver: SquadronCommandResolver = \
+				_squadron_modal.get_command_resolver()
+		result = GameManager.activate_commanded_squadron(instance,
+				resolver.get_ship() if resolver != null else null)
+	else:
+		result = GameManager.activate_squadron(instance)
+	if result.is_empty():
+		_squadron_modal.apply_activation_acceptance_rejection(
+				"Squadron activation was rejected.")
+	elif not bool(result.get("awaiting_remote", false)) \
+			and _squadron_modal.is_activation_acceptance_pending() \
+			and _squadron_modal.apply_authoritative_activation_acceptance(instance):
+		_on_squadron_selected_in_modal(token)
+		call_deferred("_continue_accepted_activation_intent")
+
+
+func _continue_accepted_activation_intent() -> void:
+	if _squadron_modal != null:
+		_squadron_modal.continue_accepted_activation_intent()
 
 
 ## Starts the squadron activation flow for the current player.
@@ -497,11 +512,13 @@ func _on_command_executed_select_squadron(command: GameCommand,
 	# Already selected by the local-click path — nothing to do.
 	var current: SquadronToken = _squadron_modal.get_selected_token()
 	if current and current.get_squadron_instance() == instance:
-		if activation_context \
-				== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
-				and _squadron_modal.apply_authoritative_activation_acceptance(
-						instance):
+		if _squadron_modal.apply_authoritative_activation_acceptance(
+				instance):
 			_on_squadron_selected_in_modal(current)
+			if NetworkManager.get_local_player_index() < 0 \
+					or NetworkManager.get_local_player_index() \
+							== command.player_index:
+				call_deferred("_continue_accepted_activation_intent")
 			_log_diag("accepted pending activate_squadron for %s" %
 					instance.data_key)
 			return
@@ -637,7 +654,6 @@ func _on_network_activate_squadron_rejected(
 					!= state.find_squadron_index(instance):
 		return
 	_squadron_modal.apply_activation_acceptance_rejection(reason)
-	_remove_squadron_overlay()
 
 
 func _should_advance_passive_squadron_modal(command: GameCommand) -> bool:
@@ -709,16 +725,23 @@ func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 			_squadron_activation_count])
 	if _highlight_active.is_valid():
 		_highlight_active.call(instance)
-	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
-	var obstruction_bodies: Array = _build_obstruction_bodies()
-	var can_move: bool = SquadronKeywordRuleHelper.can_move_with_heavy_rule(
-			instance, token.global_position, all_squads, obstruction_bodies)
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return
+	var all_squads: Array[Dictionary] = \
+			SquadronKeywordRuleHelper.positions_from_state(game_state)
+	var obstruction_bodies: Array = \
+			EngagementResolver.obstruction_bodies_from_state(game_state)
+	var canonical_position: Vector2 = \
+			SquadronKeywordRuleHelper.position_from_state(instance)
+	var can_move: bool = game_state.can_squadron_move_under_engagement_rules(
+			instance)
 	var must_attack_engaged: bool = \
 			SquadronKeywordRuleHelper.is_engaged_by_non_heavy(
-					instance, token.global_position, all_squads,
+					instance, canonical_position, all_squads,
 					obstruction_bodies)
 	var has_targets: bool = _squadron_has_valid_targets(
-			instance, token, all_squads, obstruction_bodies)
+			instance, all_squads, obstruction_bodies)
 	var faction: Constants.Faction = Constants.Faction.REBEL_ALLIANCE
 	if instance.squadron_data:
 		faction = instance.squadron_data.faction
@@ -813,7 +836,8 @@ func _on_squadron_declaration_skip_requested(
 		return
 	# Local command execution normally applied presentation synchronously via
 	# command_executed. This idempotent fallback covers alternate submitters.
-	_squadron_modal.apply_declaration_skip_result(instance, result)
+	if _squadron_modal.is_declaration_skip_pending():
+		_squadron_modal.apply_declaration_skip_result(instance, result)
 
 
 func _on_squadron_move_decline_requested(
@@ -1011,14 +1035,21 @@ func _complete_accepted_move(instance: SquadronInstance,
 		token: SquadronToken, await_authoritative_completion: bool) -> void:
 	if instance == null or token == null or _squadron_modal == null:
 		return
-	var updated_squads: Array[Dictionary] = _build_all_squadron_positions()
-	var obstruction_bodies: Array = _build_obstruction_bodies()
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return
+	var updated_squads: Array[Dictionary] = \
+			SquadronKeywordRuleHelper.positions_from_state(game_state)
+	var obstruction_bodies: Array = \
+			EngagementResolver.obstruction_bodies_from_state(game_state)
 	var must_attack_engaged: bool = \
 			SquadronKeywordRuleHelper.is_engaged_by_non_heavy(
-					instance, token.global_position, updated_squads,
+					instance,
+					SquadronKeywordRuleHelper.position_from_state(instance),
+					updated_squads,
 					obstruction_bodies)
 	var new_has_targets: bool = _squadron_has_valid_targets(
-			instance, token, updated_squads, obstruction_bodies)
+			instance, updated_squads, obstruction_bodies)
 	_squadron_modal.set_action_availability(
 			false, new_has_targets, must_attack_engaged)
 	EventBus.squadron_moved.emit(token)
@@ -1134,7 +1165,6 @@ func _build_obstruction_bodies() -> Array:
 ## Rules Reference: "Squadron Attacks", RRG p.19; "Engagement" p.4.
 func _squadron_has_valid_targets(
 		instance: SquadronInstance,
-		token: SquadronToken,
 		all_squads: Array[Dictionary],
 		obstruction_bodies: Array) -> bool:
 	var game_state: GameState = GameManager.current_game_state
@@ -1148,7 +1178,8 @@ func _squadron_has_valid_targets(
 					game_state, instance.owner_player, squadron_index)
 	var must_attack_squadron: bool = \
 			SquadronKeywordRuleHelper.is_engaged_by_non_heavy(
-					instance, token.global_position,
+					instance,
+					SquadronKeywordRuleHelper.position_from_state(instance),
 					all_squads, obstruction_bodies)
 	if must_attack_squadron:
 		for candidate: Dictionary in candidates:

@@ -568,6 +568,7 @@ func _on_ship_destroyed(ship_node: Node) -> void:
 	for entry: Dictionary in _entries:
 		if entry["instance"] != inst:
 			continue
+		_refresh_damage_for_ship(inst)
 		_ghost_entry(entry)
 		break
 

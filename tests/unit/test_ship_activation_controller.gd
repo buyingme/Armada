@@ -348,6 +348,86 @@ func test_debris_choice_explains_zone_damage_and_shield_priority() -> void:
 	assert_eq((descriptor.get("options", []) as Array).size(), 4)
 
 
+func test_obstacle_acknowledgment_is_one_action_and_retries_after_rejection() \
+		-> void:
+	var ship: ShipInstance = _create_ship(0)
+	var controller := ShipActivationController.new()
+	add_child_autofree(controller)
+	var action: Dictionary = {
+		"kind": "decision",
+		"command_type": AcknowledgeObstaclePreEffectCommand.TYPE,
+		"player_index": 0,
+		"payload": {"occurrence_id": "obstacle:occurrence:1"},
+		"record": {"obstacle_type": "asteroid",
+			"effect_id": "asteroid_damage"},
+	}
+	controller._ensure_maneuver_consequence_modal()
+	controller._pending_maneuver_action = action
+	var modal: OpponentChoiceModal = controller._maneuver_consequence_modal
+	modal.open(controller._maneuver_choice_descriptor(action, ship))
+	assert_eq(modal._option_buttons.size(), 0,
+			"An informational acknowledgment has no selectable gameplay option.")
+	assert_eq(modal._confirm_button.text, "Acknowledge")
+	assert_false(modal._confirm_button.disabled)
+	modal._confirm_button.pressed.emit()
+	assert_eq(_submitter.submitted_commands.size(), 1)
+	assert_eq(_submitter.submitted_commands[0].command_type,
+			AcknowledgeObstaclePreEffectCommand.TYPE)
+	assert_eq(_submitter.submitted_commands[0].payload["occurrence_id"],
+			"obstacle:occurrence:1")
+	assert_true(modal._confirm_button.disabled,
+			"A pending Network acknowledgment cannot submit twice.")
+	modal._confirm_button.pressed.emit()
+	assert_eq(_submitter.submitted_commands.size(), 1)
+	GameManager.network_command_rejected.emit(
+			_submitter.submitted_commands[0], "rejected")
+	assert_false(modal._confirm_button.disabled)
+	modal._confirm_button.pressed.emit()
+	assert_eq(_submitter.submitted_commands.size(), 2,
+			"Rejection preserves the same occurrence for explicit retry.")
+
+
+func test_ship_teardown_preserves_projected_squadron_ui_for_network_seats() \
+		-> void:
+	var saved_role: NetworkManager.Role = NetworkManager.role
+	var saved_mode: PlayMode.Mode = PlayMode.current_mode
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SQUADRON
+	GameManager.current_game_state = state
+	var controller := ShipActivationController.new()
+	add_child_autofree(controller)
+	controller._activation_ctx = ActivationContext.new()
+	var panels := UIPanelManager.new()
+	add_child_autofree(panels)
+	panels.end_activation_button = EndActivationButton.new()
+	panels.add_child(panels.end_activation_button)
+	controller._panel_mgr = panels
+	var squadron_controller := SquadronPhaseController.new()
+	add_child_autofree(squadron_controller)
+	var modal := SquadronActivationModal.new()
+	add_child_autofree(modal)
+	squadron_controller._squadron_modal = modal
+	controller._squadron_phase_controller = squadron_controller
+	PlayMode.current_mode = PlayMode.Mode.NETWORK
+	for role: NetworkManager.Role in [NetworkManager.Role.SERVER,
+			NetworkManager.Role.CLIENT]:
+		NetworkManager.role = role
+		for local_player: int in [0, 1]:
+			NetworkManager._local_player_index = local_player
+			modal.open_for_turn(1, Constants.SQUADRONS_PER_ACTIVATION)
+			controller._on_board_activation_ended()
+			assert_true(modal.visible,
+					"Ship teardown must preserve the projected next controller " \
+					+ "on either Network seat.")
+	state.current_phase = Constants.GamePhase.SHIP
+	controller._on_board_activation_ended()
+	assert_false(modal.visible,
+			"Ship-phase teardown still retires an old command-mode modal.")
+	NetworkManager.role = saved_role
+	PlayMode.current_mode = saved_mode
+
+
 func test_maneuver_consequence_route_dispatches_exact_candidate_payloads() -> void:
 	var controller := ShipActivationController.new()
 	add_child_autofree(controller)

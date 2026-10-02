@@ -21,7 +21,7 @@ func _init(p_player: int = 0, p_payload: Dictionary = {}) -> void:
 
 
 func application_contract_version() -> int:
-	return 2
+	return 3
 
 
 func project_application_result(authority_result: Dictionary,
@@ -77,6 +77,36 @@ func execute_with_application_result(game_state: GameState,
 	if replacement == null:
 		return {}
 	var additions: Array = damage_application["faceup_additions"] as Array
+	var inspection_data: Dictionary = application_result[
+			"faceup_damage_inspection"] as Dictionary
+	var destroyed: bool = bool(damage_application["destroyed"])
+	var interrupted: bool = destroyed and ship.has_active_ship_activation()
+	var cleanup: Dictionary = application_result["destruction_cleanup"] as Dictionary
+	var next_controller: int = DestroyUnitCommand.next_controller_after_source(
+			game_state, attack.defender_player, [{"owner_player":
+				attack.defender_player, "ship_index": attack.defender_index}]) \
+			if interrupted else -1
+	if (destroyed and not DestroyUnitCommand.prevalidate_source_cleanup(
+			cleanup, ship.get_facedown_damage_count() \
+				+ int(damage_application["facedown_delta"]),
+			interrupted, next_controller)) \
+			or (not destroyed and not cleanup.is_empty()):
+		return {}
+	if additions.is_empty() != inspection_data.is_empty():
+		return {}
+	var inspection: FaceupDamageInspection = null
+	if not additions.is_empty():
+		inspection = FaceupDamageInspection.deserialize(inspection_data)
+		if inspection == null \
+				or int(inspection_data["owner_player"]) != attack.defender_player \
+				or int(inspection_data["ship_index"]) != attack.defender_index \
+				or str(inspection_data["roster_entry_id"]) != ship.roster_entry_id \
+				or inspection_data["public_card"] != FaceupDamageInspection \
+						.public_card_from_addition(additions[0] as Dictionary) \
+				or inspection.required_principal_ids() \
+						!= game_state.required_faceup_inspection_principals() \
+				or game_state.faceup_damage_inspection != null:
+			return {}
 	_drew_immediate_candidate = not additions.is_empty() \
 			and str((additions[0] as Dictionary).get(
 					"immediate_obligation", "none")) == "open"
@@ -92,8 +122,15 @@ func execute_with_application_result(game_state: GameState,
 		var change: Dictionary = raw_change as Dictionary
 		ship.current_shields[str(change["zone"])] = int(change["new_shields"])
 	game_state.set_current_attack_state(replacement)
-	if bool(damage_application["destroyed"]):
+	if inspection != null \
+			and not game_state.install_faceup_damage_inspection(inspection):
+		return {}
+	if destroyed:
 		ship.mark_destroyed()
+		if not DestroyUnitCommand.install_cleanup_in_source(game_state,
+				attack.defender_player, attack.defender_index,
+				interrupted, cleanup):
+			return {}
 	return application_result.duplicate(true)
 
 
@@ -175,15 +212,35 @@ func execute(game_state: GameState) -> Dictionary:
 	if replacement == null or not game_state.set_current_attack_state(replacement):
 		_restore(game_state, ship, attack_before, deck_before, ship_before)
 		return {}
-	ship.reduce_shields(zone, shield_damage)
 	var destroyed: bool = ship.is_destroyed()
+	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+	var interrupted: bool = destroyed and ship.has_active_ship_activation()
+	var inspection_data: Dictionary = {}
+	if not additions.is_empty():
+		var required_ids: Array[String] = \
+				game_state.required_faceup_inspection_principals()
+		var inspection: FaceupDamageInspection = \
+				FaceupDamageInspection.create(owner, ship_index,
+						ship.roster_entry_id,
+						FaceupDamageInspection.public_card_from_addition(
+								additions[0]), required_ids)
+		if inspection == null \
+					or not game_state.install_faceup_damage_inspection(inspection):
+			_restore(game_state, ship, attack_before, deck_before, ship_before)
+			return {}
+		inspection_data = inspection.serialize()
+	ship.reduce_shields(zone, shield_damage)
 	if destroyed:
 		ship.mark_destroyed()
+	var cleanup: Dictionary = DestroyUnitCommand.cleanup_in_source(
+			game_state, owner, ship_index, interrupted) if destroyed else {}
 	return {
 		"attack_id": attack.attack_id,
 		"target_kind": "ship",
 		"owner_player": owner,
 		"ship_index": ship_index,
+		"faceup_damage_inspection": inspection_data,
+		"destruction_cleanup": cleanup,
 		"damage_application": {
 			"owner_player": owner,
 			"ship_index": ship_index,
@@ -194,7 +251,7 @@ func execute(game_state: GameState) -> Dictionary:
 			"faceup_additions": additions,
 			"faceup_removals": [],
 			"public_discards": [],
-			"new_hull": ship.ship_data.hull - ship.get_total_damage(),
+			"new_hull": new_hull,
 			"destroyed": destroyed,
 		},
 	}
@@ -214,12 +271,15 @@ static func _restore(game_state: GameState, ship: ShipInstance,
 static func _application_result_is_valid(result: Dictionary) -> bool:
 	return _has_exact_keys(result, [
 		"attack_id", "target_kind", "owner_player", "ship_index",
-		"damage_application"]) \
+		"damage_application", "faceup_damage_inspection",
+		"destruction_cleanup"]) \
 			and typeof(result.get("attack_id")) == TYPE_STRING \
 			and not str(result["attack_id"]).is_empty() \
 			and result.get("target_kind") == "ship" \
 			and typeof(result.get("owner_player")) == TYPE_INT \
 			and typeof(result.get("ship_index")) == TYPE_INT \
+			and result.get("faceup_damage_inspection") is Dictionary \
+			and result.get("destruction_cleanup") is Dictionary \
 			and APPLICATION.is_exact_damage_application(
 					result.get("damage_application"))
 

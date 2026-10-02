@@ -703,6 +703,8 @@ func commit_maneuver_execution(expected_activation_identity: String,
 		"final_transform_applied": false,
 		"committed_result": committed_result.duplicate(true),
 		"obstacle_resolution_order": [],
+		"obstacle_pre_effect": {},
+		"asteroid_completion_outstanding": {},
 		"ship_collision": ship_collision.duplicate(true),
 	}
 	if not _active_maneuver_execution_is_valid(candidate):
@@ -757,6 +759,136 @@ func commit_maneuver_obstacle_order(expected_activation_identity: String,
 	return true
 
 
+func pending_obstacle_pre_effect_snapshot() -> Dictionary:
+	return (_active_maneuver_execution.get("obstacle_pre_effect", {}) \
+			as Dictionary).duplicate(true)
+
+
+func matching_satisfied_obstacle_pre_effect(obstacle_id: String,
+		obstacle_type: String) -> Dictionary:
+	var record: Dictionary = pending_obstacle_pre_effect_snapshot()
+	return record if not record.is_empty() \
+			and record.get("obstacle_id") == obstacle_id \
+			and record.get("obstacle_type") == obstacle_type \
+			and record.get("received_principal_ids") \
+				== record.get("required_principal_ids") else {}
+
+
+func asteroid_completion_outstanding_snapshot() -> Dictionary:
+	return (_active_maneuver_execution.get(
+			"asteroid_completion_outstanding", {}) as Dictionary).duplicate(true)
+
+
+func open_obstacle_pre_effect(ordinal: int, obstacle_id: String,
+		obstacle_type: String, required_principals: Array[String]) -> bool:
+	if not has_active_maneuver_execution() \
+			or not bool(_active_maneuver_execution.get(
+					"final_transform_applied", false)) \
+			or not pending_obstacle_pre_effect_snapshot().is_empty() \
+			or not asteroid_completion_outstanding_snapshot().is_empty():
+		return false
+	var order: Array = _active_maneuver_execution[
+			"obstacle_resolution_order"] as Array
+	if ordinal < 0 or ordinal >= order.size() \
+			or order[ordinal] != obstacle_id:
+		return false
+	var execution_id: String = str(_active_maneuver_execution[
+			"maneuver_execution_id"])
+	var effect_id: String = _obstacle_effect_id(obstacle_type)
+	if effect_id.is_empty():
+		return false
+	var record: Dictionary = {
+		"occurrence_id": "obstacle-pre-effect:%s:%d:%s:%s" % [
+			execution_id, ordinal, obstacle_id, effect_id],
+		"ship_activation_identity": ship_activation_identity,
+		"maneuver_execution_id": execution_id,
+		"ordered_ordinal": ordinal,
+		"obstacle_id": obstacle_id,
+		"obstacle_type": obstacle_type,
+		"effect_id": effect_id,
+		"required_principal_ids": required_principals.duplicate(),
+		"received_principal_ids": [],
+	}
+	_active_maneuver_execution["obstacle_pre_effect"] = record
+	if _active_maneuver_execution_is_valid(_active_maneuver_execution):
+		return true
+	_active_maneuver_execution["obstacle_pre_effect"] = {}
+	return false
+
+
+func acknowledge_obstacle_pre_effect(occurrence_id: String,
+		principal_id: String) -> bool:
+	var record: Dictionary = pending_obstacle_pre_effect_snapshot()
+	if str(record.get("occurrence_id", "")) != occurrence_id:
+		return false
+	var required: Array = record["required_principal_ids"] as Array
+	var received: Array = record["received_principal_ids"] as Array
+	if principal_id not in required or principal_id in received:
+		return false
+	received.append(principal_id)
+	received.sort()
+	_active_maneuver_execution["obstacle_pre_effect"] = record
+	return _active_maneuver_execution_is_valid(_active_maneuver_execution)
+
+
+func consume_satisfied_obstacle_pre_effect(occurrence_id: String,
+		obstacle_id: String) -> bool:
+	var record: Dictionary = pending_obstacle_pre_effect_snapshot()
+	if str(record.get("occurrence_id", "")) != occurrence_id \
+			or str(record.get("obstacle_id", "")) != obstacle_id \
+			or record.get("received_principal_ids") \
+				!= record.get("required_principal_ids"):
+		return false
+	_active_maneuver_execution["obstacle_pre_effect"] = {}
+	return true
+
+
+func open_asteroid_completion_outstanding(occurrence: Dictionary,
+		inspection_id: String) -> bool:
+	if not pending_obstacle_pre_effect_snapshot().is_empty() \
+			or not asteroid_completion_outstanding_snapshot().is_empty() \
+			or inspection_id.is_empty() \
+			or str(occurrence.get("obstacle_type", "")) != "asteroid":
+		return false
+	var record: Dictionary = {
+		"ship_activation_identity": ship_activation_identity,
+		"maneuver_execution_id": str(_active_maneuver_execution.get(
+				"maneuver_execution_id", "")),
+		"ordered_ordinal": int(occurrence.get("ordered_ordinal", -1)),
+		"occurrence_id": str(occurrence.get("occurrence_id", "")),
+		"obstacle_id": str(occurrence.get("obstacle_id", "")),
+		"inspection_id": inspection_id,
+		"inspection_released": false,
+	}
+	_active_maneuver_execution["asteroid_completion_outstanding"] = record
+	if _active_maneuver_execution_is_valid(_active_maneuver_execution):
+		return true
+	_active_maneuver_execution["asteroid_completion_outstanding"] = {}
+	return false
+
+
+func mark_asteroid_inspection_released(inspection_id: String) -> bool:
+	var record: Dictionary = asteroid_completion_outstanding_snapshot()
+	if str(record.get("inspection_id", "")) != inspection_id \
+			or bool(record.get("inspection_released", true)):
+		return false
+	record["inspection_released"] = true
+	var previous: Dictionary = asteroid_completion_outstanding_snapshot()
+	_active_maneuver_execution["asteroid_completion_outstanding"] = record
+	if _active_maneuver_execution_is_valid(_active_maneuver_execution):
+		return true
+	_active_maneuver_execution["asteroid_completion_outstanding"] = previous
+	return false
+
+
+func consume_released_asteroid_completion(record: Dictionary) -> bool:
+	if asteroid_completion_outstanding_snapshot() != record \
+			or not bool(record.get("inspection_released", false)):
+		return false
+	_active_maneuver_execution["asteroid_completion_outstanding"] = {}
+	return true
+
+
 ## Advances only the immutable collision branch's exact-once resolved bit.
 func mark_maneuver_ship_collision_damage_resolved(
 		expected_activation_identity: String, execution_id: String,
@@ -784,7 +916,9 @@ func complete_maneuver_execution(expected_activation_identity: String,
 			expected_activation_identity, execution_id) \
 			or not bool(_active_maneuver_execution.get(
 					"final_transform_applied", false)) \
-			or has_active_obstacle_resolution():
+			or has_active_obstacle_resolution() \
+			or not pending_obstacle_pre_effect_snapshot().is_empty() \
+			or not asteroid_completion_outstanding_snapshot().is_empty():
 		return false
 	maneuver_opportunity_disposition = ACTIVATION_DISPOSITION_CONSUMED
 	_active_maneuver_execution.clear()
@@ -1588,7 +1722,8 @@ static func _active_maneuver_execution_is_valid_for(execution: Dictionary,
 	var expected_fields: Array[String] = [
 		"maneuver_execution_id", "ship_activation_identity",
 		"navigate_speed_changed", "final_transform_applied",
-		"obstacle_resolution_order",
+		"obstacle_resolution_order", "obstacle_pre_effect",
+		"asteroid_completion_outstanding",
 		"ship_collision",
 	]
 	var transform_applied: Variant = execution.get("final_transform_applied")
@@ -1610,6 +1745,8 @@ static func _active_maneuver_execution_is_valid_for(execution: Dictionary,
 					!= activation_identity \
 			or typeof(execution["navigate_speed_changed"]) != TYPE_BOOL \
 			or not execution["obstacle_resolution_order"] is Array \
+			or not execution["obstacle_pre_effect"] is Dictionary \
+			or not execution["asteroid_completion_outstanding"] is Dictionary \
 			or not execution["ship_collision"] is Dictionary:
 		return false
 	if requires_committed_result and not (
@@ -1626,9 +1763,113 @@ static func _active_maneuver_execution_is_valid_for(execution: Dictionary,
 		if obstacle_id.is_empty() or seen_obstacles.has(obstacle_id):
 			return false
 		seen_obstacles[obstacle_id] = true
+	if not _obstacle_pre_effect_is_valid(execution) \
+			or not _asteroid_completion_is_valid(execution):
+		return false
 	return _maneuver_ship_collision_is_valid(
 			execution["ship_collision"] as Dictionary,
 			activation_identity, str(execution["maneuver_execution_id"]))
+
+
+static func _obstacle_effect_id(obstacle_type: String) -> String:
+	match obstacle_type:
+		"asteroid": return "asteroid_faceup_damage"
+		"debris": return "debris_damage"
+		"station": return "station_repair_choice"
+	return ""
+
+
+static func _obstacle_pre_effect_is_valid(execution: Dictionary) -> bool:
+	var record: Dictionary = execution["obstacle_pre_effect"] as Dictionary
+	if record.is_empty():
+		return true
+	var keys: Array[String] = ["occurrence_id", "ship_activation_identity",
+		"maneuver_execution_id", "ordered_ordinal", "obstacle_id",
+		"obstacle_type", "effect_id", "required_principal_ids",
+		"received_principal_ids"]
+	if record.size() != keys.size() \
+			or not bool(execution["final_transform_applied"]):
+		return false
+	for key: String in keys:
+		if not record.has(key):
+			return false
+	var ordinal: Variant = record["ordered_ordinal"]
+	var order: Array = execution["obstacle_resolution_order"] as Array
+	if typeof(ordinal) != TYPE_INT or int(ordinal) < 0 \
+			or int(ordinal) >= order.size() \
+			or typeof(record["obstacle_id"]) != TYPE_STRING \
+			or order[int(ordinal)] != record["obstacle_id"] \
+			or record["ship_activation_identity"] \
+				!= execution["ship_activation_identity"] \
+			or record["maneuver_execution_id"] \
+				!= execution["maneuver_execution_id"]:
+		return false
+	var effect_id: String = _obstacle_effect_id(
+			str(record["obstacle_type"]))
+	if effect_id.is_empty() or record["effect_id"] != effect_id \
+			or record["occurrence_id"] \
+				!= "obstacle-pre-effect:%s:%d:%s:%s" % [
+					execution["maneuver_execution_id"], int(ordinal),
+					record["obstacle_id"], effect_id]:
+		return false
+	var required: Variant = record["required_principal_ids"]
+	var received: Variant = record["received_principal_ids"]
+	if not required is Array or not received is Array \
+			or (required as Array).size() not in [1, 2]:
+		return false
+	var required_sorted: Array = (required as Array).duplicate()
+	var received_sorted: Array = (received as Array).duplicate()
+	required_sorted.sort()
+	received_sorted.sort()
+	if required_sorted != required or received_sorted != received:
+		return false
+	var seen: Dictionary = {}
+	for principal: Variant in required as Array:
+		if typeof(principal) != TYPE_STRING or str(principal).is_empty() \
+				or seen.has(principal):
+			return false
+		seen[principal] = true
+	seen.clear()
+	for principal: Variant in received as Array:
+		if typeof(principal) != TYPE_STRING or principal not in required \
+				or seen.has(principal):
+			return false
+		seen[principal] = true
+	return true
+
+
+static func _asteroid_completion_is_valid(execution: Dictionary) -> bool:
+	var record: Dictionary = execution[
+			"asteroid_completion_outstanding"] as Dictionary
+	if record.is_empty():
+		return true
+	var keys: Array[String] = ["ship_activation_identity",
+		"maneuver_execution_id", "ordered_ordinal", "occurrence_id",
+		"obstacle_id", "inspection_id", "inspection_released"]
+	if record.size() != keys.size() \
+			or not bool(execution["final_transform_applied"]) \
+			or not (execution["obstacle_pre_effect"] as Dictionary).is_empty():
+		return false
+	for key: String in keys:
+		if not record.has(key):
+			return false
+	var ordinal: Variant = record["ordered_ordinal"]
+	var order: Array = execution["obstacle_resolution_order"] as Array
+	return typeof(ordinal) == TYPE_INT \
+			and int(ordinal) >= 0 and int(ordinal) < order.size() \
+			and order[int(ordinal)] == record["obstacle_id"] \
+			and record["ship_activation_identity"] \
+				== execution["ship_activation_identity"] \
+			and record["maneuver_execution_id"] \
+				== execution["maneuver_execution_id"] \
+			and typeof(record["inspection_released"]) == TYPE_BOOL \
+			and typeof(record["inspection_id"]) == TYPE_STRING \
+			and str(record["inspection_id"]).begins_with(
+				"faceup-inspection:faceup:") \
+			and record["occurrence_id"] \
+				== "obstacle-pre-effect:%s:%d:%s:%s" % [
+					execution["maneuver_execution_id"], int(ordinal),
+					record["obstacle_id"], "asteroid_faceup_damage"]
 
 
 static func _obstacle_resolution_records_are_valid_for(execution: Dictionary,

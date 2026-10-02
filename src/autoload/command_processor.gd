@@ -115,6 +115,10 @@ func _ready() -> void:
 	SkipAttackCommand.register()
 	CompleteAttackCommand.register()
 	AcknowledgeAttackResultCommand.register()
+	AcknowledgeFaceupDamageCommand.register()
+	AcknowledgeObstaclePreEffectCommand.register()
+	CompleteAsteroidOverlapCommand.register()
+	CompleteMatchCommand.register()
 	# Tier 3 — movement commands.
 	MoveSquadronCommand.register()
 	DeclineSquadronMoveCommand.register()
@@ -252,6 +256,18 @@ func submit_replay_deferred_followups(command: GameCommand) -> Dictionary:
 ## Returns an empty string when the command may continue, otherwise the
 ## rejection reason that should be emitted to callers.
 func preflight(command: GameCommand, game_state: GameState) -> String:
+	var terminal_reason: String = _check_terminal_admission(
+			command, game_state)
+	if not terminal_reason.is_empty():
+		return terminal_reason
+	var faceup_reason: String = _check_faceup_damage_inspection(
+			command, game_state)
+	if not faceup_reason.is_empty():
+		return faceup_reason
+	var obstacle_reason: String = _check_obstacle_pre_effect(
+			command, game_state)
+	if not obstacle_reason.is_empty():
+		return obstacle_reason
 	var inspection_reason: String = _check_completed_attack_inspection(
 			command, game_state)
 	if inspection_reason != "":
@@ -262,6 +278,56 @@ func preflight(command: GameCommand, game_state: GameState) -> String:
 		return str(applicability.get(
 				COMMAND_APPLICABILITY_SCRIPT.KEY_REASON, ""))
 	return _check_rule_validators(command, game_state)
+
+
+func _check_terminal_admission(command: GameCommand,
+		game_state: GameState) -> String:
+	if command == null or game_state == null:
+		return ""
+	if not game_state.terminal_match_result.is_empty():
+		return "The match result is terminal."
+	if game_state.detected_terminal_reason().is_empty():
+		return ""
+	if command.command_type in [
+		AcknowledgeFaceupDamageCommand.TYPE,
+		AcknowledgeAttackResultCommand.TYPE,
+		"resolve_immediate_effect", CompleteAttackCommand.TYPE,
+		"ready_ecm", "decline_ecm_ready", CompleteMatchCommand.TYPE,
+	]:
+		return ""
+	return "Terminal cleanup is pending; ordinary gameplay is closed."
+
+
+func _check_faceup_damage_inspection(command: GameCommand,
+		game_state: GameState) -> String:
+	if command == null or game_state == null \
+			or game_state.faceup_damage_inspection == null:
+		return ""
+	if command.command_type == AcknowledgeFaceupDamageCommand.TYPE:
+		return ""
+	return "Faceup damage-card acknowledgment is outstanding."
+
+
+func _check_obstacle_pre_effect(command: GameCommand,
+		game_state: GameState) -> String:
+	if command == null or game_state == null:
+		return ""
+	var ship: ShipInstance = game_state.get_active_ship_activation()
+	if ship == null:
+		return ""
+	var record: Dictionary = ship.pending_obstacle_pre_effect_snapshot()
+	if record.is_empty():
+		return ""
+	if command.command_type == AcknowledgeObstaclePreEffectCommand.TYPE:
+		return ""
+	if record["received_principal_ids"] != record["required_principal_ids"]:
+		return "Obstacle pre-effect acknowledgment is outstanding."
+	var expected_type: String = "resolve_%s_overlap" % str(
+			record["obstacle_type"])
+	if command.command_type != expected_type \
+			or command.payload.get("obstacle_id") != record["obstacle_id"]:
+		return "Acknowledged obstacle consequence is outstanding."
+	return ""
 
 
 func _check_completed_attack_inspection(command: GameCommand,
@@ -275,6 +341,9 @@ func _check_completed_attack_inspection(command: GameCommand,
 		return ""
 	if not inspection.is_satisfied():
 		return "Completed attack result acknowledgement is outstanding."
+	if command.command_type == CompleteMatchCommand.TYPE \
+			and not game_state.detected_terminal_reason().is_empty():
+		return ""
 	if command.command_type not in [
 		"begin_attack", "skip_attack", "move_squadron",
 		DeclineSquadronMoveCommand.TYPE,
@@ -340,8 +409,6 @@ func _submit(command: GameCommand,
 		consequence_replacement = envelope_validation.get(
 				"maneuver_consequence_view", {}) as Dictionary
 	var flow_snapshot: InteractionFlow = _snapshot_flow(game_state)
-	var destruction_candidates: Array[Dictionary] = \
-			_capture_destruction_candidates(command, game_state)
 	var preflight_reason: String = preflight(command, game_state)
 	if preflight_reason != "":
 		return _reject_command(command, preflight_reason, game_state, execution_mode)
@@ -367,8 +434,6 @@ func _submit(command: GameCommand,
 			and not is_replaying:
 			_collect_observer_followups(
 					command, result, game_state, flow_snapshot)
-	_enqueue_authority_destruction_cleanup(
-			game_state, command, destruction_candidates, execution_mode)
 	_enqueue_post_success_continuation(
 			game_state, command, result, execution_mode)
 	if not is_replaying:
@@ -380,111 +445,25 @@ func _submit(command: GameCommand,
 	return result
 
 
-func _capture_destruction_candidates(command: GameCommand,
-		game_state: GameState) -> Array[Dictionary]:
-	var targets: Array[Dictionary] = []
-	if command == null or game_state == null:
-		return targets
-	match command.command_type:
-		"resolve_damage":
-			var attack: CurrentAttackState = game_state.current_attack_state
-			if attack != null and attack.defender_kind == CurrentAttackState.KIND_SHIP:
-				targets.append({"owner": attack.defender_player,
-					"index": attack.defender_index})
-		"overlap_damage":
-			targets.append({"owner": command.player_index,
-				"index": int(command.payload.get("ship_index", -1))})
-			targets.append({"owner": int(command.payload.get("other_owner", -1)),
-				"index": int(command.payload.get("other_ship_index", -1))})
-		"resolve_ship_collision_damage":
-			targets.append({"owner": int(command.payload.get(
-					"owner_player", -1)),
-				"index": int(command.payload.get("ship_index", -1))})
-			targets.append({"owner": int(command.payload.get(
-					"target_owner_player", -1)),
-				"index": int(command.payload.get("target_ship_index", -1))})
-		"resolve_thruster_fissure", "resolve_damaged_controls", \
-				"resolve_asteroid_overlap", "resolve_debris_overlap", \
-				"resolve_ruptured_engine", "apply_maneuver_transform":
-			targets.append({"owner": int(command.payload.get("owner_player", -1)),
-				"index": int(command.payload.get("ship_index", -1))})
-		"persistent_effect_damage", "resolve_immediate_effect", \
-				"debug_deal_damage":
-			targets.append({"owner": int(command.payload.get("owner_player", -1)),
-				"index": int(command.payload.get("ship_index", -1))})
-	for target: Dictionary in targets:
-		var owner: int = int(target.get("owner", -1))
-		var index: int = int(target.get("index", -1))
-		var ship: ShipInstance = null
-		if owner >= 0 and owner < game_state.player_states.size() \
-				and index >= 0:
-			ship = game_state.get_ship(owner, index)
-		target["was_destroyed"] = ship != null and ship.is_destroyed()
-		target["had_active_ship_activation"] = ship != null \
-				and ship.has_active_ship_activation()
-	return targets
-
-
-func _enqueue_authority_destruction_cleanup(game_state: GameState,
-		command: GameCommand, candidates: Array[Dictionary],
-		execution_mode: String) -> void:
-	if execution_mode != TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
-			or is_replaying or command == null:
-		return
-	var unique: Dictionary = {}
-	for candidate: Dictionary in candidates:
-		var owner: int = int(candidate.get("owner", -1))
-		var index: int = int(candidate.get("index", -1))
-		if owner < 0 or owner >= game_state.player_states.size() or index < 0:
-			continue
-		var key: String = "%d:%d" % [owner, index]
-		var ship: ShipInstance = game_state.get_ship(owner, index)
-		var requires_card_cleanup: bool = ship != null \
-				and ship.get_total_damage() > 0
-		var is_out_of_play_maneuver: bool = command.command_type \
-				== "apply_maneuver_transform"
-		if not bool(candidate.get("was_destroyed", false)) and ship != null \
-				and ship.is_destroyed() \
-				and (requires_card_cleanup or is_out_of_play_maneuver):
-			unique[key] = {
-				"owner": owner,
-				"index": index,
-				"had_active_ship_activation": bool(candidate.get(
-						"had_active_ship_activation", false)),
-			}
-	var ordered: Array = unique.values()
-	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		if int(a["owner"]) != int(b["owner"]):
-			return int(a["owner"]) < int(b["owner"])
-		return int(a["index"]) < int(b["index"])
-	)
-	for target: Dictionary in ordered:
-		var terminate_ship_phase_turn: bool = bool(target.get(
-				"had_active_ship_activation", false)) \
-				and not _ship_phase_turn_is_already_terminated(game_state)
-		_observer_followups.append(DestroyUnitCommand.new(command.player_index, {
-			"owner_player": int(target["owner"]),
-			"ship_index": int(target["index"]),
-			"terminate_ship_phase_turn": terminate_ship_phase_turn,
-		}))
-
-
-func _ship_phase_turn_is_already_terminated(game_state: GameState) -> bool:
-	if game_state == null or game_state.interaction_flow == null:
-		return false
-	var flow: InteractionFlow = game_state.interaction_flow
-	return flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION \
-			and flow.step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT
-
-
 func _enqueue_post_success_continuation(game_state: GameState,
 		command: GameCommand,
 		result: Dictionary,
 		execution_mode: String) -> void:
+	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
+			and game_state != null and command != null \
+			and command.command_type != CompleteMatchCommand.TYPE \
+			and game_state.terminal_match_result.is_empty() \
+			and game_state.terminal_result_ready():
+		_observer_followups.append(CompleteMatchCommand.new(
+				game_state.initiative_player, {}))
+		return
 	var timing: GameCommand = _timing_continuation(
 			game_state, command, result, execution_mode)
 	var attack: GameCommand = _attack_continuation(
 			game_state, command, result, execution_mode)
+	var faceup_immediate: GameCommand = \
+			_faceup_automatic_immediate_continuation(
+				game_state, command, result, execution_mode)
 	var commanded_squadron: GameCommand = \
 		_commanded_squadron_completion_continuation(
 				game_state, command, execution_mode)
@@ -497,6 +476,7 @@ func _enqueue_post_success_continuation(game_state: GameState,
 	var maneuver: GameCommand = _maneuver_execution_continuation(
 			game_state, command, execution_mode)
 	var continuation_count: int = int(timing != null) + int(attack != null) \
+			+ int(faceup_immediate != null) \
 			+ int(commanded_squadron != null) \
 			+ int(declined_move_completion != null) \
 			+ int(ship_phase_termination != null) + int(maneuver != null)
@@ -507,6 +487,8 @@ func _enqueue_post_success_continuation(game_state: GameState,
 		_observer_followups.append(timing)
 	elif attack != null:
 		_observer_followups.append(attack)
+	elif faceup_immediate != null:
+		_observer_followups.append(faceup_immediate)
 	elif commanded_squadron != null:
 		_observer_followups.append(commanded_squadron)
 	elif declined_move_completion != null:
@@ -515,6 +497,83 @@ func _enqueue_post_success_continuation(game_state: GameState,
 		_observer_followups.append(ship_phase_termination)
 	elif maneuver != null:
 		_observer_followups.append(maneuver)
+
+
+## Resumes only a matching choice-less Attack or debug immediate obligation
+## after the independent faceup inspection releases. Maneuver remains with its
+## existing evaluator; a player choice remains with the source UI.
+func _faceup_automatic_immediate_continuation(game_state: GameState,
+		command: GameCommand, result: Dictionary,
+		execution_mode: String) -> GameCommand:
+	if execution_mode != TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
+			or command == null or game_state == null \
+			or command.command_type != AcknowledgeFaceupDamageCommand.TYPE \
+			or not bool(result.get("released", false)):
+		return null
+	var public_ref: String = str(result.get("inspection_id", "")) \
+			.trim_prefix("faceup-inspection:")
+	return _auto_immediate_for_public_ref(game_state, public_ref)
+
+
+## Re-derives a released choice-less obligation after full state installation.
+## It records no acknowledgment and passive peers never call it.
+func derive_reconstructed_faceup_automatic_immediate(
+		game_state: GameState) -> GameCommand:
+	if game_state == null or game_state.faceup_damage_inspection != null \
+			or not game_state.terminal_match_result.is_empty():
+		return null
+	var candidate: GameCommand = null
+	for player: PlayerState in game_state.player_states:
+		for ship: ShipInstance in player.ships:
+			var record: Dictionary = ship.active_immediate_resolution_snapshot()
+			if record.is_empty() or str(record.get("enclosing_kind", "")) \
+					not in ["attack", "debug"]:
+				continue
+			var next: GameCommand = _auto_immediate_for_public_ref(
+					game_state, str(record.get("public_card_ref", "")))
+			if next == null:
+				continue
+			if candidate != null:
+				return null
+			candidate = next
+	return candidate
+
+
+func _auto_immediate_for_public_ref(game_state: GameState,
+		public_ref: String) -> GameCommand:
+	for owner: int in range(game_state.player_states.size()):
+		var player: PlayerState = game_state.get_player_state(owner)
+		for index: int in range(player.ships.size()):
+			var ship: ShipInstance = game_state.get_ship(owner, index)
+			var record: Dictionary = ship.active_immediate_resolution_snapshot()
+			if record.get("public_card_ref") != public_ref \
+					or str(record.get("enclosing_kind", "")) \
+							not in ["attack", "debug"]:
+				continue
+			var card: DamageCard = ship.faceup_card_for_public_ref(public_ref)
+			if card == null or not ImmediateEffectResolver.new() \
+					.get_required_choice(card, ship).is_empty():
+				return null
+			var payload: Dictionary = {
+				"owner_player": owner, "ship_index": index,
+				"public_card_ref": public_ref,
+				"immediate_resolution_id": record["immediate_resolution_id"],
+				"enclosing_kind": record["enclosing_kind"],
+			}
+			if record["enclosing_kind"] == "attack":
+				payload["attack_id"] = record["attack_id"]
+			else:
+				payload["debug_application_id"] = record[
+						"debug_application_id"]
+			if card.effect_id == "comm_noise":
+				payload["comm_noise_action"] = "speed" \
+						if ship.current_speed > 0 else "none"
+			elif card.effect_id == "shield_failure":
+				payload["shield_zones"] = []
+			var actor: int = int(record.get("actor_player", -1))
+			return CandidateResolveImmediateEffectCommand.new(
+				owner if actor == -1 else actor, payload)
+	return null
 
 
 ## Purpose-specific ADR-006 re-evaluation. It creates no persisted route or
@@ -528,6 +587,9 @@ func _maneuver_execution_continuation(game_state: GameState,
 				"commit_displacement", "resolve_ship_collision_damage",
 				"resolve_thruster_fissure", "resolve_damaged_controls",
 				"commit_maneuver_obstacle_order", "resolve_asteroid_overlap",
+				AcknowledgeObstaclePreEffectCommand.TYPE,
+				AcknowledgeFaceupDamageCommand.TYPE,
+				CompleteAsteroidOverlapCommand.TYPE,
 				"resolve_immediate_effect", "resolve_debris_overlap",
 				"resolve_station_overlap", "resolve_ruptured_engine",
 			]:
@@ -535,6 +597,13 @@ func _maneuver_execution_continuation(game_state: GameState,
 	var owner: int = int(command.payload.get("owner_player",
 			command.player_index))
 	var ship_index: int = int(command.payload.get("ship_index", -1))
+	if command.command_type in [AcknowledgeObstaclePreEffectCommand.TYPE,
+			AcknowledgeFaceupDamageCommand.TYPE]:
+		var active: ShipInstance = game_state.get_active_ship_activation()
+		if active == null:
+			return null
+		owner = active.owner_player
+		ship_index = game_state.find_ship_index(active)
 	var ship: ShipInstance = game_state.get_ship(owner, ship_index)
 	if ship == null or ship.is_destroyed() \
 			or not ship.has_active_maneuver_execution():

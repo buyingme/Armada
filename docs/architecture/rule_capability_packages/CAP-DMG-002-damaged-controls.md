@@ -10,7 +10,7 @@ Related Contracts: CON-003
 Related Context Packs: CP-001
 Related Tests: TEST-003; existing and required tests listed below
 Created: 2026-09-12
-Last Updated: 2026-09-12
+Last Updated: 2026-09-30
 Owner: Project Owner
 Test Owner: Capability implementation owner; Project Owner review required
 Capability Classification: mixed
@@ -244,9 +244,29 @@ The guard must not collapse instances by title, rule ID, or `effect_id`.
 | Migration impact | high | Current Boolean/timing collapse accepted distinctions | Replace invocation while reusing low-level draw. |
 | Complexity | high | Two invocation points share one per-instance invariant | One capability owner, no generic work framework. |
 
+### UX-006–UX-012 candidate trace (2026-09-30)
+
+`CandidateResolveDamagedControlsCommand` retains the card-instance/Maneuver
+choice and now carries version-3 source-atomic lethal cleanup. The UX-008
+pre-effect occurrence and any UX-006 inspection are owned at their distinct
+accepted boundaries. Save schema 8, Network protocol 9, passive exact-result
+validation, and semantic replay apply. Candidate checks:
+`tests/unit/test_candidate_resolve_damaged_controls_command.gd` and
+`tests/unit/test_candidate_obstacle_consequences.gd`.
+
+This is Codex candidate implementation evidence under the accepted UX workbook. The
+package remains **Draft**; Owner integration and genuine replay capture remain
+separate gates. Earlier missing-path observations in this package describe its pre-candidate
+baseline. Section 9.1 supersedes those observations for the UX boundaries only;
+it does not authorize a different rule or ownership boundary.
+
 ## 10. Integration Status
 
 Current Status: Draft
+
+The UX candidate trace in Section 9.1 updates the affected implementation
+surfaces. Package-wide integration remains subject to separate Owner review;
+the older evidence summary below records the pre-candidate baseline.
 Evidence Summary:
 
 - Card data, current hook, direct-draw command infrastructure, and focused tests exist.

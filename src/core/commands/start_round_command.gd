@@ -69,7 +69,9 @@ func execute(game_state: GameState) -> Dictionary:
 	var cleared_ready_cost: Array[String] = \
 			ECM_SCRIPT.clear_status_ready_cost_window_state(game_state)
 	game_state.current_round += 1
+	game_state.final_status_cleanup_round = -1
 	game_state.current_phase = Constants.GamePhase.COMMAND
+	game_state.ship_phase_selection_controller = -1
 	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.COMMAND_PHASE,
 			Constants.InteractionStep.SELECT_DIALS,

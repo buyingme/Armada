@@ -6,9 +6,9 @@
 ##   2. Clears all damage cards (faceup + facedown) from the ship.
 ##   3. Returns cleared cards to the damage deck discard pile.
 ##
-## The actual [method ShipInstance.mark_destroyed] call and the visual
-## destruction (fade-out, EventBus signal) remain in the presentation
-## layer — this command only covers mutable GameState changes.
+## The accepted damage or out-of-play source marks the ship destroyed and
+## invokes these cleanup operations in that same semantic transaction.
+## Visual destruction remains a presentation concern.
 ##
 ## Payload:
 ##   - "owner_player": int — player index (0 or 1)
@@ -23,6 +23,80 @@ extends GameCommand
 
 
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+
+## Reuse the existing ship/deck cleanup operations inside the command that
+## actually destroyed the ship. This does not submit or record destroy_unit.
+static func cleanup_in_source(game_state: GameState, owner: int,
+		ship_index: int, interrupted_ship_turn: bool) -> Dictionary:
+	var cleanup := DestroyUnitCommand.new(owner, {
+		"owner_player": owner,
+		"ship_index": ship_index,
+		"terminate_ship_phase_turn": interrupted_ship_turn,
+	})
+	var result: Dictionary = cleanup.execute(game_state)
+	return cleanup.project_application_result(result, 0) \
+			if not result.is_empty() else {}
+
+
+## Applies only the prevalidated public cleanup in a passive source command.
+## Callers must validate this complete result against their post-damage
+## prediction before they mutate source state.
+static func install_cleanup_in_source(game_state: GameState, owner: int,
+		ship_index: int, interrupted_ship_turn: bool,
+		cleanup_result: Dictionary) -> bool:
+	var cleanup := DestroyUnitCommand.new(owner, {
+		"owner_player": owner,
+		"ship_index": ship_index,
+		"terminate_ship_phase_turn": interrupted_ship_turn,
+	})
+	return not cleanup.execute_with_application_result(
+			game_state, cleanup_result).is_empty()
+
+
+static func prevalidate_source_cleanup(result: Dictionary,
+		expected_facedown_count: int, terminate_turn: bool,
+		expected_next_controller: int) -> bool:
+	if result.size() != 3 \
+			or not result.get("facedown_discards") is Array \
+			or typeof(result.get("ship_phase_turn_terminated")) != TYPE_BOOL \
+			or typeof(result.get("next_ship_phase_controller")) != TYPE_INT \
+			or (result["facedown_discards"] as Array).size() \
+				!= expected_facedown_count \
+			or result["ship_phase_turn_terminated"] != terminate_turn \
+			or result["next_ship_phase_controller"] != expected_next_controller:
+		return false
+	for raw: Variant in result["facedown_discards"]:
+		if not raw is Dictionary:
+			return false
+		var card: DamageCard = PassiveDamageLedger.deserialize_public_card(
+				raw as Dictionary)
+		if card == null or card.is_faceup:
+			return false
+	return true
+
+
+## Predicts the existing alternating Ship Phase controller from a source's
+## complete newly-destroyed set, without mutating any ship.
+static func next_controller_after_source(game_state: GameState,
+		ending_player: int, newly_destroyed: Array[Dictionary]) -> int:
+	var other: int = Constants.PLAYER_COUNT - 1 - ending_player
+	for player_index: int in [other, ending_player]:
+		var player_state: PlayerState = game_state.get_player_state(player_index)
+		if player_state == null:
+			continue
+		for index: int in range(player_state.ships.size()):
+			var ship: ShipInstance = player_state.ships[index] as ShipInstance
+			var will_die: bool = false
+			for target: Dictionary in newly_destroyed:
+				if int(target.get("owner_player", -1)) == player_index \
+						and int(target.get("ship_index", -1)) == index:
+					will_die = true
+					break
+			if ship != null and not ship.is_destroyed() \
+					and not will_die and not ship.activated_this_round:
+				return player_index
+	return ending_player
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -91,6 +165,7 @@ func execute_with_application_result(game_state: GameState,
 	var faceup: Array = ship.faceup_damage.duplicate()
 	ship.faceup_damage.clear()
 	for public_card: DamageCard in faceup:
+		public_card.flip_facedown()
 		ledger.append_public_discard(public_card)
 	for public_card: DamageCard in cards:
 		ledger.append_public_discard(public_card)
@@ -194,6 +269,7 @@ func _apply_ship_phase_return(game_state: GameState,
 	if not bool(transition["ship_phase_turn_terminated"]):
 		return
 	var next_player: int = int(transition["next_ship_phase_controller"])
+	game_state.ship_phase_selection_controller = next_player
 	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,

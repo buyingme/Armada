@@ -13,7 +13,7 @@ Related Requirements: DM-005, DM-010 through DM-015
 Related Boundaries: ADR-001/CON-001 Attack authority and return dependency; ADR-014 purpose-specific immediate-resolution boundary  
 Related Gaps: ADR-014 physical-card identity, active-obligation, recovery, Network filtering, and return implementation gaps  
 Created: 2026-09-12  
-Last Updated: 2026-09-12  
+Last Updated: 2026-09-30
 Owner: Project Owner  
 Test Owner: Capability implementation owner; Project Owner review required  
 Capability Classification: mixed
@@ -218,6 +218,23 @@ and rejection of earlier-occurrence identities.
 | Visibility | medium | Public prompt and hidden post-flip identity. |
 | Migration | medium | Version stable card/pending schema. |
 | Complexity | medium | Preserve explicit multi-select semantics only. |
+
+### UX-006–UX-012 candidate trace (2026-09-30)
+
+A newly dealt faceup Shield Failure card enters UX-006 inspection before its
+existing immediate choice/effect. `CandidateResolveImmediateEffectCommand`
+version 3 retains shield-zone legality and any source-atomic lethal cleanup.
+Save schema 8, Network protocol 9, passive exact-result application, and ordered
+semantic replay apply. Candidate checks:
+`tests/unit/test_candidate_resolve_immediate_effect_command.gd`,
+`tests/unit/test_candidate_obstacle_consequences.gd`, and the real Network
+acknowledgment scenario in `tests/acceptance/network_resume/driver.gd`.
+
+This is Codex candidate implementation evidence under the accepted UX workbook. The
+package remains **Draft**; Owner integration and genuine replay capture remain
+separate gates. Earlier missing-path observations in this package describe its pre-candidate
+baseline. Section 9.1 supersedes those observations for the UX boundaries only;
+it does not authorize a different rule or ownership boundary.
 
 ## 10. Integration Status
 

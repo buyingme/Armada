@@ -26,8 +26,9 @@ func after_each() -> void:
 	GameCommand._registry = _saved_registry
 
 
-func test_ruptured_engine_destruction_ends_active_activation_and_advances_phase() -> void:
+func test_ruptured_engine_destruction_ends_active_activation_and_match() -> void:
 	var state: GameState = _state_with_active_ship_at_final_hull()
+	_add_ship(state, 1, false)
 	GameManager.current_game_state = state
 	var result: Dictionary = _processor.submit(_lethal_damage_command(
 			"ruptured_engine", 0))
@@ -37,28 +38,29 @@ func test_ruptured_engine_destruction_ends_active_activation_and_advances_phase(
 	assert_true(ship.is_destroyed())
 	assert_false(ship.has_active_ship_activation(),
 			"Exceptional destruction must clear the active activation boundary.")
-	assert_eq(state.current_phase, Constants.GamePhase.SQUADRON,
-			"The existing recorded phase transition must converge when no ships remain.")
+	assert_false(state.terminal_match_result.is_empty(),
+			"The cleaned final-ship death must install the terminal result.")
 	assert_eq(_history_types(_processor), [
-			"persistent_effect_damage", "destroy_unit", "advance_phase"],
-			"Cleanup must precede the existing phase transition.")
+			"persistent_effect_damage", "complete_match"],
+			"Cleanup is part of the lethal source before terminal detection.")
 
 
-func test_crew_panic_destruction_at_pre_reveal_boundary_advances_phase() -> void:
+func test_crew_panic_destruction_at_pre_reveal_boundary_ends_match() -> void:
 	var state: GameState = _state_with_pre_reveal_ship_at_final_hull()
+	_add_ship(state, 1, false)
 	GameManager.current_game_state = state
 	var result: Dictionary = _processor.submit(_lethal_damage_command(
 			"crew_panic", 0))
 	assert_true(bool(result.get("destroyed", false)))
 	assert_true(bool(result.get("ship_phase_turn_terminated", false)))
-	assert_eq(state.current_phase, Constants.GamePhase.SQUADRON,
-			"Crew Panic destruction must not leave Ship Phase waiting for a dead ship.")
+	assert_false(state.terminal_match_result.is_empty())
 	assert_eq(_history_types(_processor), [
-			"persistent_effect_damage", "destroy_unit", "advance_phase"])
+			"persistent_effect_damage", "complete_match"])
 
 
 func test_destruction_with_another_legal_ship_projects_next_controller() -> void:
 	var state: GameState = _state_with_active_ship_at_final_hull()
+	_add_ship(state, 0, false)
 	_add_ship(state, 1, false)
 	GameManager.current_game_state = state
 	var result: Dictionary = _processor.submit(_lethal_damage_command(
@@ -71,7 +73,7 @@ func test_destruction_with_another_legal_ship_projects_next_controller() -> void
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT)
 	assert_eq(state.interaction_flow.controller_player, 1,
 			"The surviving opponent must receive the next canonical Ship Phase choice.")
-	assert_eq(_history_types(_processor), ["persistent_effect_damage", "destroy_unit"])
+	assert_eq(_history_types(_processor), ["persistent_effect_damage"])
 
 
 func _state_with_active_ship_at_final_hull() -> GameState:

@@ -10,6 +10,8 @@ var _ship: ShipInstance
 func before_each() -> void:
 	_state = GameState.new()
 	_state.initialize()
+	assert_true(_state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	_state.current_phase = Constants.GamePhase.SHIP
 	var data := ShipData.new()
 	data.hull = 5
@@ -40,6 +42,7 @@ func test_historical_name_uses_authoritative_application_contract() -> void:
 	var result: Dictionary = command.execute(_state)
 	assert_eq(result.keys(), [
 		"debug_application_id", "owner_player", "ship_index",
+		"faceup_damage_inspection", "destruction_cleanup",
 		"damage_application",
 	])
 	assert_false(result.has("card_index"))
@@ -78,7 +81,7 @@ func test_factory_roundtrip_restores_the_same_authoritative_command() -> void:
 	assert_not_null(restored)
 	assert_true(restored is CandidateDebugDealDamageCommand)
 	assert_eq(restored.application_contract_id(), "debug_deal_damage")
-	assert_eq(restored.application_contract_version(), 2)
+	assert_eq(restored.application_contract_version(), 3)
 
 
 func test_unavailable_card_and_conflicting_obligation_fail_without_mutation() \

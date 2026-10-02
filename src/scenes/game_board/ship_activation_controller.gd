@@ -1019,7 +1019,12 @@ func _on_board_activation_ended() -> void:
 		_panel_mgr.show_activation_button.hide_button()
 	if _panel_mgr.activation_modal:
 		_panel_mgr.activation_modal.close_and_clear()
-	_squadron_phase_controller.hide_ui()
+	# The last ship can advance to Squadron Phase before this signal listener
+	# runs. Retire command-mode UI only; preserve a newly projected phase choice.
+	if _squadron_phase_controller != null and (GameManager.current_game_state == null \
+			or GameManager.current_game_state.current_phase \
+					!= Constants.GamePhase.SQUADRON):
+		_squadron_phase_controller.hide_ui()
 	if _panel_mgr.activation_sidebar:
 		_panel_mgr.activation_sidebar.clear_active()
 		_panel_mgr.activation_sidebar.refresh()
@@ -1157,7 +1162,7 @@ func _ensure_crew_panic_modal() -> void:
 ## Re-projects one current ADR-006 consequence decision. Gameplay ownership
 ## remains in the purpose-specific command/state; this stores no progress.
 func project_maneuver_consequence(game_state: GameState,
-		_local_viewer: int) -> void:
+		local_viewer: int) -> void:
 	if game_state == null:
 		_close_maneuver_consequence_modal()
 		return
@@ -1168,6 +1173,15 @@ func project_maneuver_consequence(game_state: GameState,
 	var ship_index: int = game_state.find_ship_index(ship)
 	var action: Dictionary = ManeuverExecutionEvaluator.next_action(
 			game_state, ship.owner_player, ship_index)
+	if str(action.get("kind", "")) == "acknowledgment":
+		var record: Dictionary = action.get("record", {}) as Dictionary
+		var principal_id: String = game_state.principal_id_for_player(
+				local_viewer)
+		if principal_id in record.get("required_principal_ids", []) \
+				and principal_id not in record.get(
+						"received_principal_ids", []):
+			action["kind"] = "decision"
+			action["player_index"] = local_viewer
 	if str(action.get("kind", "")) != "decision" \
 			or not _can_act_as(int(action.get("player_index", -1))):
 		_close_maneuver_consequence_modal()
@@ -1196,6 +1210,28 @@ func _ensure_maneuver_consequence_modal() -> void:
 	layer.add_child(_maneuver_consequence_modal)
 	_maneuver_consequence_modal.choice_confirmed.connect(
 			_on_maneuver_consequence_choice)
+	if not CommandProcessor.command_rejected.is_connected(
+			_on_obstacle_acknowledgment_rejected):
+		CommandProcessor.command_rejected.connect(
+				_on_obstacle_acknowledgment_rejected)
+	if not GameManager.network_command_rejected.is_connected(
+			_on_obstacle_acknowledgment_rejected):
+		GameManager.network_command_rejected.connect(
+				_on_obstacle_acknowledgment_rejected)
+
+
+func _on_obstacle_acknowledgment_rejected(command: GameCommand,
+		_reason: String) -> void:
+	if command == null or command.command_type \
+			!= AcknowledgeObstaclePreEffectCommand.TYPE \
+			or _maneuver_consequence_modal == null \
+			or _pending_maneuver_action.is_empty():
+		return
+	var pending: Dictionary = _pending_maneuver_action.get("payload", {}) \
+			as Dictionary
+	if str(command.payload.get("occurrence_id", "")) \
+			== str(pending.get("occurrence_id", "")):
+		_maneuver_consequence_modal.retry_obstacle_acknowledgment()
 
 
 func _close_maneuver_consequence_modal() -> void:
@@ -1212,13 +1248,26 @@ func _maneuver_choice_descriptor(action: Dictionary,
 	var multi_select: bool = false
 	var max_selections: int = 1
 	match command_type:
+		"acknowledge_obstacle_pre_effect":
+			pass
 		"commit_maneuver_obstacle_order":
 			var ids: Array[String] = []
+			var names_by_id: Dictionary = {}
+			for raw_obstacle: Variant in action.get("obstacles", []):
+				if raw_obstacle is Dictionary:
+					var obstacle: Dictionary = raw_obstacle as Dictionary
+					names_by_id[str(obstacle.get("obstacle_id", ""))] = \
+							str(obstacle.get("obstacle_type", "obstacle")) \
+									.capitalize()
 			for raw: Variant in action["payload"]["obstacle_ids"]:
 				ids.append(str(raw))
 			for ordering: Array[String] in _permutations(ids):
+				var names: Array[String] = []
+				for obstacle_id: String in ordering:
+					names.append(str(names_by_id.get(obstacle_id,
+							"Obstacle")))
 				options.append({"id":"|".join(ordering),
-					"label":" → ".join(ordering)})
+					"label":" → ".join(names)})
 		"resolve_thruster_fissure", "resolve_debris_overlap", \
 		"resolve_ruptured_engine":
 			var refs: Array = action.get("public_card_refs", []) as Array
@@ -1273,6 +1322,11 @@ func _maneuver_choice_descriptor(action: Dictionary,
 								"label":"Replace dial: %s" % ImmediateEffectResolver._command_type_name(replacement)})
 	var effect_text: String = \
 			"Resolve the current mandatory Maneuver consequence."
+	if command_type == "acknowledge_obstacle_pre_effect":
+		var record: Dictionary = action.get("record", {}) as Dictionary
+		effect_text = "The ship overlaps %s. Next: %s." % [
+			str(record.get("obstacle_type", "obstacle")).capitalize(),
+			str(record.get("effect_id", "effect")).replace("_", " ")]
 	if command_type == "resolve_debris_overlap":
 		effect_text = "Choose one hull zone to suffer the Debris Field's " \
 				+ "two damage points. Shields in that zone are lost first."
@@ -1281,6 +1335,8 @@ func _maneuver_choice_descriptor(action: Dictionary,
 			else "opponent"
 	return {"card_title":_maneuver_choice_title(command_type),
 		"effect_text":effect_text, "chooser":chooser, "options":options,
+		"obstacle_acknowledgment": command_type \
+				== AcknowledgeObstaclePreEffectCommand.TYPE,
 		"multi_select":multi_select, "max_selections":max_selections,
 		"choice_type":ImmediateEffectResolver.CHOICE_SHIELD_FAILURE \
 				if multi_select else "maneuver_consequence"}
@@ -1297,6 +1353,9 @@ func _on_maneuver_consequence_choice(selection: Dictionary) -> void:
 	var selected_id: String = str(selection.get("id",
 			selected[0] if not selected.is_empty() else ""))
 	match command_type:
+		"acknowledge_obstacle_pre_effect":
+			if selected_id != "ack":
+				return
 		"commit_maneuver_obstacle_order":
 			var obstacle_ids: Array[String] = []
 			for obstacle_id: String in selected_id.split("|", false):
@@ -1348,12 +1407,18 @@ func _on_maneuver_consequence_choice(selection: Dictionary) -> void:
 					elif selected_id.begins_with("dial|"):
 						payload["comm_noise_action"] = "dial"
 						payload["replacement_command"] = int(selected_id.trim_prefix("dial|"))
-	_close_maneuver_consequence_modal()
+	if command_type != AcknowledgeObstaclePreEffectCommand.TYPE:
+		_close_maneuver_consequence_modal()
 	var command: GameCommand = GameCommand.deserialize({"type":command_type,
 		"player":int(action["player_index"]), "sequence":-1, "payload":payload})
 	var submitter: CommandSubmitter = GameManager.get_command_submitter()
 	if command != null and submitter != null:
-		submitter.submit(command)
+		var result: Dictionary = submitter.submit(command)
+		if command_type == AcknowledgeObstaclePreEffectCommand.TYPE \
+				and result.is_empty():
+			_maneuver_consequence_modal.retry_obstacle_acknowledgment()
+	elif command_type == AcknowledgeObstaclePreEffectCommand.TYPE:
+		_maneuver_consequence_modal.retry_obstacle_acknowledgment()
 
 
 static func _permutations(values: Array[String]) -> Array[Array]:
@@ -1369,6 +1434,7 @@ static func _permutations(values: Array[String]) -> Array[Array]:
 
 static func _maneuver_choice_title(command_type: String) -> String:
 	match command_type:
+		"acknowledge_obstacle_pre_effect": return "Obstacle Overlap"
 		"commit_maneuver_obstacle_order": return "Obstacle Order"
 		"resolve_thruster_fissure": return "Thruster Fissure"
 		"resolve_debris_overlap": return "Debris Field"

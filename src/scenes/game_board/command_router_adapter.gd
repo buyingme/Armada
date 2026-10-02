@@ -157,6 +157,11 @@ func _route_to_controllers(cmd: GameCommand, result: Dictionary) -> void:
 			and cmd.command_type == "debug_deal_damage":
 		_damage_card_immediate_effect_controller.react_to_debug_damage_result(
 				cmd, result)
+	if cmd != null and _damage_card_immediate_effect_controller != null \
+			and cmd.command_type == "acknowledge_faceup_damage" \
+			and bool(result.get("released", false)):
+		_damage_card_immediate_effect_controller.reconstruct_from_state(
+				GameManager.current_game_state)
 	if cmd != null and cmd.command_type == "debug_reposition":
 		_project_debug_reposition(result)
 	if cmd != null and cmd.command_type == "persistent_effect_damage":
@@ -180,6 +185,8 @@ func _route_to_controllers(cmd: GameCommand, result: Dictionary) -> void:
 			_ship_activation_controller.show_end_activation_after_maneuver()
 	if cmd != null and cmd.command_type == "destroy_unit":
 		_emit_destroyed_ship_presentation(cmd)
+	if cmd != null:
+		_emit_source_destruction_presentation(cmd, result)
 
 
 func _project_debug_reposition(result: Dictionary) -> void:
@@ -216,6 +223,30 @@ func _emit_persistent_damage_events(cmd: GameCommand,
 
 func _emit_candidate_damage_events(cmd: GameCommand,
 		result: Dictionary) -> void:
+	# Maneuver immediate effects do not pass through the Attack/debug signal
+	# owner. Refresh the canonical token column after accepted Injured Crew on
+	# the live authority; passive clients use the existing remote handler.
+	if cmd.command_type == "resolve_immediate_effect" \
+			and str(cmd.payload.get("enclosing_kind", "")) == "maneuver" \
+			and NetworkManager.role != NetworkManager.Role.CLIENT \
+			and str(result.get("effect_id", "")) == "injured_crew":
+		var state: GameState = GameManager.current_game_state
+		var ship: ShipInstance = state.get_ship(
+				int(result.get("owner_player", -1)),
+				int(result.get("ship_index", -1))) if state != null else null
+		if ship != null:
+			EventBus.ship_defense_token_changed.emit(ship)
+	if cmd.command_type == "resolve_immediate_effect" \
+			and str(result.get("effect_id", "")) \
+					== "life_support_failure" \
+			and bool((result.get("effect_result", {}) as Dictionary).get(
+					"tokens_cleared", false)):
+		var state: GameState = GameManager.current_game_state
+		var ship: ShipInstance = state.get_ship(
+				int(result.get("owner_player", -1)),
+				int(result.get("ship_index", -1))) if state != null else null
+		if ship != null:
+			EventBus.command_tokens_changed.emit(ship)
 	if cmd.command_type == "resolve_immediate_effect" \
 			and (str(cmd.payload.get("enclosing_kind", "")) == "maneuver" \
 				or NetworkManager.role == NetworkManager.Role.CLIENT):
@@ -280,6 +311,41 @@ func _emit_destroyed_ship_presentation(cmd: GameCommand) -> void:
 		EventBus.ship_destroyed.emit(target)
 		if target is CanvasItem:
 			(target as CanvasItem).visible = false
+
+
+## The accepted lethal source owns cleanup; project its final ship state from
+## that same result rather than waiting for a second destroy_unit command.
+func _emit_source_destruction_presentation(cmd: GameCommand,
+		result: Dictionary) -> void:
+	var state: GameState = GameManager.current_game_state
+	if state == null or result.is_empty():
+		return
+	for entry: Dictionary in [
+		{"key": "destruction_cleanup", "owner": "owner_player",
+			"index": "ship_index"},
+		{"key": "moving_destruction_cleanup", "owner": "owner_player",
+			"index": "ship_index"},
+		{"key": "target_destruction_cleanup",
+			"owner": "target_owner_player", "index": "target_ship_index"},
+	]:
+		var cleanup: Dictionary = result.get(str(entry["key"]), {}) \
+				as Dictionary
+		if cleanup.is_empty():
+			continue
+		var owner: int = int(result.get(str(entry["owner"]),
+				cmd.payload.get(str(entry["owner"]), -1)))
+		var index: int = int(result.get(str(entry["index"]),
+				cmd.payload.get(str(entry["index"]), -1)))
+		var ship: ShipInstance = state.get_ship(owner, index)
+		if ship == null or not ship.is_destroyed():
+			continue
+		EventBus.damage_card_dealt.emit(ship, null, false)
+		EventBus.ship_hull_changed.emit(ship, 0)
+		var target: Node = _destroyed_ship_signal_target(ship)
+		if target != null:
+			EventBus.ship_destroyed.emit(target)
+			if target is CanvasItem:
+				(target as CanvasItem).visible = false
 
 
 func _persistent_damage_ship(cmd: GameCommand,

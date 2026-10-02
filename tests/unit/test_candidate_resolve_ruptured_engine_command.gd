@@ -130,7 +130,8 @@ func test_lethal_hull_point_converges_on_passive_peer_and_cleans_execution() -> 
 	assert_eq(passive_command.execute_with_application_result(
 			passive, projected), projected)
 	assert_true(mirror.is_destroyed())
-	assert_eq(mirror.get_facedown_damage_count(), 1)
+	assert_eq(mirror.get_facedown_damage_count(), 0,
+			"Lethal source cleanup returns the new card immediately.")
 	assert_eq(passive.passive_damage_ledger.draw_count, 1)
 	assert_false(mirror.has_active_maneuver_execution())
 

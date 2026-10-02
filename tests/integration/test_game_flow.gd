@@ -135,9 +135,22 @@ func test_game_ends_after_six_rounds() -> void:
 
 func test_end_game_emits_signal_with_winner() -> void:
 	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
-	# This flow test verifies termination signals, not replay capture.
+	var state: GameState = GameManager.current_game_state
+	state.current_round = Constants.MAX_ROUNDS
+	state.current_phase = Constants.GamePhase.STATUS
+	state.final_status_cleanup_round = state.current_round
+	for owner: int in [0, 1]:
+		var data := ShipData.new()
+		data.hull = 4
+		var ship := ShipInstance.create_from_data(
+				"flow-terminal:%d" % owner, data, 1, owner)
+		ship.roster_entry_id = "flow-terminal:%d" % owner
+		state.get_player_state(owner).ships.append(ship)
+	var completion := CompleteMatchCommand.new(state.initiative_player, {})
+	completion.sequence = 1
+	assert_false(completion.execute(state).is_empty())
 	CommandProcessor.reset()
-	GameManager.end_game("round_6")
+	GameManager.end_game()
 	assert_true(_game_ended, "Should emit game_ended signal")
 	assert_eq(_game_ended_details.get("reason"), "round_6",
 			"Reason should be round_6")

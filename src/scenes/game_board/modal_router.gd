@@ -12,6 +12,8 @@ extends Node
 
 const ECM_READY_COST_MODAL_SCRIPT: GDScript = preload(
 		"res://src/ui/upgrades/ecm_ready_cost_modal.gd")
+const FACEUP_INSPECTION_MODAL_SCRIPT: GDScript = preload(
+		"res://src/ui/ship/faceup_damage_inspection_modal.gd")
 
 var _panel_mgr: UIPanelManager = null
 var _attack_panel_controller: AttackPanelController = null
@@ -20,6 +22,7 @@ var _squadron_phase_controller: SquadronPhaseController = null
 var _displacement_controller: DisplacementController = null
 var _tarkin_choice_modal: TarkinChoiceModal = null
 var _ecm_ready_cost_modal: Variant = null
+var _faceup_inspection_modal: FaceupDamageInspectionModal = null
 var _activation_ctx: ActivationContext = null
 var _find_ship_token_fn: Callable
 var _find_squadron_token_fn: Callable
@@ -165,6 +168,8 @@ func _apply_hud_intent(intent: UIProjector.UIIntent) -> void:
 
 func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 		game_state: GameState, command: GameCommand) -> void:
+	if _drive_faceup_damage_inspection(intent, game_state):
+		return
 	if _ship_activation_controller != null:
 		_ship_activation_controller.project_maneuver_consequence(
 				game_state, _local_viewer(game_state))
@@ -181,6 +186,40 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 	_drive_current_attack_dice(intent.attack_dice_results)
 	_drive_timing_window_panel(intent.timing_window)
 	_apply_activation_affordances(intent)
+
+
+func _drive_faceup_damage_inspection(intent: UIProjector.UIIntent,
+		game_state: GameState) -> bool:
+	if intent.faceup_damage_inspection.is_empty():
+		if _faceup_inspection_modal != null:
+			_faceup_inspection_modal.sync_inspection({}, false)
+		return false
+	var modal: FaceupDamageInspectionModal = _ensure_faceup_inspection_modal()
+	var actionable: bool = intent.affordances.has(
+			"acknowledge_faceup_damage")
+	modal.sync_inspection(intent.faceup_damage_inspection, actionable)
+	return true
+
+
+func _ensure_faceup_inspection_modal() -> FaceupDamageInspectionModal:
+	if _faceup_inspection_modal != null:
+		return _faceup_inspection_modal
+	_faceup_inspection_modal = FACEUP_INSPECTION_MODAL_SCRIPT.new()
+	_faceup_inspection_modal.name = "FaceupDamageInspectionModal"
+	_faceup_inspection_modal.acknowledge_requested.connect(
+			_on_faceup_acknowledge_requested)
+	var parent: Node = _panel_mgr.turn_management_layer \
+			if _panel_mgr.turn_management_layer != null else _panel_mgr
+	parent.add_child(_faceup_inspection_modal)
+	return _faceup_inspection_modal
+
+
+func _on_faceup_acknowledge_requested(inspection_id: String) -> void:
+	var state: GameState = GameManager.current_game_state
+	if state == null:
+		return
+	GameManager.submit_acknowledge_faceup_damage(
+			_local_viewer(state), inspection_id)
 
 
 ## A satisfied result can leave the currently commanded squadron with one

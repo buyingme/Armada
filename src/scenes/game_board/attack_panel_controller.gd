@@ -156,6 +156,9 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 	if command.command_type == "resolve_immediate_effect":
 		_attack_executor.apply_remote_immediate_choice(result)
 		return
+	if command.command_type == "acknowledge_faceup_damage":
+		_attack_executor.apply_faceup_damage_inspection_release(result)
+		return
 	if command.command_type == "counter_choice":
 		_attack_executor.apply_counter_choice_result(result)
 		return

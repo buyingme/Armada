@@ -13,7 +13,7 @@ Related Requirements: DM-005, DM-008; Ship Maneuver Owner Decision Record Sectio
 Related Boundaries: ADR-001/CON-001 Attack authority and return dependency; ADR-014; ADR-012/ADR-013 and BUG-042 damage/RNG result-application boundary  
 Related Gaps: ADR-014 physical-card identity, active-obligation, recovery, and purpose-specific return implementation gaps  
 Created: 2026-09-12  
-Last Updated: 2026-09-12  
+Last Updated: 2026-09-30
 Owner: Project Owner  
 Test Owner: Capability implementation owner; Project Owner review required  
 Capability Classification: mixed
@@ -248,6 +248,23 @@ assignment-scoped obligation and rejection of earlier-occurrence identities.
 | Visibility | high | Faceup-to-hidden transition and filtered-history tests. |
 | Migration | medium | Version stable card identity and keep dormant until compatible. |
 | Complexity | medium | Reuse deck lifecycle; keep only card semantics here. |
+
+### UX-006–UX-012 candidate trace (2026-09-30)
+
+A newly dealt faceup Structural Damage card enters the source-independent UX-006
+inspection before `CandidateResolveImmediateEffectCommand` may add its facedown
+card. The immediate command's version-3 result carries any lethal cleanup; the
+additional facedown card opens no second inspection. Save schema 8, Network
+protocol 9, filtered public results, and ordered semantic replay apply.
+Candidate checks:
+`tests/unit/test_candidate_resolve_immediate_effect_command.gd` and
+`tests/unit/test_candidate_obstacle_consequences.gd`.
+
+This is Codex candidate implementation evidence under the accepted UX workbook. The
+package remains **Draft**; Owner integration and genuine replay capture remain
+separate gates. Earlier missing-path observations in this package describe its pre-candidate
+baseline. Section 9.1 supersedes those observations for the UX boundaries only;
+it does not authorize a different rule or ownership boundary.
 
 ## 10. Integration Status
 

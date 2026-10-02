@@ -257,7 +257,7 @@ func test_contract_2_passive_application_uses_aggregate_result_without_draw() ->
 	}))
 	var passive_command: GameCommand = COMMAND.new(
 			authority_command.player_index, authority_command.payload.duplicate(true))
-	assert_eq(passive_command.application_contract_version(), 2)
+	assert_eq(passive_command.application_contract_version(), 3)
 	var projected: Dictionary = passive_command.project_application_result(
 			authority_result, 0)
 	assert_false(projected.is_empty())

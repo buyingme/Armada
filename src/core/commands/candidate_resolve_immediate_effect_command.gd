@@ -32,7 +32,7 @@ func application_contract_id() -> String:
 
 
 func application_contract_version() -> int:
-	return 2
+	return 3
 
 
 func validate_exact_semantic_payload() -> String:
@@ -57,7 +57,8 @@ func project_application_result(authority_result: Dictionary,
 func execute_with_application_result(game_state: GameState,
 		application_result: Dictionary) -> Dictionary:
 	if game_state == null or game_state.passive_damage_ledger == null \
-			or not _application_result_shape_is_valid(application_result):
+			or not _application_result_shape_is_valid(application_result) \
+			or not validate(game_state).is_empty():
 		return {}
 	for key: String in BASE_KEYS:
 		if str(application_result.get(key, "")) != str(payload.get(key, "")):
@@ -99,6 +100,31 @@ func execute_with_application_result(game_state: GameState,
 			or not _passive_effect_matches(
 					ship, effect, effect_result, damage, hidden_draws):
 		return {}
+	var destroyed: bool = bool(damage["destroyed"])
+	var expected_next_obstacle: Dictionary = {}
+	if str(payload["enclosing_kind"]) == "maneuver" and not destroyed:
+		var execution: Dictionary = ship.active_maneuver_execution_snapshot()
+		var order: Array = execution.get("obstacle_resolution_order", []) as Array
+		var ordinal: int = order.find(str(payload["maneuver_source_id"]))
+		expected_next_obstacle = ObstacleOverlapAuthority.next_pre_effect_after(
+				game_state, int(payload["owner_player"]),
+				int(payload["ship_index"]), ordinal)
+	if application_result["next_obstacle_pre_effect"] \
+			!= expected_next_obstacle:
+		return {}
+	var interrupted: bool = destroyed and ship.has_active_ship_activation()
+	var cleanup: Dictionary = application_result["destruction_cleanup"] \
+			as Dictionary
+	var next_controller: int = DestroyUnitCommand.next_controller_after_source(
+			game_state, int(payload["owner_player"]), [{"owner_player":
+				int(payload["owner_player"]), "ship_index":
+				int(payload["ship_index"])}]) if interrupted else -1
+	if (destroyed and not DestroyUnitCommand.prevalidate_source_cleanup(
+			cleanup, ship.get_facedown_damage_count() \
+				+ int(damage["facedown_delta"]), interrupted,
+				next_controller)) \
+			or (not destroyed and not cleanup.is_empty()):
+		return {}
 	if not ship.retire_filtered_immediate_resolution(
 			str(payload["immediate_resolution_id"]),
 			str(payload["public_card_ref"]), source_disposition):
@@ -119,8 +145,12 @@ func execute_with_application_result(game_state: GameState,
 	var delta: int = int(damage["facedown_delta"])
 	if delta > 0 and not ship.increment_passive_facedown_damage(delta):
 		return {}
-	if bool(damage["destroyed"]):
+	if destroyed:
 		ship.mark_destroyed()
+		if not DestroyUnitCommand.install_cleanup_in_source(game_state,
+				int(payload["owner_player"]), int(payload["ship_index"]),
+				interrupted, cleanup):
+			return {}
 	elif str(payload["enclosing_kind"]) == "maneuver" \
 			and not ObstacleOverlapAuthority.open_next_purpose_resolution(
 					game_state, int(payload["owner_player"]),
@@ -251,6 +281,8 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if not base.is_empty():
 		return base
+	if game_state.faceup_damage_inspection != null:
+		return "Faceup damage inspection is pending."
 	var record: Dictionary = _record(game_state)
 	if record.is_empty():
 		return "No matching immediate resolution."
@@ -369,7 +401,9 @@ func execute(game_state: GameState) -> Dictionary:
 		game_state.mark_obstacle_resolved_for_maneuver(
 				str(record["maneuver_source_id"]),
 				str(record["maneuver_execution_id"]))
-	if ship.get_total_damage() >= ship.ship_data.hull:
+	var destroyed: bool = ship.get_total_damage() >= ship.ship_data.hull
+	var interrupted: bool = destroyed and ship.has_active_ship_activation()
+	if destroyed:
 		ship.mark_destroyed()
 	elif str(record["enclosing_kind"]) == "maneuver" \
 			and not ObstacleOverlapAuthority.open_next_purpose_resolution(
@@ -381,6 +415,9 @@ func execute(game_state: GameState) -> Dictionary:
 	var damage_application: Dictionary = _damage_application(
 			ship, int(payload["owner_player"]), int(payload["ship_index"]),
 			state_before, faceup_ref, source_disposition)
+	var cleanup: Dictionary = DestroyUnitCommand.cleanup_in_source(
+			game_state, int(payload["owner_player"]),
+			int(payload["ship_index"]), interrupted) if destroyed else {}
 	var result: Dictionary = {}
 	for key: String in BASE_KEYS:
 		result[key] = payload[key]
@@ -399,6 +436,9 @@ func execute(game_state: GameState) -> Dictionary:
 	result["obligation_retired"] = true
 	result["damage_application"] = damage_application
 	result["effect_result"] = effect_result
+	result["destruction_cleanup"] = cleanup
+	result["next_obstacle_pre_effect"] = \
+			ship.pending_obstacle_pre_effect_snapshot()
 	return result
 
 
@@ -647,7 +687,8 @@ static func _application_result_shape_is_valid(result: Dictionary) -> bool:
 			return false
 	common.append_array([
 		"effect_id", "source_disposition", "obligation_retired",
-		"damage_application", "effect_result"])
+		"damage_application", "effect_result", "destruction_cleanup",
+		"next_obstacle_pre_effect"])
 	if not _has_exact_keys(result, common) \
 			or str(result.get("effect_id", "")) not in VALID_EFFECTS \
 			or str(result.get("source_disposition", "")) \
@@ -656,6 +697,10 @@ static func _application_result_shape_is_valid(result: Dictionary) -> bool:
 			or not APPLICATION.is_exact_damage_application(
 					result.get("damage_application")) \
 			or not result.get("effect_result") is Dictionary:
+		return false
+	if not result.get("destruction_cleanup") is Dictionary:
+		return false
+	if not result.get("next_obstacle_pre_effect") is Dictionary:
 		return false
 	var damage: Dictionary = result["damage_application"] as Dictionary
 	if int(damage["facedown_delta"]) < 0:

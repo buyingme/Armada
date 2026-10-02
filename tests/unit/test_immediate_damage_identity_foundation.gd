@@ -13,7 +13,10 @@ var _ship: ShipInstance
 func before_each() -> void:
 	_state = GameState.new()
 	_state.initialize()
+	assert_true(_state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	_ship = ShipInstance.create_from_data("damage-owner", _ship_data(), 1, 0)
+	_ship.roster_entry_id = "debug-ship"
 	_state.get_player_state(0).ships.append(_ship)
 
 
@@ -190,6 +193,7 @@ func test_lethal_debug_assignment_terminates_new_obligation_without_rollback() -
 	var lethal_data: ShipData = _ship_data()
 	lethal_data.hull = 1
 	_ship = ShipInstance.create_from_data("damage-owner", lethal_data, 1, 0)
+	_ship.roster_entry_id = "debug-ship"
 	_state.get_player_state(0).ships[0] = _ship
 	_state.damage_deck = _deck_with_card(
 			_card("damage:lethal", "shield_failure", "immediate"))
@@ -203,7 +207,9 @@ func test_lethal_debug_assignment_terminates_new_obligation_without_rollback() -
 	assert_true(bool(result["damage_application"]["destroyed"]))
 	assert_true(_ship.has_finalized_destruction())
 	assert_false(_ship.has_active_immediate_resolution())
-	assert_eq(_ship.faceup_damage.size(), 1)
+	assert_eq(_ship.faceup_damage.size(), 0)
+	assert_eq(_state.damage_deck.get_discard_count(), 1)
+	assert_true(_state.faceup_damage_inspection != null)
 
 
 func test_candidate_debug_passive_application_installs_filtered_obligation() -> void:
@@ -219,26 +225,28 @@ func test_candidate_debug_passive_application_installs_filtered_obligation() -> 
 	var passive := GameState.new()
 	passive.initialize()
 	assert_true(passive.install_match_player_control_binding(
-			MatchPlayerControlBinding.create_hot_seat_human()))
+			MatchPlayerControlBinding.deserialize(
+					_state.serialize()["match_player_control_binding"])))
 	passive.damage_deck = null
 	passive.rng = null
 	var passive_ship := ShipInstance.create_from_data(
 			"damage-owner", _ship_data(), 1, 0)
-	passive_ship.roster_entry_id = "passive-debug"
+	passive_ship.roster_entry_id = "debug-ship"
 	passive.get_player_state(0).ships.append(passive_ship)
 	passive.passive_damage_ledger = PassiveDamageLedger.deserialize({
 		"schema_version": 1,
 		"draw_count": 1,
 		"discard_pile": [],
-		"facedown_counts": {"0:passive-debug": 0},
-	}, ["0:passive-debug"])
+		"facedown_counts": {"0:debug-ship": 0},
+	}, ["0:debug-ship"])
 	assert_true(passive_ship.bind_passive_damage_ledger(
-			passive.passive_damage_ledger, "0:passive-debug"))
+			passive.passive_damage_ledger, "0:debug-ship"))
 	var mirror: GameCommand = DEBUG_COMMAND.new(0,
 			authority.payload.duplicate(true))
 	mirror.sequence = 55
 	var projected: Dictionary = mirror.project_application_result(
 			authority_result, 1)
+	assert_eq(mirror.validate(passive), "")
 	assert_eq(mirror.execute_with_application_result(passive, projected),
 			projected)
 	assert_eq(passive_ship.faceup_damage.size(), 1)

@@ -25,6 +25,7 @@ func test_all_six_branches_bind_and_resolve_from_attack() -> void:
 		source.sequence = 100 + index
 		var assignment: Dictionary = source.execute(state)
 		assert_false(assignment.is_empty(), EFFECTS[index])
+		_ack_faceup_inspection(state)
 		var ship: ShipInstance = state.get_ship(1, 0)
 		var resolve: GameCommand = _resolver(ship, EFFECTS[index])
 		assert_eq(resolve.validate(state), "", EFFECTS[index])
@@ -43,6 +44,7 @@ func test_all_six_branches_bind_and_resolve_from_debug() -> void:
 		})
 		source.sequence = 200 + index
 		assert_false(source.execute(state).is_empty(), EFFECTS[index])
+		_ack_faceup_inspection(state)
 		var resolve: GameCommand = _resolver(ship, EFFECTS[index])
 		assert_eq(resolve.validate(state), "", EFFECTS[index])
 		assert_false(resolve.execute(state).is_empty(), EFFECTS[index])
@@ -90,6 +92,7 @@ func test_all_six_debug_obligations_round_trip_and_rederive_legal_resolution() -
 		})
 		source.sequence = 400 + index
 		assert_false(source.execute(state).is_empty(), EFFECTS[index])
+		_ack_faceup_inspection(state)
 		var restored := GameState.new()
 		restored.initialize()
 		restored.current_phase = Constants.GamePhase.SHIP
@@ -161,14 +164,26 @@ func _attack_state(effect: String, sequence: int) -> GameState:
 func _plain_state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_phase = Constants.GamePhase.SHIP
 	var ship := ShipInstance.create_from_data("matrix", _ship_data(), 1, 0)
+	ship.roster_entry_id = "matrix-ship"
 	ship.pos_x = 0.5
 	ship.pos_y = 0.5
 	state.get_player_state(0).ships.append(ship)
 	state.damage_deck = DamageDeck.deserialize_for_save7({
 		"draw_pile": [], "discard_pile": []})
 	return state
+
+
+func _ack_faceup_inspection(state: GameState) -> void:
+	var inspection: FaceupDamageInspection = state.faceup_damage_inspection
+	assert_not_null(inspection)
+	if inspection != null:
+		assert_false(state.apply_faceup_damage_acknowledgment(
+				inspection.inspection_id(),
+				state.principal_id_for_player(0)).is_empty())
 
 
 func _deck(effect: String) -> DamageDeck:

@@ -164,9 +164,22 @@ func test_activation_ended_logged() -> void:
 
 func test_game_ended_logged() -> void:
 	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
-	# This logging test verifies the event log, not replay capture.
+	var state: GameState = GameManager.current_game_state
+	state.current_round = Constants.MAX_ROUNDS
+	state.current_phase = Constants.GamePhase.STATUS
+	state.final_status_cleanup_round = state.current_round
+	for owner: int in [0, 1]:
+		var data := ShipData.new()
+		data.hull = 4
+		var ship := ShipInstance.create_from_data(
+				"log-terminal:%d" % owner, data, 1, owner)
+		ship.roster_entry_id = "log-terminal:%d" % owner
+		state.get_player_state(owner).ships.append(ship)
+	var completion := CompleteMatchCommand.new(state.initiative_player, {})
+	completion.sequence = 1
+	assert_false(completion.execute(state).is_empty())
 	CommandProcessor.reset()
-	GameManager.end_game("round_6")
+	GameManager.end_game()
 	var content: String = _get_log_content()
 	assert_string_contains(content, "game_ended",
 			"Should log game_ended")

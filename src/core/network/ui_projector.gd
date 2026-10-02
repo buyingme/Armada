@@ -117,6 +117,7 @@ class UIIntent extends RefCounted:
 	## Public, immutable completed-result evidence. Presentation derives its
 	## acknowledgement/waiting surface from this canonical projection only.
 	var completed_attack_inspection: Dictionary = {}
+	var faceup_damage_inspection: Dictionary = {}
 
 
 ## Computes a [UIIntent] for [param viewer_player] from [param state].
@@ -136,6 +137,8 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	intent.attack_dice_results = _project_attack_dice_results(state)
 	intent.completed_attack_inspection = _project_completed_attack_inspection(
 			state, viewer_player, intent)
+	intent.faceup_damage_inspection = _project_faceup_damage_inspection(
+			state, viewer_player, intent)
 	var flow: InteractionFlow = state.interaction_flow
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return intent
@@ -154,6 +157,22 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 			else {}
 	intent.affordances.merge(_affordances_for(state, flow, viewer_player), true)
 	return intent
+
+
+static func _project_faceup_damage_inspection(state: GameState,
+		viewer_player: int, intent: UIIntent) -> Dictionary:
+	var inspection: FaceupDamageInspection = state.faceup_damage_inspection
+	if inspection == null:
+		return {}
+	var principal_id: String = state.principal_id_for_player(viewer_player)
+	if inspection.required_principal_ids().has(principal_id) \
+			and not inspection.has_received(principal_id):
+		intent.affordances["acknowledge_faceup_damage"] = {
+			"inspection_id": inspection.inspection_id(),
+		}
+	else:
+		intent.affordances["faceup_damage_waiting"] = true
+	return inspection.serialize()
 
 
 static func _project_attack_dice_results(
@@ -304,14 +323,11 @@ static func _turn_status_text(
 
 
 static func _needs_turn_banner(
-		phase: Constants.GamePhase,
-		active_player: int,
-		viewer_player: int,
-		shared_screen: bool) -> bool:
-	if phase != Constants.GamePhase.SHIP \
-			and phase != Constants.GamePhase.SQUADRON:
-		return false
-	return shared_screen or active_player == viewer_player
+		_phase: Constants.GamePhase,
+		_active_player: int,
+		_viewer_player: int,
+		_shared_screen: bool) -> bool:
+	return false
 
 
 static func _player_state_or_null(

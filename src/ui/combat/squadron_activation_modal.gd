@@ -29,6 +29,10 @@ signal move_commit_requested(squadron_token: SquadronToken)
 ## Player clicked "Attack" — game board should open the attack executor.
 signal attack_requested(squadron_token: SquadronToken)
 
+## Disposable action intent; activation must be accepted before it continues.
+signal activation_intent_requested(squadron_token: SquadronToken,
+		intent: String)
+
 ## Player declined the currently available pre-Begin attack opportunity.
 ## The controller submits the authoritative declaration Skip and reports its
 ## result back before presentation advances.
@@ -158,6 +162,8 @@ var _move_decline_pending: bool = false
 
 ## Command-mode candidate awaiting ActivateSquadronCommand acceptance.
 var _activation_acceptance_pending: bool = false
+var _pending_activation_intent: String = ""
+var _whole_activation_skip_intent: bool = false
 
 
 # ---------------------------------------------------------------------------
@@ -272,11 +278,12 @@ func handle_squadron_click(token: SquadronToken) -> bool:
 		State.WAITING_FOR_SELECTION:
 			return _try_select_squadron(token)
 		State.ACTION_CHOICE:
-			if not _is_command_mode:
-				return false
 			if token == _selected_token:
 				return false
-			return _try_select_different_command_squadron(token)
+			if _is_command_mode:
+				return _try_select_different_command_squadron(token)
+			return _try_select_squadron(token) \
+					if not _has_committed_current_activation() else false
 		State.MOVING:
 			# During movement, clicks on other squadrons are ignored
 			# (board click handler is used for placement).
@@ -377,13 +384,19 @@ func is_activation_acceptance_pending() -> bool:
 	return _activation_acceptance_pending
 
 
+func is_declaration_skip_pending() -> bool:
+	return _declaration_skip_pending
+
+
 ## Gates a selected command-mode candidate until its semantic activation is
 ## authoritatively accepted.
-func begin_activation_acceptance_pending() -> bool:
-	if _activation_acceptance_pending or not _is_command_mode \
+func begin_activation_acceptance_pending(intent: String) -> bool:
+	if _activation_acceptance_pending \
+			or intent not in ["move", "attack", "skip"] \
 			or _selected_instance == null \
 			or _selected_instance.has_activation_action_state():
 		return false
+	_pending_activation_intent = intent
 	_activation_acceptance_pending = true
 	_activation_slot_committed = false
 	_transition_to(State.WAITING_FOR_SELECTION)
@@ -402,14 +415,30 @@ func apply_authoritative_activation_acceptance(
 	return true
 
 
+func continue_accepted_activation_intent() -> void:
+	if _activation_acceptance_pending \
+			or _selected_instance == null \
+			or not _selected_instance.has_activation_action_state():
+		return
+	var intent: String = _pending_activation_intent
+	_pending_activation_intent = ""
+	match intent:
+		"move":
+			_begin_move_choice()
+		"attack":
+			_begin_attack_choice()
+		"skip":
+			_whole_activation_skip_intent = true
+			_execute_skip_choice()
+
+
 func apply_activation_acceptance_rejection(reason: String) -> bool:
 	if not _activation_acceptance_pending:
 		return false
 	_activation_acceptance_pending = false
-	_selected_token = null
-	_selected_instance = null
+	_pending_activation_intent = ""
 	_activation_slot_committed = false
-	_transition_to(State.WAITING_FOR_SELECTION)
+	_transition_to(State.ACTION_CHOICE)
 	_show_error(reason if not reason.is_empty() \
 			else "Squadron activation was rejected.")
 	return true
@@ -584,7 +613,17 @@ func apply_declaration_skip_result(instance: SquadronInstance,
 	_has_attacked = instance.attack_action_disposition \
 			!= SquadronInstance.ATTACK_ACTION_AVAILABLE
 	if bool(result.get("activation_complete", false)):
+		_whole_activation_skip_intent = false
 		_finish_activation()
+	elif _whole_activation_skip_intent:
+		var game_state: GameState = GameManager.current_game_state
+		if game_state != null \
+				and game_state.has_legal_remaining_squadron_move_action(
+					instance):
+			_request_move_decline()
+		else:
+			_whole_activation_skip_intent = false
+			_finish_activation()
 	else:
 		_transition_to(State.ACTION_CHOICE)
 	return true
@@ -665,17 +704,9 @@ func _validate_squadron_selection(
 		if _command_resolver.is_done():
 			_show_error("All Squadron command activations are used.")
 			return null
-		if not _command_resolver.is_squadron_in_range(
-				token.global_position):
+		if not SquadronCommandResolver.is_squadron_in_authoritative_range(
+				_command_resolver.get_ship(), instance):
 			_show_error("Out of range (requires close–medium).")
-			return null
-	# In squadron-phase mode, call GameManager to formally activate.
-	# In command mode (SHIP phase) we skip GameManager — the ship is the
-	# activating entity, not the squadron phase turn tracker.
-	if not _is_command_mode:
-		GameManager.activate_squadron(instance)
-		if GameManager.get_activating_squadron() != instance:
-			_show_error("Activation rejected by GameManager.")
 			return null
 	return instance
 
@@ -758,6 +789,8 @@ func _finish_activation(emit_activation_completion: bool = true) -> void:
 	_activation_completion_pending = false
 	_move_decline_pending = false
 	_activation_acceptance_pending = false
+	_whole_activation_skip_intent = false
+	_pending_activation_intent = ""
 	# In command mode, check if more activations remain.
 	if _is_command_mode and _command_resolver != null:
 		if _command_resolver.is_done():
@@ -797,6 +830,8 @@ func _clear_command_preview_selection() -> void:
 	_activation_completion_pending = false
 	_move_decline_pending = false
 	_activation_acceptance_pending = false
+	_pending_activation_intent = ""
+	_whole_activation_skip_intent = false
 	selection_cleared.emit()
 	_transition_to(State.WAITING_FOR_SELECTION)
 
@@ -1063,8 +1098,9 @@ func _update_action_buttons() -> void:
 	# Also hidden if already moved during a move-and-attack activation.
 	var can_move: bool = _can_move \
 			and _selected_instance != null \
-			and _selected_instance.move_action_disposition \
-					== SquadronInstance.MOVE_ACTION_AVAILABLE
+			and (not _selected_instance.has_activation_action_state() \
+					or _selected_instance.move_action_disposition \
+							== SquadronInstance.MOVE_ACTION_AVAILABLE)
 	if _allow_move_and_attack and _has_moved:
 		can_move = false
 	_move_button.visible = can_move
@@ -1133,8 +1169,6 @@ func _apply_button_interactable(btn: Button) -> void:
 
 
 func _get_skip_button_text() -> String:
-	if _is_command_mode and not _has_committed_current_activation():
-		return "Back"
 	return "Skip"
 
 
@@ -1228,6 +1262,14 @@ func _show_error(msg: String) -> void:
 func _on_move_pressed() -> void:
 	if _is_action_blocked("Move"):
 		return
+	if _selected_instance != null \
+			and not _selected_instance.has_activation_action_state():
+		activation_intent_requested.emit(_selected_token, "move")
+		return
+	_begin_move_choice()
+
+
+func _begin_move_choice() -> void:
 	SfxManager.play_sfx("droid_sound")
 	_log.info("Move pressed for %s" % _get_squadron_name())
 	_transition_to(State.MOVING)
@@ -1237,6 +1279,14 @@ func _on_move_pressed() -> void:
 func _on_attack_pressed() -> void:
 	if _is_action_blocked("Attack"):
 		return
+	if _selected_instance != null \
+			and not _selected_instance.has_activation_action_state():
+		activation_intent_requested.emit(_selected_token, "attack")
+		return
+	_begin_attack_choice()
+
+
+func _begin_attack_choice() -> void:
 	if not _commit_command_activation_if_needed():
 		return
 	SfxManager.play_sfx("droid_sound")
@@ -1248,11 +1298,15 @@ func _on_attack_pressed() -> void:
 func _on_skip_pressed() -> void:
 	if _is_action_blocked("Skip"):
 		return
-	SfxManager.play_sfx("skip_beep")
-	if _is_command_mode and not _has_committed_current_activation():
-		_log.info("Back pressed — clearing Squadron command preview.")
-		_clear_command_preview_selection()
+	if _selected_instance != null \
+			and not _selected_instance.has_activation_action_state():
+		activation_intent_requested.emit(_selected_token, "skip")
 		return
+	_execute_skip_choice()
+
+
+func _execute_skip_choice() -> void:
+	SfxManager.play_sfx("skip_beep")
 	_log.info("Skip pressed for %s" % _get_squadron_name())
 	# An available attack disposition is the accepted no-active declaration
 	# Skip boundary. Keep the modal open until the existing semantic command

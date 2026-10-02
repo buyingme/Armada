@@ -171,7 +171,8 @@ func test_speed_zero_to_zero_commits_through_normal_authority() -> void:
 	var ship: ShipInstance = fixture["ship"] as ShipInstance
 	var controller: ShipActivationController = fixture["controller"] \
 			as ShipActivationController
-	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			GameManager.current_game_state.principal_id_for_player(0)))
 
 	controller._on_execute_maneuver()
 
@@ -189,7 +190,8 @@ func test_speed_zero_to_one_navigate_commits_through_normal_authority() -> void:
 	var tool: ManeuverToolScene = fixture["tool"] as ManeuverToolScene
 	var controller: ShipActivationController = fixture["controller"] \
 			as ShipActivationController
-	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			GameManager.current_game_state.principal_id_for_player(0)))
 
 	tool._handle_speed_change(1)
 	assert_eq(ship.current_speed, 0,
@@ -219,7 +221,8 @@ func test_v9_speed_zero_final_transform_detects_real_contour_overlap() -> void:
 		"placement_order": 0,
 		"last_maneuver_execution_id": "",
 	}]
-	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			GameManager.current_game_state.principal_id_for_player(0)))
 
 	controller._on_execute_maneuver()
 
@@ -227,6 +230,14 @@ func test_v9_speed_zero_final_transform_detects_real_contour_overlap() -> void:
 	assert_true(bool(ship.active_maneuver_execution_snapshot().get(
 			"final_transform_applied", false)))
 	var next: Dictionary = ManeuverExecutionEvaluator.next_action(state, 0, 0)
+	assert_eq(next.get("kind"), "acknowledgment")
+	assert_eq(next.get("command_type"), "acknowledge_obstacle_pre_effect")
+	var occurrence: Dictionary = ship.pending_obstacle_pre_effect_snapshot()
+	assert_false(GameManager.get_command_submitter().submit(
+			AcknowledgeObstaclePreEffectCommand.new(0, {
+				"occurrence_id": occurrence["occurrence_id"],
+			})).is_empty())
+	next = ManeuverExecutionEvaluator.next_action(state, 0, 0)
 	assert_eq(next.get("kind"), "decision")
 	assert_eq(next.get("command_type"), "resolve_debris_overlap")
 	assert_eq((next.get("payload", {}) as Dictionary).get("obstacle_id"),
@@ -234,7 +245,7 @@ func test_v9_speed_zero_final_transform_detects_real_contour_overlap() -> void:
 	assert_eq(next.get("hull_zones"), ship.current_shields.keys())
 	assert_eq(_history_types(), [
 		"execute_maneuver", "apply_maneuver_transform",
-		"commit_maneuver_obstacle_order"])
+		"commit_maneuver_obstacle_order", "acknowledge_obstacle_pre_effect"])
 
 
 func test_token_only_speed_change_is_debited_atomically_at_commit() -> void:
@@ -442,9 +453,16 @@ func _fixture(activation_identity: String, initial_speed: int = 2,
 	player_zero.ships.append(ship)
 	var player_one := PlayerState.new()
 	player_one.player_index = 1
+	var opposing_ship := ShipInstance.create_from_data(
+			"bug043_opponent", data, 1, 1)
+	opposing_ship.pos_x = 0.85
+	opposing_ship.pos_y = 0.85
+	player_one.ships.append(opposing_ship)
 	var game_state := GameState.new()
 	game_state.current_phase = Constants.GamePhase.SHIP
 	game_state.player_states = [player_zero, player_one]
+	assert_true(game_state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	game_state.objectives["obstacles"] = []
 	GameManager.current_game_state = game_state
 

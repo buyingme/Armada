@@ -28,6 +28,33 @@ static func next_action(game_state: GameState, owner_player: int,
 		"ship_activation_identity": execution["ship_activation_identity"],
 		"maneuver_execution_id": execution["maneuver_execution_id"],
 	}
+	var pre_effect: Dictionary = ship.pending_obstacle_pre_effect_snapshot()
+	var asteroid_outstanding: Dictionary = \
+			ship.asteroid_completion_outstanding_snapshot()
+	if not asteroid_outstanding.is_empty():
+		if not bool(asteroid_outstanding["inspection_released"]):
+			return {"kind": "waiting", "command_type":
+				AcknowledgeFaceupDamageCommand.TYPE}
+		var completion_payload: Dictionary = base.duplicate(true)
+		for key: String in ["ordered_ordinal", "occurrence_id",
+				"obstacle_id", "inspection_id"]:
+			completion_payload[key] = asteroid_outstanding[key]
+		return {"kind": "command",
+			"command_type": CompleteAsteroidOverlapCommand.TYPE,
+			"player_index": owner_player, "payload": completion_payload}
+	# A dealt faceup card must be inspected before its immediate effect (or
+	# any further Maneuver consequence) can be submitted. The admission gate
+	# already enforces this; derive the same wait for live and passive views.
+	if game_state.faceup_damage_inspection != null:
+		return {"kind": "waiting",
+			"command_type": AcknowledgeFaceupDamageCommand.TYPE}
+	if not pre_effect.is_empty() \
+			and pre_effect["received_principal_ids"] \
+				!= pre_effect["required_principal_ids"]:
+		return {"kind": "acknowledgment",
+			"command_type": AcknowledgeObstaclePreEffectCommand.TYPE,
+			"payload": {"occurrence_id": pre_effect["occurrence_id"]},
+			"record": pre_effect}
 	if game_state.passive_damage_ledger != null:
 		return _next_passive_action(game_state, ship, base)
 	if not bool(execution["final_transform_applied"]):

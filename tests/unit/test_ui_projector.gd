@@ -346,13 +346,13 @@ func test_turn_transition_network_passive_squadron_waits() -> void:
 	assert_eq(intent.hud_status_text, "waiting for opponent's choice")
 
 
-func test_turn_transition_network_active_ship_projects_banner() -> void:
+func test_turn_transition_network_active_ship_omits_ordinary_banner() -> void:
 	var intent: UIProjector.UIIntent = UIProjector.project_turn_transition(
 			Constants.GamePhase.SHIP, 0, 0, false)
 	assert_true(intent.is_interactive,
 			"Active network peer should be interactive.")
-	assert_true(intent.needs_turn_banner,
-			"Active network peer should see the turn banner.")
+	assert_false(intent.needs_turn_banner,
+			"Ordinary Ship turns no longer show a timed banner.")
 	assert_false(intent.needs_waiting_overlay,
 			"Active network peer should not project waiting state.")
 	assert_eq(intent.hud_status_text, "make your choices")

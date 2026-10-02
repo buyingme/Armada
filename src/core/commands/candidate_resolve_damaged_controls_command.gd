@@ -27,7 +27,7 @@ func application_contract_id() -> String:
 
 
 func application_contract_version() -> int:
-	return 2
+	return 3
 
 
 func project_application_result(authority_result: Dictionary,
@@ -51,6 +51,14 @@ func execute_with_application_result(game_state: GameState,
 	var card: DamageCard = ship.faceup_card_for_public_ref(
 			str(payload["public_card_ref"])) if ship != null else null
 	var damage: Dictionary = application_result["damage_application"]
+	var destroyed: bool = bool(damage["destroyed"])
+	var interrupted: bool = destroyed and ship.has_active_ship_activation()
+	var cleanup: Dictionary = application_result["destruction_cleanup"] \
+			as Dictionary
+	var next_controller: int = DestroyUnitCommand.next_controller_after_source(
+			game_state, int(payload["owner_player"]), [{"owner_player":
+				int(payload["owner_player"]), "ship_index":
+				int(payload["ship_index"])}]) if interrupted else -1
 	var expected_hull: int = ship.ship_data.hull \
 			- ship.get_total_damage() - 1 if ship != null else 0
 	if ship == null or ship.is_destroyed() or card == null \
@@ -64,13 +72,21 @@ func execute_with_application_result(game_state: GameState,
 			or not (damage["public_discards"] as Array).is_empty() \
 			or int(damage["new_hull"]) != expected_hull \
 			or bool(damage["destroyed"]) != (expected_hull <= 0) \
+			or (destroyed and not DestroyUnitCommand.prevalidate_source_cleanup(
+					cleanup, ship.get_facedown_damage_count() + 1,
+					interrupted, next_controller)) \
+			or (not destroyed and not cleanup.is_empty()) \
 			or not game_state.passive_damage_ledger.can_consume_hidden_draws(1):
 		return {}
 	game_state.passive_damage_ledger.consume_hidden_draws(1)
 	if not ship.increment_passive_facedown_damage(1):
 		return {}
-	if bool(damage["destroyed"]):
+	if destroyed:
 		ship.mark_destroyed()
+		if not DestroyUnitCommand.install_cleanup_in_source(game_state,
+				int(payload["owner_player"]), int(payload["ship_index"]),
+				interrupted, cleanup):
+			return {}
 	return application_result.duplicate(true)
 
 
@@ -170,14 +186,19 @@ func execute(game_state: GameState) -> Dictionary:
 		return {}
 	card.flip_facedown()
 	ship.add_facedown_damage(card)
+	var destroyed: bool = ship.is_destroyed()
+	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+	var interrupted: bool = destroyed and ship.has_active_ship_activation()
 	source.last_damaged_controls_execution_id = str(
 			payload["maneuver_execution_id"])
-	if ship.is_destroyed():
+	if destroyed:
 		ship.mark_destroyed()
 	if not ship.is_destroyed() and not game_state.validate_damage_state_for_save7():
 		_restore(game_state, ship, deck_before, ship_before)
 		return {}
 	var result: Dictionary = payload.duplicate(true)
+	result["destruction_cleanup"] = DestroyUnitCommand.cleanup_in_source(
+			game_state, owner, ship_index, interrupted) if destroyed else {}
 	result["damage_application"] = {
 		"owner_player": owner,
 		"ship_index": ship_index,
@@ -186,8 +207,8 @@ func execute(game_state: GameState) -> Dictionary:
 		"faceup_additions": [],
 		"faceup_removals": [],
 		"public_discards": [],
-		"new_hull": ship.ship_data.hull - ship.get_total_damage(),
-		"destroyed": ship.is_destroyed(),
+		"new_hull": new_hull,
+		"destroyed": destroyed,
 	}
 	return result
 
@@ -206,7 +227,7 @@ static func _application_result_is_valid(result: Dictionary) -> bool:
 		return false
 	var keys: Array[String] = (SHIP_PAYLOAD_KEYS if kind == "ship" \
 			else OBSTACLE_PAYLOAD_KEYS).duplicate()
-	keys.append("damage_application")
+	keys.append_array(["damage_application", "destruction_cleanup"])
 	return _has_exact_keys(result, keys) \
 			and typeof(result.get("owner_player")) == TYPE_INT \
 			and int(result["owner_player"]) in [0, 1] \
@@ -217,6 +238,7 @@ static func _application_result_is_valid(result: Dictionary) -> bool:
 				"public_card_ref"]) \
 			and (kind == "ship" or not str(result.get(
 					"obstacle_id", "")).is_empty()) \
+			and result.get("destruction_cleanup") is Dictionary \
 			and APPLICATION.is_exact_damage_application(
 					result.get("damage_application"))
 

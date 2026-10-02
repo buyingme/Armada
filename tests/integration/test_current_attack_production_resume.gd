@@ -427,19 +427,13 @@ func test_immediate_critical_resolves_before_complete_attack_without_hidden_resu
 
 	var immediate_record: Dictionary = defender \
 			.active_immediate_resolution_snapshot()
-	var immediate_result: Dictionary = CommandProcessor.submit(
-			CandidateResolveImmediateEffectCommand.new(1, {
-				"owner_player": 1,
-				"ship_index": 0,
-				"public_card_ref": immediate_record["public_card_ref"],
-				"immediate_resolution_id": immediate_record[
-						"immediate_resolution_id"],
-				"enclosing_kind": "attack",
-				"attack_id": state.current_attack_state.attack_id,
-			}))
-	assert_false(immediate_result.is_empty())
+	assert_false(CommandProcessor.submit(
+			AcknowledgeFaceupDamageCommand.new(0, {
+				"inspection_id": state.faceup_damage_inspection.inspection_id(),
+			})).is_empty())
 	assert_eq(_history_types(), [
-		"resolve_damage", "resolve_immediate_effect", "complete_attack",
+		"resolve_damage", "acknowledge_faceup_damage",
+		"resolve_immediate_effect", "complete_attack",
 	], "The command-owned immediate effect must precede terminal completion")
 	assert_true(state.current_attack_state.is_inactive())
 	assert_not_null(state.completed_attack_inspection)
@@ -475,16 +469,12 @@ func test_x_wing_bomber_critical_uses_normal_immediate_attack_continuation() -> 
 	assert_eq(defender.faceup_damage.size(), 1)
 	var obligation: Dictionary = defender.active_immediate_resolution_snapshot()
 	assert_false(obligation.is_empty())
-	assert_false(CommandProcessor.submit(CandidateResolveImmediateEffectCommand.new(1, {
-		"owner_player": 1,
-		"ship_index": 0,
-		"public_card_ref": obligation["public_card_ref"],
-		"immediate_resolution_id": obligation["immediate_resolution_id"],
-		"enclosing_kind": "attack",
-		"attack_id": state.current_attack_state.attack_id,
+	assert_false(CommandProcessor.submit(AcknowledgeFaceupDamageCommand.new(0, {
+		"inspection_id": state.faceup_damage_inspection.inspection_id(),
 	})).is_empty())
 	assert_eq(_history_types(), [
-		"resolve_damage", "resolve_immediate_effect", "complete_attack"])
+		"resolve_damage", "acknowledge_faceup_damage",
+		"resolve_immediate_effect", "complete_attack"])
 	assert_true(state.current_attack_state.is_inactive())
 
 
@@ -524,22 +514,16 @@ func test_v3_lethal_attack_immediate_cleans_once_then_completes_attack() -> void
 			.active_immediate_resolution_snapshot()
 	assert_false(immediate_record.is_empty())
 	assert_false(CommandProcessor.submit(
-			CandidateResolveImmediateEffectCommand.new(1, {
-				"owner_player": 1,
-				"ship_index": 0,
-				"public_card_ref": immediate_record["public_card_ref"],
-				"immediate_resolution_id": immediate_record[
-						"immediate_resolution_id"],
-				"enclosing_kind": "attack",
-				"attack_id": state.current_attack_state.attack_id,
+			AcknowledgeFaceupDamageCommand.new(0, {
+				"inspection_id": state.faceup_damage_inspection.inspection_id(),
 			})).is_empty())
 
 	var types: Array[String] = _history_types()
 	assert_eq(types, [
-		"resolve_damage", "resolve_immediate_effect", "destroy_unit",
-		"complete_attack",
+		"resolve_damage", "acknowledge_faceup_damage",
+		"resolve_immediate_effect", "complete_attack",
 	])
-	assert_eq(types.count("destroy_unit"), 1)
+	assert_eq(types.count("destroy_unit"), 0)
 	assert_eq(types.count("complete_attack"), 1)
 	assert_true(defender.has_finalized_destruction())
 	assert_true(state.current_attack_state.is_inactive())
@@ -2570,8 +2554,13 @@ func test_commanded_squadron_completion_reopens_existing_opportunity() -> void:
 			"Squadron selection must not mutate the serialized engagement cache.")
 	second_token.global_position += Vector2(450.0, -100.0)
 	var second_instance: SquadronInstance = second_token.get_squadron_instance()
+	assert_false(second_instance.has_activation_action_state(),
+			"Inspection must leave activation and command capacity uncommitted.")
+	assert_eq(ship.squadron_command_activations_committed, 1)
+	board._squadron_phase_controller.get_modal()._on_move_pressed()
+	await get_tree().process_frame
 	assert_true(second_instance.has_activation_action_state(),
-			"Accepted selection must establish its canonical activation exactly once.")
+			"The legal Move intent must first accept canonical activation.")
 	assert_true(second_instance.commit_move_action(second_instance.activation_id, false),
 			"Fixture completes the second commanded squadron's remaining move.")
 	assert_true(second_instance.commit_attack_action_declined(

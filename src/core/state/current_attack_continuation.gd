@@ -49,6 +49,20 @@ static func derive_reconstructed_inspection_release(
 	return _derive_inspection_release(game_state)
 
 
+## A released faceup inspection leaves the existing resolved Attack owner
+## durable even when the in-memory follow-up queue was lost on reconstruction.
+static func derive_reconstructed_resolved_attack(
+		game_state: GameState) -> GameCommand:
+	if game_state == null:
+		return null
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_RESOLVED \
+			or _post_damage_decision_pending(game_state, attack):
+		return null
+	return _build_complete_attack(attack)
+
+
 static func _derive_followup(game_state: GameState,
 		command: GameCommand,
 		result: Dictionary) -> GameCommand:
@@ -72,10 +86,15 @@ static func _derive_followup(game_state: GameState,
 		return _derive_defense_followup(
 				game_state, attack, command, result)
 	if command.command_type == "resolve_damage":
-		if not _post_damage_decision_pending(game_state, attack, command):
+		if not _post_damage_decision_pending(game_state, attack):
 			return _build_complete_attack(attack)
-	if command.command_type in ["resolve_immediate_effect", "counter_choice"] \
+	if command.command_type == "counter_choice" \
 			and attack.stage == CurrentAttackState.STAGE_RESOLVED:
+		return _build_complete_attack(attack)
+	if command.command_type in ["resolve_immediate_effect",
+			"acknowledge_faceup_damage"] \
+			and attack.stage == CurrentAttackState.STAGE_RESOLVED \
+			and not _post_damage_decision_pending(game_state, attack):
 		return _build_complete_attack(attack)
 	return null
 
@@ -286,16 +305,16 @@ static func _build_complete_attack(
 
 
 static func _post_damage_decision_pending(game_state: GameState,
-		attack: CurrentAttackState,
-		command: GameCommand) -> bool:
+		attack: CurrentAttackState) -> bool:
+	if game_state.faceup_damage_inspection != null:
+		return true
 	if _counter_decision_pending(game_state, attack):
 		return true
-	# Authority cleanup consumes every damage card owned by a destroyed ship;
-	# there is no surviving public card owner on which to resolve an effect.
-	# A non-lethal immediate draw remains the command-owned blocker.
-	return command is ResolveDamageCommand \
-			and not bool(attack.resolved_outcome.get("destroyed", false)) \
-			and (command as ResolveDamageCommand).drew_immediate_faceup_card()
+	if attack.defender_kind != CurrentAttackState.KIND_SHIP:
+		return false
+	var defender: ShipInstance = game_state.get_ship(
+			attack.defender_player, attack.defender_index)
+	return defender != null and defender.has_active_immediate_resolution()
 
 
 static func _counter_decision_pending(game_state: GameState,

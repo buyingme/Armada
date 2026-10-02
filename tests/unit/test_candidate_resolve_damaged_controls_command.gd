@@ -61,6 +61,7 @@ func test_ship_branch_draws_once_and_records_per_instance_execution_guard() -> v
 	assert_eq(result.keys(), [
 		"owner_player", "ship_index", "ship_activation_identity",
 		"maneuver_execution_id", "public_card_ref", "overlap_kind",
+		"destruction_cleanup",
 		"damage_application",
 	])
 	assert_false(result.has("obstacle_id"))

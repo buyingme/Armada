@@ -367,8 +367,8 @@ func test_pre_begin_skip_emits_declaration_intent_not_completion() -> void:
 	_modal.handle_squadron_click(token)
 	watch_signals(_modal)
 	_modal._on_skip_pressed()
-	assert_signal_emitted(_modal, "declaration_skip_requested",
-			"Pre-Begin Skip should request the existing semantic command.")
+	assert_signal_emitted(_modal, "activation_intent_requested",
+			"Precommit Skip must request activation acceptance first.")
 	assert_signal_not_emitted(_modal, "activation_done",
 			"Presentation must not request completion before Skip accepts.")
 	assert_eq(_modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE,
@@ -784,15 +784,14 @@ func test_back_pressed_command_preview_clears_without_spend() -> void:
 	_modal._on_skip_pressed()
 	assert_eq(resolver.get_activations_used(), 0,
 			"Back from preview should not spend command activation budget.")
-	assert_null(_modal.get_selected_token(),
-			"Back from preview should clear the selected squadron.")
-	assert_eq(int(_modal.get_state()),
-			int(SquadronActivationModal.State.WAITING_FOR_SELECTION),
-			"Back from preview should return to squadron selection.")
+	assert_same(_modal.get_selected_token().get_squadron_instance(), inst,
+			"Skip intent retains the inspected candidate until acceptance.")
+	assert_true(_modal.is_activation_acceptance_pending() == false,
+			"The controller, not the modal, submits activation.")
 	assert_signal_not_emitted(_modal, "activation_done",
 			"Back from preview should not finish an activation.")
-	assert_signal_emitted(_modal, "selection_cleared",
-			"Back from preview should notify the controller to clear overlays.")
+	assert_signal_emitted(_modal, "activation_intent_requested",
+			"Skip now expresses legal whole-activation intent.")
 
 
 ## Clicking the SAME squadron in ACTION_CHOICE (command mode) is ignored.
@@ -835,9 +834,11 @@ func test_click_different_squadron_turn_mode_returns_false() -> void:
 	var token_b: SquadronToken = _make_token(inst_b)
 	_modal.handle_squadron_click(token_a)
 	var consumed: bool = _modal.handle_squadron_click(token_b)
-	assert_false(consumed,
-			"Turn-mode ACTION_CHOICE click on different squadron"
-			+" should be ignored (controller drives next pick)")
+	assert_true(consumed,
+			"A different candidate remains inspectable before activation.")
+	assert_same(_modal.get_selected_token(), token_b)
+	assert_false(inst_a.has_activation_action_state())
+	assert_false(inst_b.has_activation_action_state())
 
 
 # ===========================================================================

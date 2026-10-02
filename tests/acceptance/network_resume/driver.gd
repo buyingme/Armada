@@ -33,10 +33,12 @@ var _dice_submitted := false
 var _accuracy_submitted := false
 var _defense_submitted := false
 var _acknowledged := false
+var _fresh_faceup_ack_sent := ""
 var _repair_submitted := false
 var _gameplay_evidence: Dictionary = {}
 var _commanded_evidence: Dictionary = {}
 var _commanded_attack_started := false
+var _commanded_activation_intent_sent := false
 var _commanded_dice_submitted := false
 var _commanded_confirm_submitted := false
 var _commanded_defense_submitted := false
@@ -64,6 +66,10 @@ var _bug043_maneuver_submitted := false
 var _bug043_reconnect_started := false
 var _bug043_order_submitted := false
 var _bug043_immediate_submitted := false
+var _bug043_obstacle_ack_sent := ""
+var _bug043_faceup_ack_sent := ""
+var _bug043_wrong_ack_sent := false
+var _bug043_wrong_ack_rejected := false
 var _finish_started := false
 
 func _ready() -> void:
@@ -678,7 +684,26 @@ func _enter_game_board() -> void:
 func _advance_fresh_gameplay() -> void:
 	if _game_board == null or GameManager.current_game_state == null:
 		return
+	# This acceptance scene bypasses MainMenu, which normally installs the
+	# client strategy after the resumed peer's Network role is established.
+	if _role == "client" and NetworkManager.role \
+			== NetworkManager.Role.CLIENT \
+			and not GameManager.get_command_submitter() \
+					is NetworkCommandSubmitter:
+		GameManager.set_command_submitter(NetworkCommandSubmitter.new())
 	var state: GameState = GameManager.current_game_state
+	var faceup: FaceupDamageInspection = state.faceup_damage_inspection
+	if faceup != null:
+		var local_player: int = NetworkManager.get_local_player_index()
+		var principal_id: String = state.principal_id_for_player(local_player)
+		var faceup_id: String = faceup.inspection_id()
+		if not faceup.has_received(principal_id) \
+				and _fresh_faceup_ack_sent != faceup_id:
+			_fresh_faceup_ack_sent = faceup_id
+			GameManager.get_command_submitter().submit(
+					AcknowledgeFaceupDamageCommand.new(local_player,
+							{"inspection_id": faceup_id}))
+		return
 	if _role != "host":
 		_finish_client_after_convergence(state)
 		return
@@ -817,6 +842,8 @@ func _advance_commanded_squadron() -> void:
 
 func _advance_commanded_client(
 		state: GameState, attack: CurrentAttackState) -> void:
+	if not GameManager.get_command_submitter() is NetworkCommandSubmitter:
+		GameManager.set_command_submitter(NetworkCommandSubmitter.new())
 	var controller: SquadronPhaseController = \
 			_game_board._squadron_phase_controller
 	var modal: SquadronActivationModal = controller.get_modal()
@@ -826,6 +853,8 @@ func _advance_commanded_client(
 		_finish(false, "commanded_client_projection_missing")
 		return
 	if not attacker.has_activation_action_state():
+		if _commanded_activation_intent_sent:
+			return
 		if not modal.visible or not modal.is_command_mode():
 			_game_board._ship_activation_controller \
 					.open_squadron_command_from_interaction_state()
@@ -837,14 +866,19 @@ func _advance_commanded_client(
 		if attacker_token == null \
 				or not controller.try_handle_squadron_click(attacker_token):
 			_finish(false, "commanded_activation_selection_failed")
+			return
+		_commanded_evidence["precommit_inspection_inert"] = \
+				not attacker.has_activation_action_state() \
+				and state.get_ship(1, 0).squadron_command_activations_committed == 0
+		modal._on_attack_pressed()
+		_commanded_activation_intent_sent = true
 		return
 	if not _commanded_attack_started:
-		if modal.get_state() != SquadronActivationModal.State.ACTION_CHOICE \
+		if modal.get_state() != SquadronActivationModal.State.ATTACKING \
 				or modal._selected_instance != attacker:
 			return
 		_commanded_evidence["selection_preserved_engagement_cache"] = \
 				not attacker.is_engaged and not defender.is_engaged
-		modal._on_attack_pressed()
 		var defender_token: SquadronToken = \
 				_game_board._find_squadron_token_for_instance(defender)
 		if defender_token == null \
@@ -1053,6 +1087,13 @@ func _capture_commanded_command(command: GameCommand, _result: Dictionary) -> vo
 
 
 func _capture_commanded_rejection(command: GameCommand, reason: String) -> void:
+	if _scenario == "bug043_stabilization" and _role == "reconnect" \
+			and command != null \
+			and command.command_type \
+					== AcknowledgeObstaclePreEffectCommand.TYPE \
+			and reason.contains("Submitting principal is not authorized"):
+		_bug043_wrong_ack_rejected = true
+		return
 	if _scenario == "ship_end_activation" and command != null:
 		_end_rejections.append(command.command_type + ":" + reason)
 		return
@@ -1158,6 +1199,11 @@ func _advance_commanded_decline_client(state: GameState) -> void:
 			_finish(false, "decline_next_selection_failed")
 			return
 		_decline_next_selected = true
+		_decline_evidence["next_selection_transient"] = \
+				not modal.is_activation_acceptance_pending() \
+				and not next.has_activation_action_state() \
+				and state.get_ship(1, 0).squadron_command_activations_committed == 1
+		modal._on_attack_pressed()
 		_decline_evidence["next_pending_before_acceptance"] = \
 				modal.is_activation_acceptance_pending()
 		_decline_evidence["no_second_capacity_before_acceptance"] = \
@@ -1266,7 +1312,8 @@ func _advance_commanded_activation_gate() -> void:
 			_game_board._squadron_phase_controller.get_modal()
 	if state == null or modal == null:
 		return
-	if not modal.visible or not modal.is_command_mode():
+	if not _activation_gate_selected \
+			and (not modal.visible or not modal.is_command_mode()):
 		_game_board._ship_activation_controller \
 				.open_squadron_command_from_interaction_state()
 		return
@@ -1285,9 +1332,22 @@ func _advance_commanded_activation_gate() -> void:
 		var second: SquadronInstance = state.get_squadron(1, 1)
 		var second_token: SquadronToken = \
 				_game_board._find_squadron_token_for_instance(second)
+		var second_inspected: bool = _game_board._squadron_phase_controller \
+				.try_handle_squadron_click(second_token)
+		var cycle_reversible: bool = second_inspected \
+				and modal._selected_instance == second \
+				and not first.has_activation_action_state() \
+				and not second.has_activation_action_state() \
+				and state.get_ship(1, 0).squadron_command_activations_committed == 0
+		if not _game_board._squadron_phase_controller \
+				.try_handle_squadron_click(first_token):
+			_finish(false, "activation_gate_reselection_failed")
+			return
+		modal._on_attack_pressed()
 		var second_consumed: bool = _game_board._squadron_phase_controller \
 				.try_handle_squadron_click(second_token)
 		_activation_gate_evidence = {
+			"precommit_cycle_reversible": cycle_reversible,
 			"pending_before_acceptance": modal.is_activation_acceptance_pending(),
 			"one_candidate_retained": modal._selected_instance == first,
 			"controls_non_actionable": not modal._move_button.visible \
@@ -1309,9 +1369,9 @@ func _advance_commanded_activation_gate() -> void:
 			_activation_gate_evidence.merge({
 				"rejection_recovered":
 						not modal.is_activation_acceptance_pending() \
-						and modal._selected_instance == null \
+						and modal._selected_instance == state.get_squadron(1, 0) \
 						and modal.get_state() \
-								== SquadronActivationModal.State.WAITING_FOR_SELECTION,
+								== SquadronActivationModal.State.ACTION_CHOICE,
 				"no_phantom_capacity": state.get_ship(1, 0) \
 						.squadron_command_activations_committed == 0,
 				"no_phantom_activation": not state.get_squadron(1, 0) \
@@ -1351,14 +1411,16 @@ func _advance_commanded_activation_gate() -> void:
 				or FileAccess.get_file_as_string(path).strip_edges() \
 						!= CanonicalJson.hash(state.serialize()):
 			return
+		if not _game_board._squadron_phase_controller.is_in_attacking_state():
+			return
 		_activation_gate_evidence.merge({
 			"activate_count": 1,
 			"identity_installed": state.get_squadron(1, 0) \
 					.has_activation_action_state(),
 			"capacity_installed": state.get_ship(1, 0) \
 					.squadron_command_activations_committed == 1,
-			"controls_enabled_once": modal.get_state() \
-					== SquadronActivationModal.State.ACTION_CHOICE \
+			"action_intent_continued": _game_board \
+					._squadron_phase_controller.is_in_attacking_state() \
 					and modal._selected_instance == state.get_squadron(1, 0),
 			"projection_converged": true,
 			"no_rejection": not _commanded_has_rejection("activate_squadron"),
@@ -1476,6 +1538,8 @@ func _advance_bug043_host(state: GameState, ship: ShipInstance) -> void:
 		_bug043_evidence["wrong_principal_unchanged"] = \
 				before == CanonicalJson.hash(state.serialize())
 		return
+	if _acknowledge_bug043_public_gate(state, ship):
+		return
 	var action: Dictionary = ManeuverExecutionEvaluator.next_action(state, 0, 0)
 	if str(action.get("choice", "")) == "shield_zones" \
 			and int(action.get("player_index", -1)) == 1 \
@@ -1503,6 +1567,10 @@ func _advance_bug043_host(state: GameState, ship: ShipInstance) -> void:
 			"order_count":_history_count("commit_maneuver_obstacle_order"),
 			"asteroid_count":_history_count("resolve_asteroid_overlap"),
 			"immediate_count":_history_count("resolve_immediate_effect"),
+			"obstacle_ack_count":_history_count(
+					"acknowledge_obstacle_pre_effect"),
+			"faceup_ack_count":_history_count(
+					"acknowledge_faceup_damage"),
 			"automatic_authority_chain":_history_count("apply_maneuver_transform") == 1 \
 					and _history_count("resolve_asteroid_overlap") == 1,
 			"other_principal_choice":true,
@@ -1537,6 +1605,8 @@ func _advance_bug043_initial_client(state: GameState,
 
 func _advance_bug043_reconnected_client(state: GameState,
 		ship: ShipInstance) -> void:
+	if _acknowledge_bug043_public_gate(state, ship):
+		return
 	var controller: ShipActivationController = \
 			_game_board._ship_activation_controller
 	if not _bug043_order_submitted:
@@ -1569,9 +1639,52 @@ func _advance_bug043_reconnected_client(state: GameState,
 				_history_count("commit_maneuver_obstacle_order") == 1 \
 				and _history_count("resolve_immediate_effect") == 1,
 		"legal_next_actor":int(next.get("player_index", -1)) == 0,
+		"wrong_ack_rejected":_bug043_wrong_ack_rejected,
+		"obstacle_ack_count":_history_count(
+				"acknowledge_obstacle_pre_effect"),
+		"faceup_ack_count":_history_count(
+				"acknowledge_faceup_damage"),
 		"cursor":CommandProcessor.get_next_sequence(),
 	}, true)
 	_finish(true, "bug043_reconnect_converged")
+
+
+func _acknowledge_bug043_public_gate(state: GameState,
+		ship: ShipInstance) -> bool:
+	var local_player: int = NetworkManager.get_local_player_index()
+	var principal_id: String = state.principal_id_for_player(local_player)
+	var occurrence: Dictionary = ship.pending_obstacle_pre_effect_snapshot()
+	if not occurrence.is_empty():
+		if occurrence.get("received_principal_ids", []) \
+				== occurrence.get("required_principal_ids", []):
+			return false
+		var id: String = str(occurrence.get("occurrence_id", ""))
+		if _role == "reconnect" and not _bug043_wrong_ack_sent:
+			_bug043_wrong_ack_sent = true
+			GameManager.get_command_submitter().submit(
+					AcknowledgeObstaclePreEffectCommand.new(1,
+							{"occurrence_id": id}))
+			return true
+		if _role == "reconnect" and not _bug043_wrong_ack_rejected:
+			return true
+		if not (occurrence.get("received_principal_ids", []) as Array).has(
+				principal_id) and _bug043_obstacle_ack_sent != id:
+			_bug043_obstacle_ack_sent = id
+			GameManager.get_command_submitter().submit(
+					AcknowledgeObstaclePreEffectCommand.new(local_player,
+							{"occurrence_id": id}))
+		return true
+	var inspection: FaceupDamageInspection = state.faceup_damage_inspection
+	if inspection != null:
+		var inspection_id: String = inspection.inspection_id()
+		if not inspection.has_received(principal_id) \
+				and _bug043_faceup_ack_sent != inspection_id:
+			_bug043_faceup_ack_sent = inspection_id
+			GameManager.get_command_submitter().submit(
+					AcknowledgeFaceupDamageCommand.new(local_player,
+							{"inspection_id": inspection_id}))
+		return true
+	return false
 
 
 func _finish_ship_end_activation_host(
@@ -1627,7 +1740,7 @@ func _on_game_starting() -> void:
 	# production submitter strategy that MainMenu installs before board entry.
 	if NetworkManager.is_server():
 		GameManager.set_command_submitter(NetworkHostCommandSubmitter.new())
-	elif PlayMode.is_network():
+	elif NetworkManager.role == NetworkManager.Role.CLIENT:
 		GameManager.set_command_submitter(NetworkCommandSubmitter.new())
 	if _scenario == "compatibility_network":
 		if _role == "host":

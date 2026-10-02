@@ -81,6 +81,8 @@ func execute(game_state: GameState) -> Dictionary:
 		_cleanup_squadrons(ps, result)
 	ECM_SCRIPT.clear_stale_status_ready_cost_window_state(game_state)
 	_enter_status_ready_cost_flow(game_state, result)
+	game_state.final_status_cleanup_round = game_state.current_round
+	result["final_status_cleanup_round"] = game_state.current_round
 
 	return result
 

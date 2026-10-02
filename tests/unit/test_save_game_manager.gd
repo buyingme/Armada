@@ -396,6 +396,22 @@ func test_load_rejects_twi_003_pre_cutover_version_two() -> void:
 			"Reason should be version_unsupported")
 
 
+func test_load_rejects_ambiguous_pre_ux_save_version_seven() -> void:
+	var gs: GameState = _make_game_state()
+	assert_true(_manager.save_game(gs, TEST_SAVE))
+	var path: String = SaveManagerScript.SAVE_DIR + "/" + TEST_SAVE \
+			+ SaveManagerScript.SAVE_EXT
+	var data: Dictionary = JSON.parse_string(
+			FileAccess.get_file_as_string(path))
+	data["header"]["save_format_version"] = 7
+	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(JSON.stringify(data, "\t"))
+	file.close()
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	assert_false(result["ok"])
+	assert_eq(result["reason"], "version_unsupported")
+
+
 # ---------------------------------------------------------------------------
 # can_save_now safe-point gate
 # ---------------------------------------------------------------------------

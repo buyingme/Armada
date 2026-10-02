@@ -10,7 +10,7 @@ Related Contracts: CON-003
 Related Context Packs: CP-001
 Related Tests: TEST-003; required tests listed below
 Created: 2026-09-12
-Last Updated: 2026-09-12
+Last Updated: 2026-09-30
 Owner: Project Owner
 Test Owner: Capability implementation owner; Project Owner review required
 Capability Classification: mixed
@@ -267,9 +267,32 @@ acceptance stop gate for this package.
 | Migration impact | high | No active obstacle route; current geometry is prohibited | Stage behind evidence and package gates. |
 | Complexity | high | Geometry, randomness, nested effects, destruction | Keep shared helpers low-level and ownership purpose-specific. |
 
+### UX-006–UX-012 candidate trace (2026-09-30)
+
+`CandidateCommitManeuverObstacleOrderCommand` opens the UX-008 occurrence; the
+required principal(s) acknowledge before
+`CandidateResolveAsteroidOverlapCommand` version 3 deals a faceup card. UX-006
+inspection precedes immediate resolution. A surviving non-immediate deal leaves
+Maneuver-owned completion outstanding until `CompleteAsteroidOverlapCommand`
+version 1; lethal cleanup remains in the deal transaction. Save schema 8,
+Network protocol 9, filtered/passive replacement, and semantic replay preserve
+these identities. Candidate checks:
+`tests/unit/test_candidate_obstacle_consequences.gd` and
+`tests/acceptance/network_resume/driver.gd`.
+
+This is Codex candidate implementation evidence under the accepted UX workbook. The
+package remains **Draft**; Owner integration and genuine replay capture remain
+separate gates. Earlier missing-path observations in this package describe its pre-candidate
+baseline. Section 9.1 supersedes those observations for the UX boundaries only;
+it does not authorize a different rule or ownership boundary.
+
 ## 10. Integration Status
 
 Current Status: Draft
+
+The UX candidate trace in Section 9.1 updates the affected implementation
+surfaces. Package-wide integration remains subject to separate Owner review;
+the older evidence summary below records the pre-candidate baseline.
 Evidence Summary:
 
 - Static obstacle identities, setup placement, card/deck infrastructure, and

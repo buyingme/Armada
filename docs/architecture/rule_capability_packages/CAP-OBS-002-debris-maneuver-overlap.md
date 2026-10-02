@@ -10,7 +10,7 @@ Related Contracts: CON-003
 Related Context Packs: CP-001
 Related Tests: TEST-003; required tests listed below
 Created: 2026-09-12
-Last Updated: 2026-09-12
+Last Updated: 2026-09-30
 Owner: Project Owner
 Test Owner: Capability implementation owner; Project Owner review required
 Capability Classification: mixed
@@ -263,9 +263,29 @@ This gap is an implementation and acceptance stop gate for this package.
 | Migration impact | high | No active route or accepted contour | Gate on shared prerequisites. |
 | Complexity | high | Geometry, interaction, sequential damage, destruction | Purpose-specific state with low-level helpers only. |
 
+### UX-006–UX-012 candidate trace (2026-09-30)
+
+The UX-008 occurrence requires principal acknowledgment before
+`CandidateResolveDebrisOverlapCommand` version 3 mutates shields/cards. Its
+result carries source-atomic lethal cleanup and the exact next obstacle
+occurrence. Save schema 8, Network protocol 9, filtered/passive replacement, and
+semantic replay preserve occurrence identity and order. Candidate checks:
+`tests/unit/test_candidate_obstacle_consequences.gd` and
+`tests/acceptance/network_resume/driver.gd`.
+
+This is Codex candidate implementation evidence under the accepted UX workbook. The
+package remains **Draft**; Owner integration and genuine replay capture remain
+separate gates. Earlier missing-path observations in this package describe its pre-candidate
+baseline. Section 9.1 supersedes those observations for the UX boundaries only;
+it does not authorize a different rule or ownership boundary.
+
 ## 10. Integration Status
 
 Current Status: Draft
+
+The UX candidate trace in Section 9.1 updates the affected implementation
+surfaces. Package-wide integration remains subject to separate Owner review;
+the older evidence summary below records the pre-candidate baseline.
 Evidence Summary:
 
 - Static debris identities, placement, and damage infrastructure exist.

@@ -10,7 +10,7 @@ Related Contracts: CON-003
 Related Context Packs: CP-001
 Related Tests: TEST-003; existing and required tests listed below
 Created: 2026-09-12
-Last Updated: 2026-09-12
+Last Updated: 2026-09-30
 Owner: Project Owner
 Test Owner: Capability implementation owner; Project Owner review required
 Capability Classification: mixed
@@ -248,9 +248,29 @@ The concrete representation is deferred and must not deduplicate by `effect_id`.
 | Migration impact | high | Current hook/primitive conflict with authority | Replace at post-obstacle boundary. |
 | Complexity | high | Re-derivation, multiplicity, damage, destruction | Purpose-specific state with low-level helpers only. |
 
+### UX-006–UX-012 candidate trace (2026-09-30)
+
+`CandidateResolveRupturedEngineCommand` retains the persistent card's
+post-Maneuver damage and choice; its version-3 result includes source-atomic
+lethal cleanup. UX-008 gates ordered obstacle consequences before this effect
+where applicable. Save schema 8, Network protocol 9, passive exact-result
+validation, and semantic replay apply. Candidate checks:
+`tests/unit/test_candidate_resolve_ruptured_engine_command.gd` and
+`tests/unit/test_candidate_obstacle_consequences.gd`.
+
+This is Codex candidate implementation evidence under the accepted UX workbook. The
+package remains **Draft**; Owner integration and genuine replay capture remain
+separate gates. Earlier missing-path observations in this package describe its pre-candidate
+baseline. Section 9.1 supersedes those observations for the UX boundaries only;
+it does not authorize a different rule or ownership boundary.
+
 ## 10. Integration Status
 
 Current Status: Draft
+
+The UX candidate trace in Section 9.1 updates the affected implementation
+surfaces. Package-wide integration remains subject to separate Owner review;
+the older evidence summary below records the pre-candidate baseline.
 Evidence Summary:
 
 - Card data, source state, current predicate/hook, and focused tests exist.

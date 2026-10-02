@@ -13,7 +13,7 @@ Related Requirements: DM-005
 Related Boundaries: ADR-001/CON-001 Attack authority and return dependency; ADR-014 purpose-specific immediate-resolution boundary; ADR-013 hidden-command filtering  
 Related Gaps: ADR-014 physical-card identity, active-obligation, recovery, Network filtering, and return implementation gaps  
 Created: 2026-09-12  
-Last Updated: 2026-09-12  
+Last Updated: 2026-09-30
 Owner: Project Owner  
 Test Owner: Capability implementation owner; Project Owner review required  
 Capability Classification: mixed
@@ -230,6 +230,22 @@ obligation and rejection of earlier-occurrence identities.
 | Visibility | high | Viewer-filtered prompt/result/history tests. |
 | Migration | medium | Version card/pending schema without broad dial redesign. |
 | Complexity | medium | Explicit 0/1/2-option derivation; no generic choice framework. |
+
+### UX-006–UX-012 candidate trace (2026-09-30)
+
+A newly dealt faceup Comm Noise card enters UX-006 inspection before its
+existing immediate speed/dial choice. `CandidateResolveImmediateEffectCommand`
+version 3 retains rule legality and any source-atomic lethal cleanup. Save
+schema 8, Network protocol 9, passive exact-result application, and ordered
+semantic replay apply. Candidate checks:
+`tests/unit/test_candidate_resolve_immediate_effect_command.gd` and
+`tests/unit/test_candidate_obstacle_consequences.gd`.
+
+This is Codex candidate implementation evidence under the accepted UX workbook. The
+package remains **Draft**; Owner integration and genuine replay capture remain
+separate gates. Earlier missing-path observations in this package describe its pre-candidate
+baseline. Section 9.1 supersedes those observations for the UX boundaries only;
+it does not authorize a different rule or ownership boundary.
 
 ## 10. Integration Status
 

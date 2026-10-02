@@ -8,6 +8,7 @@ const COMMAND: GDScript = preload(
 
 var _state: GameState
 var _saved_game_state: GameState
+var _shared_binding: MatchPlayerControlBinding
 
 
 class PresentationAttackExecutor:
@@ -24,6 +25,8 @@ func before_each() -> void:
 	RuleBootstrap.bootstrap_rules()
 	_state = GameState.new()
 	_state.initialize()
+	_shared_binding = MatchPlayerControlBinding.create_hot_seat_human()
+	assert_true(_state.install_match_player_control_binding(_shared_binding))
 	_state.current_phase = Constants.GamePhase.SHIP
 	assert_not_null(FIXTURE.install(_state, {
 		"attack_id": "attack:70",
@@ -53,6 +56,7 @@ func test_attack_faceup_assignment_establishes_exact_public_obligation() -> void
 	var result: Dictionary = command.execute(_state)
 	assert_eq(result.keys(), [
 		"attack_id", "target_kind", "owner_player", "ship_index",
+		"faceup_damage_inspection", "destruction_cleanup",
 		"damage_application",
 	])
 	var additions: Array = result["damage_application"]["faceup_additions"]
@@ -114,6 +118,7 @@ func test_x_wing_critical_projects_same_immediate_card_to_passive_peer() -> void
 	assert_false(result.is_empty())
 	var passive := GameState.new()
 	passive.initialize()
+	assert_true(passive.install_match_player_control_binding(_shared_binding))
 	passive.current_phase = Constants.GamePhase.SQUADRON
 	assert_not_null(FIXTURE.install(passive, {
 		"attack_id": "attack:70",
@@ -161,6 +166,7 @@ func test_x_wing_critical_projects_same_immediate_card_to_passive_peer() -> void
 func _install_squadron_ship_attack(face: Constants.DiceFace) -> void:
 	_state = GameState.new()
 	_state.initialize()
+	assert_true(_state.install_match_player_control_binding(_shared_binding))
 	_state.current_phase = Constants.GamePhase.SQUADRON
 	assert_not_null(FIXTURE.install(_state, {
 		"attack_id": "attack:70",
@@ -209,6 +215,7 @@ func test_attack_passive_application_installs_exact_filtered_attack_record() -> 
 	assert_false(authority_result.is_empty())
 	var passive := GameState.new()
 	passive.initialize()
+	assert_true(passive.install_match_player_control_binding(_shared_binding))
 	passive.current_phase = Constants.GamePhase.SHIP
 	assert_not_null(FIXTURE.install(passive, {
 		"attack_id": "attack:70",
@@ -280,7 +287,10 @@ func test_lethal_attack_faceup_assignment_terminates_obligation_and_keeps_damage
 	assert_true(bool(result["damage_application"]["destroyed"]))
 	assert_true(defender.has_finalized_destruction())
 	assert_false(defender.has_active_immediate_resolution())
-	assert_eq(defender.get_total_damage(), defender.ship_data.hull)
+	assert_eq(defender.get_total_damage(), 0,
+			"The accepted lethal transaction returns all assigned cards.")
+	assert_eq((result["destruction_cleanup"] as Dictionary)[
+			"facedown_discards"].size(), defender.ship_data.hull - 1)
 
 
 func test_v2_ship_damage_projects_canonical_shield_loss_and_feedback_event() -> void:

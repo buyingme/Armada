@@ -128,6 +128,11 @@ func test_collision_destruction_keeps_applied_geometry_and_suppresses_return() -
 func test_v3_processor_nonmoving_target_death_cleans_then_completes_mover_once() \
 		-> void:
 	_target.ship_data.hull = 1
+	var surviving_target: ShipInstance = _ship(1)
+	surviving_target.roster_entry_id = "collision-survivor"
+	surviving_target.pos_x = 0.9
+	surviving_target.pos_y = 0.9
+	_state.get_player_state(1).ships.append(surviving_target)
 	GameManager.current_game_state = _state
 	var processor: Node = PROCESSOR.new()
 	add_child_autofree(processor)
@@ -140,8 +145,8 @@ func test_v3_processor_nonmoving_target_death_cleans_then_completes_mover_once()
 	for command: GameCommand in processor.get_history():
 		types.append(command.command_type)
 	assert_eq(types, [
-		"resolve_ship_collision_damage", "destroy_unit", "complete_maneuver"])
-	assert_eq(types.count("destroy_unit"), 1)
+		"resolve_ship_collision_damage", "complete_maneuver"])
+	assert_eq(types.count("destroy_unit"), 0)
 	assert_eq(types.count("complete_maneuver"), 1)
 
 

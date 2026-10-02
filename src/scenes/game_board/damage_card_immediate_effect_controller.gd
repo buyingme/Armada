@@ -21,7 +21,7 @@ func initialize(camera: BoardCamera, handoff_overlay: HandoffOverlay) -> void:
 ## Rebuilds only an existing debug-owned player choice after state install.
 ## Automatic work remains authority-owned and is never submitted here.
 func reconstruct_from_state(state: GameState) -> void:
-	if state == null:
+	if state == null or state.faceup_damage_inspection != null:
 		return
 	for player_state: PlayerState in state.player_states:
 		for raw_ship: Variant in player_state.ships:
@@ -50,7 +50,8 @@ func reconstruct_from_state(state: GameState) -> void:
 
 func react_to_debug_damage_result(_command: GameCommand, result: Dictionary) -> void:
 	var state: GameState = GameManager.current_game_state
-	if state == null or not result.get("damage_application") is Dictionary:
+	if state == null or state.faceup_damage_inspection != null \
+			or not result.get("damage_application") is Dictionary:
 		return
 	var owner: int = int(result.get("owner_player", -1))
 	var ship_index: int = int(result.get("ship_index", -1))
@@ -81,7 +82,6 @@ func react_to_debug_damage_result(_command: GameCommand, result: Dictionary) -> 
 	if not _can_act_as(chooser):
 		return
 	if choice_info.is_empty():
-		GameManager.submit_resolve_immediate_effect(ship, card, {})
 		return
 	_pending_ship = ship
 	_pending_card = card

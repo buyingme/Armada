@@ -375,14 +375,21 @@ func test_production_composed_cross_kind_matrix_uses_canonical_capabilities() ->
 			assert_true(state.current_attack_state.is_inactive(),
 					"A generic squadron bypasses unavailable token input "
 					+"through the authoritative damage continuation.")
+		var inspected_faceup: bool = state.faceup_damage_inspection != null
+		if inspected_faceup:
+			var inspection_id: String = state.faceup_damage_inspection \
+					.inspection_id()
+			assert_false(processor.submit(
+					AcknowledgeFaceupDamageCommand.new(0, {
+						"inspection_id": inspection_id,
+					})).is_empty())
 		assert_true(state.current_attack_state.is_inactive())
 		var types: Array[String] = _history_types(
 				processor.serialize_history())
-		if state.completed_attack_inspection != null \
-				and bool(state.completed_attack_inspection.serialize().get(
-						"outcome", {}).get("destroyed", false)):
+		if inspected_faceup:
 			assert_eq(types.slice(types.size() - 3),
-					["resolve_damage", "destroy_unit", "complete_attack"])
+					["resolve_damage", "acknowledge_faceup_damage",
+						"complete_attack"])
 		else:
 			assert_eq(types.slice(types.size() - 2),
 					["resolve_damage", "complete_attack"])
@@ -778,6 +785,8 @@ func test_all_declaration_contexts_match_filtered_host_client_replay() \
 	for context: String in _declaration_protocol_contexts():
 		for begin: bool in [true, false]:
 			var initial: GameState = _make_declaration_protocol_state(context)
+			if not begin:
+				_separate_enemy_squadrons_for_legal_skip(initial, context)
 			var initial_data: Dictionary = initial.serialize()
 			var payload: Dictionary = _declaration_protocol_payload(
 					initial, context, begin)
@@ -861,6 +870,8 @@ func test_declaration_state_matrix_round_trips_save_filter_and_reconnect() \
 	for context: String in _declaration_protocol_contexts():
 		for outcome: String in ["before_begin", "after_begin", "after_skip"]:
 			var source: GameState = _make_declaration_protocol_state(context)
+			if outcome == "after_skip":
+				_separate_enemy_squadrons_for_legal_skip(source, context)
 			GameManager.current_game_state = source
 			GameManager.is_game_active = true
 			PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
@@ -912,6 +923,8 @@ func test_packed_scene_recreation_derives_every_declaration_outcome() -> void:
 	for context: String in _declaration_protocol_contexts():
 		for outcome: String in ["before_begin", "after_begin", "after_skip"]:
 			var state: GameState = _make_declaration_protocol_state(context)
+			if outcome == "after_skip":
+				_separate_enemy_squadrons_for_legal_skip(state, context)
 			GameManager.current_game_state = state
 			GameManager.is_game_active = true
 			PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
@@ -1598,6 +1611,18 @@ func _make_declaration_protocol_state(context: String) -> GameState:
 			return null
 	assert_true(state.validate_declaration_adjacent_state())
 	return state
+
+
+func _separate_enemy_squadrons_for_legal_skip(state: GameState,
+		context: String) -> void:
+	if context == SkipAttackCommand.CONTEXT_SHIP_ATTACK:
+		return
+	# Declaration protocol coverage still needs a legal Skip. Engagement now
+	# rejects the old close-range setup at the command boundary.
+	for raw_squadron: Variant in state.get_player_state(1).squadrons:
+		var squadron: SquadronInstance = raw_squadron as SquadronInstance
+		squadron.pos_x = 0.85
+		squadron.pos_y = 0.85
 
 
 func _apply_protocol_static_context(state: GameState, context: String) -> void:

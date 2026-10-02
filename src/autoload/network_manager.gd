@@ -26,7 +26,7 @@ extends Node
 # ---------------------------------------------------------------------------
 
 ## Current protocol version.  Incremented whenever the message format changes.
-const PROTOCOL_VERSION: int = 8
+const PROTOCOL_VERSION: int = 9
 
 ## Interval (seconds) between keepalive pings.
 const HEARTBEAT_INTERVAL_SEC: float = 5.0
@@ -1245,6 +1245,8 @@ func is_authority_only_maneuver_submission(command: GameCommand) -> bool:
 		"apply_maneuver_transform", "complete_maneuver",
 		"start_displacement", "resolve_ship_collision_damage",
 		"resolve_damaged_controls", "resolve_asteroid_overlap",
+		CompleteAsteroidOverlapCommand.TYPE,
+		CompleteMatchCommand.TYPE,
 	]:
 		return true
 	if command.command_type == "resolve_station_overlap":

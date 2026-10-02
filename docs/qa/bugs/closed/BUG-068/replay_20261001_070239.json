@@ -1,0 +1,242 @@
+{
+	"commands": [
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"commands": [
+					0
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 1,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					0,
+					0,
+					0
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 2,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 1,
+			"sequence": 3,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"command": 0,
+				"runtime_upgrade_id": "1:ship:debug-imperial-vsd-2:upgrade:debug-tarkin-commander-0"
+			},
+			"player": 1,
+			"sequence": 4,
+			"type": "tarkin_choice"
+		},
+		{
+			"payload": {
+				"action": "reveal",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 5,
+			"type": "reveal_dial"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 6,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0,
+				"step_id": "repair_step"
+			},
+			"player": 0,
+			"sequence": 7,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0,
+				"step_id": "attack_step"
+			},
+			"player": 0,
+			"sequence": 8,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"declaration_context": "ship_attack",
+				"reason": "no_targets",
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 9,
+			"type": "skip_attack"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0,
+				"speed": 3,
+				"yaw_bonus_joint": -1,
+				"yaw_clicks": [
+					0,
+					0,
+					0
+				]
+			},
+			"player": 0,
+			"sequence": 10,
+			"type": "execute_maneuver"
+		},
+		{
+			"payload": {
+				"maneuver_execution_id": "maneuver:10",
+				"owner_player": 0,
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 11,
+			"type": "apply_maneuver_transform"
+		},
+		{
+			"payload": {
+				"maneuver_execution_id": "maneuver:10",
+				"obstacle_ids": [
+					"obstacle:0"
+				],
+				"owner_player": 0,
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 12,
+			"type": "commit_maneuver_obstacle_order"
+		},
+		{
+			"payload": {
+				"occurrence_id": "obstacle-pre-effect:maneuver:10:0:obstacle:0:asteroid_faceup_damage"
+			},
+			"player": 0,
+			"sequence": 13,
+			"type": "acknowledge_obstacle_pre_effect"
+		},
+		{
+			"payload": {
+				"maneuver_execution_id": "maneuver:10",
+				"obstacle_id": "obstacle:0",
+				"owner_player": 0,
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 14,
+			"type": "resolve_asteroid_overlap"
+		},
+		{
+			"payload": {
+				"inspection_id": "faceup-inspection:faceup:14:0"
+			},
+			"player": 0,
+			"sequence": 15,
+			"type": "acknowledge_faceup_damage"
+		},
+		{
+			"payload": {
+				"enclosing_kind": "maneuver",
+				"immediate_resolution_id": "immediate:faceup:14:0",
+				"maneuver_execution_id": "maneuver:10",
+				"maneuver_source_id": "obstacle:0",
+				"maneuver_source_kind": "asteroid",
+				"owner_player": 0,
+				"public_card_ref": "faceup:14:0",
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 16,
+			"type": "resolve_immediate_effect"
+		},
+		{
+			"payload": {
+				"maneuver_execution_id": "maneuver:10",
+				"owner_player": 0,
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 17,
+			"type": "complete_maneuver"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0,
+				"step_id": "activation_done"
+			},
+			"player": 0,
+			"sequence": 18,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 19,
+			"type": "end_activation"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			1
+		],
+		"format_version": 10,
+		"godot_version": "4.5.1-stable (official)",
+		"initial_command_sequence": 0,
+		"initiative_player": 0,
+		"match_player_control_binding": {
+			"player_principal_ids": [
+				"mp-c4ad422c-2592-43a2-a305-641d5b6ab1bd",
+				"mp-c4ad422c-2592-43a2-a305-641d5b6ab1bd"
+			],
+			"principals": [
+				{
+					"kind": "HUMAN",
+					"principal_id": "mp-c4ad422c-2592-43a2-a305-641d5b6ab1bd"
+				}
+			]
+		},
+		"rng_seed": "-8754772985063967669",
+		"scenario_id": "debug_scenario",
+		"timestamp": "2026-10-01T05:02:39"
+	}
+}

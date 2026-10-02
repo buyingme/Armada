@@ -43,6 +43,8 @@ var your_turn_banner: YourTurnBanner = null
 
 ## Victory screen overlay shown when the game ends (WN-001–004).
 var victory_screen: VictoryScreen = null
+var _terminal_banner_layer: CanvasLayer = null
+var _terminal_details: Dictionary = {}
 
 ## "End Activation" button (TF-005, TF-011).
 var end_activation_button: EndActivationButton = null
@@ -221,11 +223,53 @@ func set_pre_reveal_dial_handler(handler: Callable) -> void:
 		imperial_card_panel.set_pre_reveal_dial_handler(handler)
 
 
-## Creates and displays the VictoryScreen overlay.
-## Requirements: WN-001–004.
+## Projects the authoritative terminal result before opening the score view.
 func show_game_end(details: Dictionary) -> void:
-	if victory_screen != null:
-		return # Already shown.
+	if victory_screen != null or _terminal_banner_layer != null \
+			or details.is_empty():
+		return
+	_terminal_details = details.duplicate(true)
+	_terminal_banner_layer = CanvasLayer.new()
+	_terminal_banner_layer.name = "TerminalMatchBannerLayer"
+	_terminal_banner_layer.layer = 110
+	add_child(_terminal_banner_layer)
+	var cover := ColorRect.new()
+	cover.name = "TerminalMatchBanner"
+	cover.color = Color(0.04, 0.06, 0.15, 0.94)
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_terminal_banner_layer.add_child(cover)
+	var title := Label.new()
+	title.name = "TerminalMatchBannerTitle"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 64)
+	title.text = _terminal_banner_text(details)
+	title.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cover.add_child(title)
+	var timer := Timer.new()
+	timer.name = "TerminalMatchPresentationDelay"
+	timer.one_shot = true
+	timer.wait_time = 2.0
+	timer.timeout.connect(_show_terminal_results)
+	_terminal_banner_layer.add_child(timer)
+	timer.start()
+
+
+func _terminal_banner_text(details: Dictionary) -> String:
+	var winner: int = int(details.get("winner_index", -1))
+	if winner < 0:
+		return "DRAW"
+	var local_player: int = NetworkManager.get_local_player_index()
+	return "VICTORY" if local_player < 0 or local_player == winner \
+			else "DEFEAT"
+
+
+func _show_terminal_results() -> void:
+	if not is_inside_tree() or _terminal_details.is_empty():
+		return
+	if _terminal_banner_layer != null:
+		_terminal_banner_layer.queue_free()
+		_terminal_banner_layer = null
 	var layer: CanvasLayer = CanvasLayer.new()
 	layer.name = "VictoryScreenLayer"
 	layer.layer = 110
@@ -234,7 +278,7 @@ func show_game_end(details: Dictionary) -> void:
 	layer.add_child(victory_screen)
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	victory_screen.update_size(vp_size)
-	victory_screen.show_results(details)
+	victory_screen.show_results(_terminal_details)
 
 
 ## Shows or toggles the in-game menu modal when Escape is pressed and no

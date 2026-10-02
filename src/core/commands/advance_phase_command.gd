@@ -74,7 +74,10 @@ func execute(game_state: GameState) -> Dictionary:
 	var flow_before: InteractionFlow = InteractionFlow.deserialize(
 			game_state.interaction_flow.serialize()) \
 			if game_state.interaction_flow != null else InteractionFlow.new()
+	var ship_controller_before: int = game_state.ship_phase_selection_controller
 	game_state.current_phase = target as Constants.GamePhase
+	if target != int(Constants.GamePhase.SHIP):
+		game_state.ship_phase_selection_controller = -1
 	if prev == int(Constants.GamePhase.SQUADRON):
 		game_state.clear_squadron_phase_progress()
 	match target:
@@ -84,7 +87,8 @@ func execute(game_state: GameState) -> Dictionary:
 			if not game_state.initialize_squadron_phase_progress(
 					game_state.initiative_player):
 				_restore_phase_transaction(game_state, prev,
-						phase_progress_before, flow_before)
+						phase_progress_before, flow_before,
+						ship_controller_before)
 				return {}
 			game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 					Constants.InteractionFlow.SQUADRON_ACTIVATION,
@@ -94,7 +98,8 @@ func execute(game_state: GameState) -> Dictionary:
 					Constants.Visibility.ALL)
 	if not game_state.validate_declaration_adjacent_state():
 		_restore_phase_transaction(game_state, prev,
-				phase_progress_before, flow_before)
+				phase_progress_before, flow_before,
+				ship_controller_before)
 		return {}
 	return {"previous_phase": prev, "new_phase": target,
 			"controller_player":
@@ -103,13 +108,15 @@ func execute(game_state: GameState) -> Dictionary:
 
 static func _restore_phase_transaction(game_state: GameState,
 		previous_phase: int, phase_progress: Dictionary,
-		flow: InteractionFlow) -> void:
+		flow: InteractionFlow, ship_controller: int) -> void:
 	game_state.current_phase = previous_phase as Constants.GamePhase
+	game_state.ship_phase_selection_controller = ship_controller
 	game_state.restore_squadron_phase_progress(phase_progress)
 	game_state.interaction_flow = flow
 
 
 static func _enter_ship_phase_flow(game_state: GameState) -> void:
+	game_state.ship_phase_selection_controller = game_state.initiative_player
 	var tarkin_source: Dictionary = TARKIN_SCRIPT.find_prompt_source(game_state)
 	if not tarkin_source.is_empty():
 		game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(

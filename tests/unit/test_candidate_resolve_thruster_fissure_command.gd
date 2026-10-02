@@ -103,7 +103,7 @@ func test_v3_processor_pre_movement_death_cleans_once_without_transform() -> voi
 	assert_true(_ship.has_finalized_destruction())
 	assert_eq(Vector2(_ship.pos_x, _ship.pos_y), before)
 	assert_eq(_processor_types(processor), [
-		"resolve_thruster_fissure", "destroy_unit", "advance_phase"])
+		"resolve_thruster_fissure", "complete_match"])
 	assert_false(_processor_types(processor).has("apply_maneuver_transform"))
 	assert_false(_processor_types(processor).has("complete_maneuver"))
 

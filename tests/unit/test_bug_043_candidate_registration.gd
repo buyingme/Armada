@@ -1,7 +1,7 @@
 extends GutTest
 
 
-func test_protocol8_candidate_routes_deserialize_to_purpose_specific_commands() -> void:
+func test_protocol9_candidate_routes_deserialize_to_purpose_specific_commands() -> void:
 	var expected: Dictionary = {
 		"execute_maneuver": CandidateExecuteManeuverCommand,
 		"apply_maneuver_transform": CandidateApplyManeuverTransformCommand,
@@ -19,6 +19,10 @@ func test_protocol8_candidate_routes_deserialize_to_purpose_specific_commands() 
 		"debug_deal_damage": CandidateDebugDealDamageCommand,
 		"start_displacement": CandidateStartDisplacementCommand,
 		"commit_displacement": CandidateCommitDisplacementCommand,
+		"acknowledge_faceup_damage": AcknowledgeFaceupDamageCommand,
+		"acknowledge_obstacle_pre_effect": AcknowledgeObstaclePreEffectCommand,
+		"complete_asteroid_overlap": CompleteAsteroidOverlapCommand,
+		"complete_match": CompleteMatchCommand,
 	}
 	for command_type: String in expected:
 		var command: GameCommand = GameCommand.deserialize({
@@ -32,14 +36,14 @@ func test_protocol8_candidate_routes_deserialize_to_purpose_specific_commands() 
 
 
 func test_coordinated_compatibility_versions_are_active_together() -> void:
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 7)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 8)
 	assert_eq(GameReplay.FORMAT_VERSION, 10)
-	assert_eq(NetworkManager.PROTOCOL_VERSION, 8)
+	assert_eq(NetworkManager.PROTOCOL_VERSION, 9)
 	assert_eq(GameCommand.APPLICATION_CONTRACT_VERSION, 2)
 	assert_eq(PassiveDamageLedger.SCHEMA_VERSION, 1)
 
 
-func test_protocol8_command_envelope_restores_only_declared_integer_fields() -> void:
+func test_protocol9_command_envelope_restores_only_declared_integer_fields() -> void:
 	var obstacle_order: GameCommand = GameCommand.deserialize({
 		"type": "commit_maneuver_obstacle_order", "player": 0.0,
 		"sequence": 4.0, "payload": {
@@ -88,3 +92,19 @@ func test_protocol8_command_envelope_restores_only_declared_integer_fields() -> 
 	})
 	assert_not_null(shield_failure)
 	assert_eq(shield_failure.payload["shield_zones"], ["front", "left"])
+
+	var asteroid_completion: GameCommand = GameCommand.deserialize({
+		"type": "complete_asteroid_overlap", "player": 0.0,
+		"sequence": 7.0, "payload": {
+			"owner_player": 0.0, "ship_index": 1.0,
+			"ship_activation_identity": "activation:4",
+			"maneuver_execution_id": "maneuver:4",
+			"obstacle_id": "obstacle:0", "ordered_ordinal": 2.0,
+			"occurrence_id": "occurrence:4",
+			"inspection_id": "faceup-inspection:4",
+		},
+	})
+	assert_not_null(asteroid_completion)
+	assert_eq(asteroid_completion.payload["owner_player"], 0)
+	assert_eq(asteroid_completion.payload["ship_index"], 1)
+	assert_eq(asteroid_completion.payload["ordered_ordinal"], 2)

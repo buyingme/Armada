@@ -147,10 +147,21 @@ static func canonical_ship_is_inside_play_area(game_state: GameState,
 	var ship: ShipInstance = game_state.get_ship(owner_player, ship_index)
 	if ship == null or ship.ship_data == null:
 		return false
+	return ship_transform_is_inside_play_area(ship, ship.pos_x, ship.pos_y,
+			ship.rotation_deg)
+
+
+## Uses the same canonical base geometry before a committed transform is
+## installed, so passive application can prevalidate out-of-play cleanup.
+static func ship_transform_is_inside_play_area(ship: ShipInstance,
+		pos_x: float, pos_y: float, rotation_deg: float) -> bool:
+	if ship == null or ship.ship_data == null:
+		return false
 	var play_area: Vector2 = GameScale.play_area_size_px
 	return _base_inside_play_area(ship.ship_data.ship_size,
-			Transform2D(deg_to_rad(ship.rotation_deg),
-					ship.get_pixel_position(play_area)), play_area)
+			Transform2D(deg_to_rad(rotation_deg),
+					Vector2(pos_x * play_area.x, pos_y * play_area.y)),
+			play_area)
 
 
 ## Derives the minimum Navigate source set for the selected result.

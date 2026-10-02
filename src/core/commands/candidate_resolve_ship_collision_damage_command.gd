@@ -22,7 +22,7 @@ func application_contract_id() -> String:
 
 
 func application_contract_version() -> int:
-	return 2
+	return 3
 
 
 func validate(game_state: GameState) -> String:
@@ -116,14 +116,28 @@ func execute(game_state: GameState) -> Dictionary:
 	var target_damage: Dictionary = _damage_application(
 			target, int(payload["target_owner_player"]),
 			int(payload["target_ship_index"]))
+	var moving_interrupted: bool = moving.is_destroyed() \
+			and moving.has_active_ship_activation()
+	var target_interrupted: bool = target.is_destroyed() \
+			and target.has_active_ship_activation()
 	if moving.is_destroyed():
 		moving.mark_destroyed()
 	if target.is_destroyed():
 		target.mark_destroyed()
+	var moving_cleanup: Dictionary = DestroyUnitCommand.cleanup_in_source(
+			game_state, int(payload["owner_player"]),
+			int(payload["ship_index"]), moving_interrupted) \
+			if moving.is_destroyed() else {}
+	var target_cleanup: Dictionary = DestroyUnitCommand.cleanup_in_source(
+			game_state, int(payload["target_owner_player"]),
+			int(payload["target_ship_index"]), target_interrupted) \
+			if target.is_destroyed() else {}
 	var result: Dictionary = payload.duplicate(true)
 	result["moving_damage_application"] = moving_damage
 	result["target_damage_application"] = target_damage
 	result["collision_damage_resolved"] = true
+	result["moving_destruction_cleanup"] = moving_cleanup
+	result["target_destruction_cleanup"] = target_cleanup
 	return result
 
 
@@ -149,9 +163,42 @@ func execute_with_application_result(game_state: GameState,
 	var target: ShipInstance = game_state.get_ship(
 			int(payload["target_owner_player"]),
 			int(payload["target_ship_index"]))
+	var moving_destroyed: bool = bool((application_result[
+			"moving_damage_application"] as Dictionary)["destroyed"])
+	var target_destroyed: bool = bool((application_result[
+			"target_damage_application"] as Dictionary)["destroyed"])
+	var dying: Array[Dictionary] = []
+	if moving_destroyed:
+		dying.append({"owner_player": int(payload["owner_player"]),
+			"ship_index": int(payload["ship_index"])})
+	if target_destroyed:
+		dying.append({"owner_player": int(payload["target_owner_player"]),
+			"ship_index": int(payload["target_ship_index"])})
+	var moving_interrupted: bool = moving_destroyed \
+			and moving.has_active_ship_activation()
+	var target_interrupted: bool = target_destroyed \
+			and target.has_active_ship_activation()
+	var moving_cleanup: Dictionary = application_result[
+			"moving_destruction_cleanup"] as Dictionary
+	var target_cleanup: Dictionary = application_result[
+			"target_destruction_cleanup"] as Dictionary
+	var moving_next: int = DestroyUnitCommand.next_controller_after_source(
+			game_state, int(payload["owner_player"]), dying) \
+			if moving_interrupted else -1
+	var target_next: int = DestroyUnitCommand.next_controller_after_source(
+			game_state, int(payload["target_owner_player"]), dying) \
+			if target_interrupted else -1
 	if ledger == null \
 			or not _passive_application_matches(
 					moving, target, application_result) \
+			or (moving_destroyed and not DestroyUnitCommand.prevalidate_source_cleanup(
+					moving_cleanup, moving.get_facedown_damage_count() + 1,
+					moving_interrupted, moving_next)) \
+			or (not moving_destroyed and not moving_cleanup.is_empty()) \
+			or (target_destroyed and not DestroyUnitCommand.prevalidate_source_cleanup(
+					target_cleanup, target.get_facedown_damage_count() + 1,
+					target_interrupted, target_next)) \
+			or (not target_destroyed and not target_cleanup.is_empty()) \
 			or not ledger.consume_hidden_draws(2) \
 			or not ledger.increment_facedown(moving.passive_damage_key()) \
 			or not ledger.increment_facedown(target.passive_damage_key()) \
@@ -160,10 +207,18 @@ func execute_with_application_result(game_state: GameState,
 					str(payload["maneuver_execution_id"]),
 					str(payload["exact_once_key"])):
 		return {}
-	if bool(application_result["moving_damage_application"]["destroyed"]):
+	if moving_destroyed:
 		moving.mark_destroyed()
-	if bool(application_result["target_damage_application"]["destroyed"]):
+	if target_destroyed:
 		target.mark_destroyed()
+	if moving_destroyed and not DestroyUnitCommand.install_cleanup_in_source(
+			game_state, int(payload["owner_player"]),
+			int(payload["ship_index"]), moving_interrupted, moving_cleanup):
+		return {}
+	if target_destroyed and not DestroyUnitCommand.install_cleanup_in_source(
+			game_state, int(payload["target_owner_player"]),
+			int(payload["target_ship_index"]), target_interrupted, target_cleanup):
+		return {}
 	return application_result.duplicate(true)
 
 
@@ -211,7 +266,8 @@ static func _result_is_valid(result: Dictionary) -> bool:
 	var keys: Array[String] = EXACT_KEYS.duplicate()
 	keys.append_array([
 		"moving_damage_application", "target_damage_application",
-		"collision_damage_resolved",
+		"collision_damage_resolved", "moving_destruction_cleanup",
+		"target_destruction_cleanup",
 	])
 	if not _has_exact_keys(result, keys) \
 			or result.get("collision_damage_resolved") != true \
@@ -231,6 +287,9 @@ static func _result_is_valid(result: Dictionary) -> bool:
 			"moving_damage_application", "target_damage_application"]:
 		if not APPLICATION.is_exact_damage_application(result[key]):
 			return false
+	if not result["moving_destruction_cleanup"] is Dictionary \
+			or not result["target_destruction_cleanup"] is Dictionary:
+		return false
 	return true
 
 

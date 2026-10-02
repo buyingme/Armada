@@ -25,6 +25,8 @@ func test_commit_creates_exact_private_execution_record() -> void:
 		"final_transform_applied": false,
 		"committed_result": _committed_result(),
 		"obstacle_resolution_order": [],
+		"obstacle_pre_effect": {},
+		"asteroid_completion_outstanding": {},
 		"ship_collision": {"kind": "none"},
 	})
 	assert_eq(_ship.maneuver_opportunity_disposition,

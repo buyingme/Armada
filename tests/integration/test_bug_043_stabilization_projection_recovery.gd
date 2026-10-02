@@ -444,7 +444,7 @@ func test_bug058_two_ruptured_sources_advance_on_passive_and_reconnect() -> void
 	var envelope: Dictionary = {
 		"protocol_version": NetworkManager.PROTOCOL_VERSION,
 		"application_contract": command.application_contract_id(),
-		"application_contract_version": 2,
+		"application_contract_version": command.application_contract_version(),
 		"viewer_player": 1,
 		"application_result": result,
 		"presentation_result": {},
@@ -528,7 +528,7 @@ func test_bug058_three_ruptured_sources_preserve_nonfirst_choice() -> void:
 		var envelope: Dictionary = {
 			"protocol_version": NetworkManager.PROTOCOL_VERSION,
 			"application_contract": command.application_contract_id(),
-			"application_contract_version": 2,
+			"application_contract_version": command.application_contract_version(),
 			"viewer_player": 1,
 			"application_result": result,
 			"presentation_result": {},
@@ -576,7 +576,7 @@ func test_bug058_replacement_rejection_precedes_canonical_mutation() -> void:
 	var valid_envelope: Dictionary = {
 		"protocol_version": NetworkManager.PROTOCOL_VERSION,
 		"application_contract": command.application_contract_id(),
-		"application_contract_version": 2,
+		"application_contract_version": command.application_contract_version(),
 		"viewer_player": 1,
 		"application_result": result,
 		"presentation_result": {},
@@ -766,7 +766,7 @@ func test_bug058_obstacle_order_and_return_reject_public_skips() -> void:
 	var order_envelope: Dictionary = {
 		"protocol_version": NetworkManager.PROTOCOL_VERSION,
 		"application_contract": order.application_contract_id(),
-		"application_contract_version": 2,
+		"application_contract_version": order.application_contract_version(),
 		"viewer_player": 1,
 		"application_result": order.project_application_result(
 				order_result, 1),
@@ -787,11 +787,32 @@ func test_bug058_obstacle_order_and_return_reject_public_skips() -> void:
 	assert_eq(passive.get_ship(0, 0)
 			.passive_maneuver_consequence_view_snapshot()["obstacle_id"],
 			"obstacle:0")
+	var notice: Dictionary = authority.get_ship(0, 0) \
+			.pending_obstacle_pre_effect_snapshot()
+	var acknowledge := AcknowledgeObstaclePreEffectCommand.new(0, {
+		"occurrence_id": notice["occurrence_id"],
+	})
+	acknowledge.sequence = 1
+	var acknowledgment: Dictionary = acknowledge.execute(authority)
+	assert_false(acknowledgment.is_empty())
+	var acknowledgment_envelope: Dictionary = {
+		"protocol_version": NetworkManager.PROTOCOL_VERSION,
+		"application_contract": acknowledge.application_contract_id(),
+		"application_contract_version": \
+				acknowledge.application_contract_version(),
+		"viewer_player": 1,
+		"application_result": acknowledgment,
+		"presentation_result": {},
+		"maneuver_consequence_view": \
+				ManeuverConsequenceProjection.capture_authority(authority),
+	}
+	assert_false(CommandProcessor.submit_mirror(
+			acknowledge, acknowledgment_envelope, 1).is_empty())
 	var hull_zone: String = str(authority.get_ship(0, 0)
 			.current_shields.keys()[0])
 	var debris := CandidateResolveDebrisOverlapCommand.new(0,
 			base.merged({"obstacle_id": "obstacle:0", "hull_zone": hull_zone}))
-	debris.sequence = 1
+	debris.sequence = 2
 	var debris_result: Dictionary = debris.execute(authority)
 	assert_false(debris_result.is_empty())
 	var next_replacement: Dictionary = \
@@ -801,7 +822,7 @@ func test_bug058_obstacle_order_and_return_reject_public_skips() -> void:
 	var debris_envelope: Dictionary = {
 		"protocol_version": NetworkManager.PROTOCOL_VERSION,
 		"application_contract": debris.application_contract_id(),
-		"application_contract_version": 2,
+		"application_contract_version": debris.application_contract_version(),
 		"viewer_player": 1,
 		"application_result": debris.project_application_result(
 				debris_result, 1),
@@ -815,14 +836,14 @@ func test_bug058_obstacle_order_and_return_reject_public_skips() -> void:
 	assert_true(CommandProcessor.submit_mirror(
 			debris, stale_current, 1).is_empty())
 	assert_eq(passive.serialize(), before)
-	assert_eq(CommandProcessor.get_next_sequence(), 1)
+	assert_eq(CommandProcessor.get_next_sequence(), 2)
 	assert_engine_error(2)
 	assert_false(CommandProcessor.submit_mirror(
 			debris, debris_envelope, 1).is_empty())
 	assert_eq(passive.get_ship(0, 0)
 			.passive_maneuver_consequence_view_snapshot()["obstacle_id"],
 			"obstacle:1")
-	assert_eq(CommandProcessor.get_next_sequence(), 2)
+	assert_eq(CommandProcessor.get_next_sequence(), 3)
 
 
 func test_bug058_damaged_controls_nonfirst_sources_survive_recovery() -> void:
@@ -897,7 +918,7 @@ func test_bug058_damaged_controls_nonfirst_sources_survive_recovery() -> void:
 		var envelope: Dictionary = {
 			"protocol_version": NetworkManager.PROTOCOL_VERSION,
 			"application_contract": command.application_contract_id(),
-			"application_contract_version": 2,
+			"application_contract_version": command.application_contract_version(),
 			"viewer_player": 1,
 			"application_result": command.project_application_result(
 					result, 1),

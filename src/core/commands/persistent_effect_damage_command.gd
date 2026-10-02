@@ -46,24 +46,54 @@ func application_contract_id() -> String:
 	return "persistent_effect_damage"
 
 
-func project_application_result(_authority_result: Dictionary,
-		_viewer_player: int) -> Dictionary:
-	return {}
+func application_contract_version() -> int:
+	return 2
+
+
+func project_application_result(authority_result: Dictionary,
+		viewer_player: int) -> Dictionary:
+	return authority_result.duplicate(true) \
+			if viewer_player in [0, 1] and _result_valid(authority_result) else {}
 
 
 func execute_with_application_result(game_state: GameState,
 		application_result: Dictionary) -> Dictionary:
-	if not application_result.is_empty() \
+	if not _result_valid(application_result) \
 			or game_state.passive_damage_ledger == null:
 		return {}
 	var ship: ShipInstance = game_state.get_ship(
 			int(payload.get("owner_player", -1)),
 			int(payload.get("ship_index", -1)))
 	var ledger: PassiveDamageLedger = game_state.passive_damage_ledger
+	var owner: int = int(payload["owner_player"])
+	var idx: int = int(payload["ship_index"])
+	var expected_hull: int = ship.ship_data.hull - ship.get_total_damage() - 1
+	var destroyed: bool = expected_hull <= 0
+	var interrupted: bool = destroyed and (ship.has_active_ship_activation()
+			or _ends_current_selection_turn(game_state, ship))
+	var cleanup: Dictionary = application_result["destruction_cleanup"] \
+			as Dictionary
+	var next_controller: int = DestroyUnitCommand.next_controller_after_source(
+			game_state, owner, [{"owner_player": owner,
+				"ship_index": idx}]) if interrupted else -1
+	if application_result["effect_id"] != payload["effect_id"] \
+			or application_result["owner_player"] != owner \
+			or application_result["ship_index"] != idx \
+			or application_result["cards_added"] != 1 \
+			or application_result["new_hull"] != expected_hull \
+			or application_result["destroyed"] != destroyed \
+			or application_result["ship_phase_turn_terminated"] != interrupted \
+			or application_result["next_ship_phase_controller"] \
+				!= next_controller \
+			or (destroyed and not DestroyUnitCommand.prevalidate_source_cleanup(
+					cleanup, ship.get_facedown_damage_count() + 1,
+					interrupted, next_controller)) \
+			or (not destroyed and not cleanup.is_empty()):
+		return {}
 	if not ledger.consume_hidden_draws(1) \
 			or not ledger.increment_facedown(ship.passive_damage_key()):
 		return {}
-	return _finish_damage(game_state, ship)
+	return _finish_damage(game_state, ship, cleanup, true)
 
 
 ## Validates that the public effect source, ship, and draw are available.
@@ -97,7 +127,8 @@ func execute(game_state: GameState) -> Dictionary:
 	return _finish_damage(game_state, ship)
 
 
-func _finish_damage(game_state: GameState, ship: ShipInstance) -> Dictionary:
+func _finish_damage(game_state: GameState, ship: ShipInstance,
+		projected_cleanup: Dictionary = {}, passive: bool = false) -> Dictionary:
 	var owner: int = int(payload.get("owner_player", -1))
 	var idx: int = int(payload.get("ship_index", -1))
 	var was_active_ship: bool = ship.has_active_ship_activation()
@@ -105,20 +136,21 @@ func _finish_damage(game_state: GameState, ship: ShipInstance) -> Dictionary:
 			game_state, ship)
 	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
 	var destroyed: bool = ship.is_destroyed()
-	var ship_phase_turn_terminated: bool = false
-	var next_ship_phase_controller: int = -1
+	var ship_phase_turn_terminated: bool = destroyed \
+			and (was_active_ship or ended_selection_turn)
+	var cleanup: Dictionary = {}
 	if destroyed:
 		ship.mark_destroyed()
-		ship_phase_turn_terminated = was_active_ship or ended_selection_turn
-		if ship_phase_turn_terminated:
-			next_ship_phase_controller = _next_ship_phase_controller(
-					game_state, owner)
-			game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
-					Constants.InteractionFlow.SHIP_ACTIVATION,
-					Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
-					game_state,
-					{"active_player": next_ship_phase_controller},
-					Constants.Visibility.ALL)
+		if passive:
+			if not DestroyUnitCommand.install_cleanup_in_source(game_state,
+					owner, idx, ship_phase_turn_terminated, projected_cleanup):
+				return {}
+			cleanup = projected_cleanup
+		else:
+			cleanup = DestroyUnitCommand.cleanup_in_source(game_state,
+					owner, idx, ship_phase_turn_terminated)
+	var next_ship_phase_controller: int = int(cleanup.get(
+			"next_ship_phase_controller", -1))
 	return {
 		"effect_id": payload.get("effect_id", ""),
 		"owner_player": owner,
@@ -128,6 +160,7 @@ func _finish_damage(game_state: GameState, ship: ShipInstance) -> Dictionary:
 		"destroyed": destroyed,
 		"ship_phase_turn_terminated": ship_phase_turn_terminated,
 		"next_ship_phase_controller": next_ship_phase_controller,
+		"destruction_cleanup": cleanup,
 	}
 
 
@@ -181,3 +214,25 @@ func _validate_damage_deck(game_state: GameState) -> String:
 	if game_state.damage_deck.get_total_count() <= 0:
 		return "Damage deck is empty."
 	return ""
+
+
+static func _result_valid(result: Dictionary) -> bool:
+	var keys: Array[String] = ["effect_id", "owner_player", "ship_index",
+		"cards_added", "new_hull", "destroyed",
+		"ship_phase_turn_terminated", "next_ship_phase_controller",
+		"destruction_cleanup"]
+	if result.size() != keys.size():
+		return false
+	for key: String in keys:
+		if not result.has(key):
+			return false
+	return typeof(result["effect_id"]) == TYPE_STRING \
+			and str(result["effect_id"]) in VALID_EFFECTS \
+			and typeof(result["owner_player"]) == TYPE_INT \
+			and typeof(result["ship_index"]) == TYPE_INT \
+			and typeof(result["cards_added"]) == TYPE_INT \
+			and typeof(result["new_hull"]) == TYPE_INT \
+			and typeof(result["destroyed"]) == TYPE_BOOL \
+			and typeof(result["ship_phase_turn_terminated"]) == TYPE_BOOL \
+			and typeof(result["next_ship_phase_controller"]) == TYPE_INT \
+			and result["destruction_cleanup"] is Dictionary

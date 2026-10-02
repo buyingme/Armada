@@ -25,6 +25,8 @@ func _setup_game(p0_count: int, p1_count: int) -> void:
 			data.defense_tokens = []
 			var inst: SquadronInstance = SquadronInstance.create_from_data(
 					"sq_%d_%d" % [player_idx, i], data, player_idx)
+			inst.pos_x = 0.2 + float(i) * 0.12
+			inst.pos_y = 0.2 if player_idx == 0 else 0.8
 			ps.squadrons.append(inst)
 	# Advance to squadron phase: COMMAND → SHIP → SQUADRON.
 	# Mark all ships as activated (there are none, so just advance).

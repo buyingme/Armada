@@ -135,7 +135,7 @@ func _ready() -> void:
 	CommandProcessor.command_executed.connect(
 			_on_ship_phase_turn_terminated)
 	CommandProcessor.command_executed.connect(
-			_on_destroy_unit_committed)
+			_on_complete_match_committed)
 	EventBus.command_dials_submitted.connect(_on_command_dials_submitted)
 	EventBus.command_picker_confirmed.connect(_on_command_picker_confirmed)
 	EventBus.activation_ended.connect(_on_activation_ended)
@@ -157,10 +157,18 @@ func _ready() -> void:
 ## canonical interaction flow; this does not infer progress from presentation.
 func _on_ship_phase_turn_terminated(
 		command: GameCommand, result: Dictionary) -> void:
-	if command == null \
-			or not bool(result.get("ship_phase_turn_terminated", false)):
+	if command == null:
 		return
-	var next_player: int = int(result.get("next_ship_phase_controller", -1))
+	var terminated: bool = bool(result.get(
+			"ship_phase_turn_terminated", false))
+	for key: String in ["destruction_cleanup",
+			"moving_destruction_cleanup", "target_destruction_cleanup"]:
+		var nested: Dictionary = result.get(key, {}) as Dictionary
+		terminated = terminated or bool(nested.get(
+				"ship_phase_turn_terminated", false))
+	if not terminated or current_game_state == null:
+		return
+	var next_player: int = current_game_state.ship_phase_selection_controller
 	if next_player >= 0 and next_player < Constants.PLAYER_COUNT:
 		_set_active_player(next_player)
 
@@ -168,11 +176,11 @@ func _on_ship_phase_turn_terminated(
 ## Destruction cleanup is the authoritative point at which elimination can be
 ## evaluated. Presentation still mirrors visuals and signals, but no longer
 ## owns progress out of a destroyed ship's activation.
-func _on_destroy_unit_committed(
+func _on_complete_match_committed(
 		command: GameCommand, _result: Dictionary) -> void:
-	if command == null or command.command_type != "destroy_unit":
+	if command == null or command.command_type != CompleteMatchCommand.TYPE:
 		return
-	_check_elimination()
+	end_game()
 
 
 func _notification(what: int) -> void:
@@ -663,24 +671,15 @@ var _scoring: ScoringCalculator = null
 ##   when [param reason] is "elimination").
 ## Rules Reference: WN-001–004, GO-004, GF-003.
 func end_game(
-		reason: String = "round_6",
-		eliminated_player: int = -1) -> void:
+		_reason: String = "round_6",
+		_eliminated_player: int = -1) -> void:
+	if current_game_state == null \
+			or current_game_state.terminal_match_result.is_empty() \
+			or not is_game_active:
+		return
 	is_game_active = false
 	auto_save_replay()
-	if _scoring == null:
-		_scoring = ScoringCalculator.new()
-	var details: Dictionary = {}
-	if current_game_state:
-		details = _scoring.determine_winner(
-				current_game_state, reason, eliminated_player)
-		details["round"] = current_game_state.current_round
-	else:
-		details = {
-			"winner_index": - 1,
-			"reason": reason,
-			"scores": [0, 0],
-			"round": 0,
-		}
+	var details: Dictionary = current_game_state.terminal_match_result
 	EventBus.game_ended.emit(details)
 
 
@@ -843,7 +842,6 @@ func _start_round() -> void:
 	# a new one.  The command's own validate() guards against this too, but
 	# we need the end_game() call here on the presentation side.
 	if current_game_state.current_round >= Constants.MAX_ROUNDS:
-		end_game("round_6")
 		return
 
 	# Route round/phase mutation through command for replay determinism.
@@ -1857,6 +1855,15 @@ func submit_acknowledge_attack_result(player: int,
 	}))
 
 
+func submit_acknowledge_faceup_damage(player: int,
+		inspection_id: String) -> Dictionary:
+	if not current_game_state:
+		return {}
+	return _submitter.submit(AcknowledgeFaceupDamageCommand.new(player, {
+		"inspection_id": inspection_id,
+	}))
+
+
 ## Returns the existing Ship Activation transition only after a completed
 ## ship-commanded Squadron activation leaves no canonical command decision.
 ## CommandProcessor owns live submission; this evaluator never reads
@@ -1925,6 +1932,19 @@ func _has_eligible_commanded_squadron(game_state: GameState,
 func release_reconstructed_completed_attack_inspection() -> Dictionary:
 	if current_game_state == null or _is_network_client():
 		return {}
+	var immediate: GameCommand = CommandProcessor \
+			.derive_reconstructed_faceup_automatic_immediate(
+				current_game_state)
+	if immediate != null:
+		return _submitter.submit_authoritative(immediate)
+	var resolved_attack: GameCommand = CurrentAttackContinuation \
+			.derive_reconstructed_resolved_attack(current_game_state)
+	if resolved_attack != null:
+		return _submitter.submit_authoritative(resolved_attack)
+	if current_game_state.terminal_result_ready() \
+			and current_game_state.terminal_match_result.is_empty():
+		return _submitter.submit(CompleteMatchCommand.new(
+				current_game_state.initiative_player, {}))
 	var followup: GameCommand = \
 		CurrentAttackContinuation.derive_reconstructed_inspection_release(
 				current_game_state)
@@ -2401,6 +2421,8 @@ func _derive_active_player_from_state(state: GameState) -> int:
 				if raw_ship is ShipInstance \
 						and (raw_ship as ShipInstance).has_active_ship_activation():
 					return (raw_ship as ShipInstance).owner_player
+		if state.ship_phase_selection_controller in [0, 1]:
+			return state.ship_phase_selection_controller
 	var flow: InteractionFlow = state.interaction_flow
 	if state.current_phase == Constants.GamePhase.SHIP \
 			and flow != null \
@@ -2480,9 +2502,9 @@ func _begin_squadron_phase() -> void:
 ## Called by the game board when the active player clicks a squadron token.
 ## Requirements: SQ-003, SQ-006.
 ## [param squadron] — the squadron instance to activate.
-func activate_squadron(squadron: SquadronInstance) -> void:
+func activate_squadron(squadron: SquadronInstance) -> Dictionary:
 	if not is_game_active or not current_game_state:
-		return
+		return {}
 	var sq_index: int = current_game_state.find_squadron_index(
 			squadron)
 	var cmd := ActivateSquadronCommand.new(squadron.owner_player,
@@ -2491,11 +2513,12 @@ func activate_squadron(squadron: SquadronInstance) -> void:
 						SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE})
 	var result: Dictionary = _submitter.submit(cmd)
 	if result.is_empty() or _is_network_client():
-		return
+		return result
 	_activating_squadron = squadron
 	_log.info("Squadron activated: %s (player %d, turn count %d)" % [
 			squadron.data_key, squadron.owner_player,
 			_squadrons_activated_this_turn + 1])
+	return result
 
 
 ## Commits a selected command-mode squadron only when its first semantic
@@ -2706,18 +2729,9 @@ func _on_squadron_destroyed(_squadron: Node) -> void:
 ## Must be called after damage resolution so [method is_destroyed] is current.
 ## Rules Reference: "Winning and Losing", RRG p.21; GF-004, WN-001.
 func _check_elimination() -> void:
-	if not is_game_active or not current_game_state:
-		return
-	if _scoring == null:
-		_scoring = ScoringCalculator.new()
-	var p0_elim: bool = _scoring.is_fleet_eliminated(0, current_game_state)
-	var p1_elim: bool = _scoring.is_fleet_eliminated(1, current_game_state)
-	if p0_elim and p1_elim:
-		end_game("mutual_destruction")
-	elif p0_elim:
-		end_game("elimination", 0)
-	elif p1_elim:
-		end_game("elimination", 1)
+	if current_game_state != null \
+			and not current_game_state.terminal_match_result.is_empty():
+		end_game()
 
 
 # ---------------------------------------------------------------------------
@@ -2901,7 +2915,8 @@ func _handle_remote_command_effects(
 			pass
 		"apply_maneuver_transform":
 			_handle_remote_execute_maneuver(cmd)
-		"commit_maneuver_obstacle_order", "resolve_debris_overlap", \
+		"commit_maneuver_obstacle_order", "resolve_asteroid_overlap", \
+				"resolve_debris_overlap", "resolve_station_overlap", \
 				"complete_maneuver":
 			# Candidate Maneuver presentation is projected from the accepted
 			# command result by CommandRouterAdapter on every peer.
@@ -2990,6 +3005,11 @@ func _handle_remote_command_effects(
 			_handle_remote_immediate_effect(cmd, result)
 		"status_phase_cleanup":
 			_handle_remote_status_cleanup()
+		"complete_match", "acknowledge_faceup_damage", \
+				"acknowledge_obstacle_pre_effect", \
+				"complete_asteroid_overlap":
+			# Canonical state and command signal already project these boundaries.
+			pass
 		"destroy_unit":
 			_handle_remote_destroy_unit(cmd, result)
 		"debug_deal_damage":

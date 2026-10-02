@@ -83,6 +83,8 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	"resolve_thruster_fissure": ["owner_player", "ship_index"],
 	"resolve_damaged_controls": ["owner_player", "ship_index"],
 	"resolve_asteroid_overlap": ["owner_player", "ship_index"],
+	"complete_asteroid_overlap": ["owner_player", "ship_index",
+		"ordered_ordinal"],
 	"resolve_debris_overlap": ["owner_player", "ship_index"],
 	"resolve_station_overlap": ["owner_player", "ship_index",
 		"facedown_ordinal"],
@@ -165,6 +167,13 @@ const _EXACT_LIVE_PAYLOAD_FIELDS: Dictionary = {
 	"destroy_unit": [
 		"owner_player", "ship_index", "terminate_ship_phase_turn",
 	],
+	"acknowledge_faceup_damage": ["inspection_id"],
+	"acknowledge_obstacle_pre_effect": ["occurrence_id"],
+	"complete_asteroid_overlap": ["owner_player", "ship_index",
+		"ship_activation_identity", "maneuver_execution_id",
+		"ordered_ordinal", "occurrence_id", "obstacle_id",
+		"inspection_id"],
+	"complete_match": [],
 }
 
 

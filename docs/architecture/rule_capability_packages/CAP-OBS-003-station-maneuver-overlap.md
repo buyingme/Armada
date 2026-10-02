@@ -11,7 +11,7 @@ Related Context Packs: CP-001
 Related Tests: TEST-003; required tests listed below
 Related Requirements: SMI-063, SMI-064, SMI-091; Ship Maneuver Owner Decision Record Section 25
 Created: 2026-09-12
-Last Updated: 2026-09-12
+Last Updated: 2026-09-30
 Owner: Project Owner
 Test Owner: Capability implementation owner; Project Owner review required
 Capability Classification: mixed
@@ -278,9 +278,30 @@ stop gate for this package.
 | Migration impact | high | No effect route; Repair command is not transferable ownership | Add station-specific boundary only. |
 | Complexity | high | Geometry, optional choice, hidden data, objective modifiers | Keep ordinary behavior and the unsupported-modifier fail-closed boundary package-owned; objective behavior remains external. |
 
+### UX-006–UX-012 candidate trace (2026-09-30)
+
+The UX-008 occurrence requires principal acknowledgment before
+`CandidateResolveStationOverlapCommand` version 3 applies the selected station
+consequence. Its result carries the exact next obstacle occurrence; canonical
+card/discard ownership remains with the existing ship/deck owners. Save schema
+8, Network protocol 9, filtered/passive replacement, and semantic replay
+preserve occurrence identity and order. Candidate checks:
+`tests/unit/test_candidate_obstacle_consequences.gd` and
+`tests/integration/test_bug_043_stabilization_projection_recovery.gd`.
+
+This is Codex candidate implementation evidence under the accepted UX workbook. The
+package remains **Draft**; Owner integration and genuine replay capture remain
+separate gates. Earlier missing-path observations in this package describe its pre-candidate
+baseline. Section 9.1 supersedes those observations for the UX boundaries only;
+it does not authorize a different rule or ownership boundary.
+
 ## 10. Integration Status
 
 Current Status: Draft
+
+The UX candidate trace in Section 9.1 updates the affected implementation
+surfaces. Package-wide integration remains subject to separate Owner review;
+the older evidence summary below records the pre-candidate baseline.
 Evidence Summary:
 
 - Static station identity, placement, and reusable discard mechanics exist.

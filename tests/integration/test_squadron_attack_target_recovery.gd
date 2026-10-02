@@ -121,11 +121,11 @@ func test_bug_025_forensic_tie_and_control_tie_target_nebulon() -> void:
 			controller._build_all_squadron_positions()
 	var obstruction_bodies: Array = controller._build_obstruction_bodies()
 	assert_true(controller._squadron_has_valid_targets(
-			tie_0, _token_for_squadron(tie_0), all_squads,
+			tie_0, all_squads,
 			obstruction_bodies),
 			"Squadron Phase projection must use the repaired shared legality.")
 	assert_true(controller._squadron_has_valid_targets(
-			tie_5, _token_for_squadron(tie_5), all_squads,
+			tie_5, all_squads,
 			obstruction_bodies))
 
 
@@ -389,14 +389,13 @@ func test_bug_025_production_selection_and_begin_accept_forensic_nebulon() \
 			state.get_squadron(1, 0))
 	var nebulon_token: ShipToken = _token_for_ship(state.get_ship(0, 1))
 
-	_activate_through_controller(controller, tie_0_token)
+	await _activate_through_controller(controller, tie_0_token)
 	assert_eq(state.find_squadron_index(
 			GameManager.get_activating_squadron()), 0)
 	assert_true(modal._attack_button.visible,
 			"Action availability must expose the repaired legal target.")
 	var enclosing_flow: Dictionary = state.interaction_flow.serialize()
 
-	modal._on_attack_pressed()
 	selector._try_select_target_ship_zone(
 			nebulon_token, Constants.HullZone.FRONT)
 
@@ -430,7 +429,7 @@ func test_bug_018_modal_skip_commits_action_then_allows_next_squadron() -> void:
 	var skipped: SquadronInstance = state.get_squadron(1, 0)
 	var skipped_token: SquadronToken = _token_for_squadron(skipped)
 
-	_activate_through_controller(controller, skipped_token)
+	await _activate_through_controller(controller, skipped_token)
 	assert_true(modal._move_button.visible,
 			"The reproduced squadron must have a legal movement action.")
 	assert_false(modal._attack_button.visible,
@@ -474,7 +473,11 @@ func test_bug_018_modal_skip_commits_action_then_allows_next_squadron() -> void:
 	var next_token: SquadronToken = _token_for_squadron(
 			state.get_squadron(1, 1))
 	assert_true(controller.try_handle_squadron_click(next_token),
-			"The next eligible squadron must be activatable.")
+			"The next eligible squadron must be inspectable.")
+	assert_eq(_history_types(), ["activate_squadron", "skip_attack"],
+			"Inspecting the next squadron must remain transient.")
+	modal._on_attack_pressed()
+	await get_tree().process_frame
 	assert_eq(_history_types(), [
 		"activate_squadron", "skip_attack", "activate_squadron"])
 
@@ -487,7 +490,7 @@ func test_bug_018_network_controller_waits_for_authoritative_skip_result() \
 	var controller: SquadronPhaseController = composition["controller"]
 	var modal: SquadronActivationModal = controller.get_modal()
 	var skipped: SquadronInstance = state.get_squadron(1, 0)
-	_activate_through_controller(controller, _token_for_squadron(skipped))
+	await _activate_through_controller(controller, _token_for_squadron(skipped))
 
 	var submitter := AwaitingSubmitter.new()
 	GameManager.set_command_submitter(submitter)
@@ -498,7 +501,7 @@ func test_bug_018_network_controller_waits_for_authoritative_skip_result() \
 
 	assert_eq(submitter.submitted.size(), 1)
 	assert_eq(submitter.submitted[0].command_type, "skip_attack")
-	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE,
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ATTACKING,
 			"Client presentation must wait for authoritative acceptance.")
 	assert_eq(skipped.attack_action_disposition,
 			SquadronInstance.ATTACK_ACTION_AVAILABLE)
@@ -537,7 +540,7 @@ func test_rejected_begin_recovers_then_deselect_and_skip_progresses() -> void:
 			state.get_squadron(1, 5))
 	var nebulon_token: ShipToken = _token_for_ship(state.get_ship(0, 1))
 
-	_activate_through_controller(controller, tie_5_token)
+	await _activate_through_controller(controller, tie_5_token)
 	assert_true(modal._attack_button.visible)
 	var enclosing_flow: Dictionary = state.interaction_flow.serialize()
 	var before_cursor: int = CommandProcessor.get_next_sequence()
@@ -547,7 +550,6 @@ func test_rejected_begin_recovers_then_deselect_and_skip_progresses() -> void:
 	watch_signals(executor)
 	watch_signals(modal)
 
-	modal._on_attack_pressed()
 	assert_true(controller.is_in_attacking_state())
 	assert_eq(state.interaction_flow.serialize(), enclosing_flow,
 			"Pre-Begin ATTACK presentation must remain transient.")
@@ -610,8 +612,7 @@ func test_legal_squadron_target_still_accepts_normal_begin_path() -> void:
 			state.get_squadron(1, 5))
 	var nebulon_token: ShipToken = _token_for_ship(state.get_ship(0, 1))
 
-	_activate_through_controller(controller, tie_5_token)
-	modal._on_attack_pressed()
+	await _activate_through_controller(controller, tie_5_token)
 	var pre_begin_flow: Dictionary = state.interaction_flow.serialize()
 	selector._try_select_target_ship_zone(
 			nebulon_token, Constants.HullZone.FRONT)
@@ -658,8 +659,7 @@ func test_post_begin_destroyed_squadron_completes_through_production_callback() 
 	var attacker_token: SquadronToken = _token_for_squadron(attacker)
 	var defender_token: ShipToken = _token_for_ship(state.get_ship(0, 1))
 
-	_activate_through_controller(controller, attacker_token)
-	modal._on_attack_pressed()
+	await _activate_through_controller(controller, attacker_token)
 	selector._try_select_target_ship_zone(
 			defender_token, Constants.HullZone.FRONT)
 	executor._on_declaration_confirm()
@@ -692,8 +692,7 @@ func test_declaration_skip_with_preview_records_no_begin() -> void:
 			state.get_squadron(1, 5))
 	var nebulon_token: ShipToken = _token_for_ship(state.get_ship(0, 1))
 
-	_activate_through_controller(controller, tie_5_token)
-	controller.get_modal()._on_attack_pressed()
+	await _activate_through_controller(controller, tie_5_token)
 	selector._try_select_target_ship_zone(
 			nebulon_token, Constants.HullZone.FRONT)
 	assert_true(selector.has_declaration_candidate())
@@ -718,8 +717,7 @@ func test_rejected_declaration_skip_restores_preview_controls() -> void:
 			state.get_squadron(1, 5))
 	var nebulon_token: ShipToken = _token_for_ship(state.get_ship(0, 1))
 
-	_activate_through_controller(controller, tie_5_token)
-	controller.get_modal()._on_attack_pressed()
+	await _activate_through_controller(controller, tie_5_token)
 	selector._try_select_target_ship_zone(
 			nebulon_token, Constants.HullZone.FRONT)
 	var candidate_before: Dictionary = selector.get_declaration_candidate()
@@ -1039,8 +1037,11 @@ func _make_declaration_skip_fixture(context: String) -> Dictionary:
 	_place_squadron(attacker, Vector2(1000.0, 1000.0))
 	state.get_player_state(0).squadrons.append(attacker)
 	var defender: SquadronInstance = _make_squadron(TIE_KEY, 1)
-	_place_squadron(defender, Vector2(1000.0, 850.0))
+	_place_squadron(defender, Vector2(1000.0, 600.0))
 	state.get_player_state(1).squadrons.append(defender)
+	var target_ship: ShipInstance = _make_ship(CR90_KEY, 1)
+	_place_ship(target_ship, Vector2(1000.0, 800.0), 180.0)
+	state.get_player_state(1).ships.append(target_ship)
 	var declaration_context: String = \
 			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE
 	var ship_identity: String = ""
@@ -1348,11 +1349,18 @@ func _make_composition(state: GameState) -> Dictionary:
 
 func _activate_through_controller(controller: SquadronPhaseController,
 		token: SquadronToken) -> void:
+	var instance: SquadronInstance = token.get_squadron_instance()
 	controller.begin_activation_flow()
 	assert_true(controller.try_handle_squadron_click(token),
-			"Real modal/controller activation should accept the selected TIE.")
+			"Real modal/controller selection should inspect the selected TIE.")
 	assert_eq(controller.get_modal().get_state(),
 			SquadronActivationModal.State.ACTION_CHOICE)
+	assert_false(instance.has_activation_action_state(),
+			"Selection must remain transient until action intent.")
+	controller.get_modal()._on_attack_pressed()
+	await get_tree().process_frame
+	assert_true(instance.has_activation_action_state(),
+			"Attack intent must await accepted canonical activation.")
 
 
 func _register_resizable(_widget: Control, _method: StringName,

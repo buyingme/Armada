@@ -25,7 +25,7 @@ func application_contract_id() -> String:
 
 
 func application_contract_version() -> int:
-	return 2
+	return 3
 
 
 func validate(game_state: GameState) -> String:
@@ -110,7 +110,11 @@ func execute(game_state: GameState) -> Dictionary:
 		ship.add_facedown_damage(drawn)
 	card.last_thruster_fissure_execution_id = \
 			str(payload["maneuver_execution_id"])
-	if ship.get_total_damage() >= ship.ship_data.hull:
+	var destroyed: bool = ship.get_total_damage() >= ship.ship_data.hull
+	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+	var facedown_delta: int = ship.get_facedown_damage_count() - previous_facedown
+	var interrupted: bool = destroyed and ship.has_active_ship_activation()
+	if destroyed:
 		ship.mark_destroyed()
 	var shield_changes: Array[Dictionary] = []
 	if int(ship.current_shields.get(zone, 0)) != previous_shields:
@@ -119,16 +123,18 @@ func execute(game_state: GameState) -> Dictionary:
 			"new_shields": int(ship.current_shields[zone]),
 		})
 	var result: Dictionary = payload.duplicate(true)
+	result["destruction_cleanup"] = DestroyUnitCommand.cleanup_in_source(
+			game_state, owner, ship_index, interrupted) if destroyed else {}
 	result["damage_application"] = {
 		"owner_player": owner,
 		"ship_index": ship_index,
 		"shield_changes": shield_changes,
-		"facedown_delta": ship.get_facedown_damage_count() - previous_facedown,
+		"facedown_delta": facedown_delta,
 		"faceup_additions": [],
 		"faceup_removals": [],
 		"public_discards": [],
-		"new_hull": ship.ship_data.hull - ship.get_total_damage(),
-		"destroyed": ship.is_destroyed(),
+		"new_hull": new_hull,
+		"destroyed": destroyed,
 	}
 	return result
 
@@ -169,6 +175,14 @@ func execute_with_application_result(game_state: GameState,
 	var changes: Array = damage["shield_changes"] as Array
 	var expected_hull: int = ship.ship_data.hull \
 			- ship.get_total_damage() - expected_delta
+	var destroyed: bool = bool(damage["destroyed"])
+	var interrupted: bool = destroyed and ship.has_active_ship_activation()
+	var cleanup: Dictionary = application_result["destruction_cleanup"] \
+			as Dictionary
+	var next_controller: int = DestroyUnitCommand.next_controller_after_source(
+			game_state, int(payload["owner_player"]), [{"owner_player":
+				int(payload["owner_player"]), "ship_index":
+				int(payload["ship_index"])}]) if interrupted else -1
 	if int(damage["owner_player"]) != int(payload["owner_player"]) \
 			or int(damage["ship_index"]) != int(payload["ship_index"]) \
 			or int(damage["facedown_delta"]) != expected_delta \
@@ -182,6 +196,10 @@ func execute_with_application_result(game_state: GameState,
 			or not (damage["public_discards"] as Array).is_empty() \
 			or int(damage["new_hull"]) != expected_hull \
 			or bool(damage["destroyed"]) != (expected_hull <= 0) \
+			or (destroyed and not DestroyUnitCommand.prevalidate_source_cleanup(
+					cleanup, ship.get_facedown_damage_count() + expected_delta,
+					interrupted, next_controller)) \
+			or (not destroyed and not cleanup.is_empty()) \
 			or (expected_delta > 0 and (game_state.passive_damage_ledger == null \
 				or not game_state.passive_damage_ledger.can_consume_hidden_draws(1))):
 		return {}
@@ -195,15 +213,20 @@ func execute_with_application_result(game_state: GameState,
 		game_state.passive_damage_ledger.consume_hidden_draws(1)
 		if not ship.increment_passive_facedown_damage(delta):
 			return {}
-	if bool(damage["destroyed"]):
+	if destroyed:
 		ship.mark_destroyed()
+		if not DestroyUnitCommand.install_cleanup_in_source(game_state,
+				int(payload["owner_player"]), int(payload["ship_index"]),
+				interrupted, cleanup):
+			return {}
 	return application_result.duplicate(true)
 
 
 static func _application_result_is_valid(result: Dictionary) -> bool:
 	var keys: Array[String] = EXACT_KEYS.duplicate()
-	keys.append("damage_application")
+	keys.append_array(["damage_application", "destruction_cleanup"])
 	if not _has_exact_keys(result, keys) \
+			or not result["destruction_cleanup"] is Dictionary \
 			or not APPLICATION.is_exact_damage_application(
 					result["damage_application"]):
 		return false

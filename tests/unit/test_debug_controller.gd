@@ -67,6 +67,8 @@ func test_candidate_debug_result_retires_debug_mode_for_immediate_handoff() \
 		-> void:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_phase = Constants.GamePhase.SHIP
 	var data := ShipData.new()
 	data.hull = 5

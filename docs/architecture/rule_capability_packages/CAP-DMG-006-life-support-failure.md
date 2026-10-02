@@ -13,7 +13,7 @@ Related Requirements: DM-005
 Related Boundaries: ADR-001/CON-001 Attack authority and return dependency; ADR-014 immediate exact-once boundary; existing RuleRegistry token-gain boundary  
 Related Gaps: ADR-014 physical-card identity, active-obligation, recovery, Network filtering, and return implementation gaps  
 Created: 2026-09-12  
-Last Updated: 2026-09-12  
+Last Updated: 2026-09-30
 Owner: Project Owner  
 Test Owner: Capability implementation owner; Project Owner review required  
 Capability Classification: mixed
@@ -232,6 +232,23 @@ future token-gain route enforces `RuleSurface.TARGET_COMMAND_TOKEN_GAIN`.
 | Visibility | low | Public card/token state filtering tests. |
 | Migration | medium | Version stable card identity without duplicating rule state. |
 | Complexity | medium | Retain one persistent RuleRegistry owner. |
+
+### UX-006–UX-012 candidate trace (2026-09-30)
+
+UX-006 inspection precedes the existing Life Support Failure immediate effect.
+`CandidateResolveImmediateEffectCommand` version 3 retains token mutation and
+any lethal cleanup; UX-007 refreshes the exact ship card from accepted canonical
+tokens on authority and passive peers. Save schema 8, Network protocol 9,
+filtered results, and semantic replay apply. Candidate checks:
+`tests/unit/test_candidate_resolve_immediate_effect_command.gd`,
+`tests/unit/test_damage_card_immediate_effect_controller.gd`, and
+`tests/unit/test_ui_projector.gd`.
+
+This is Codex candidate implementation evidence under the accepted UX workbook. The
+package remains **Draft**; Owner integration and genuine replay capture remain
+separate gates. Earlier missing-path observations in this package describe its pre-candidate
+baseline. Section 9.1 supersedes those observations for the UX boundaries only;
+it does not authorize a different rule or ownership boundary.
 
 ## 10. Integration Status
 

@@ -1389,6 +1389,9 @@ func _finalize_ready_sequence() -> bool:
 			and game_state.interaction_flow.flow_type \
 					== Constants.InteractionFlow.SQUADRON_DISPLACEMENT
 	if _command_router_adapter != null and (
+			(game_state != null \
+				and game_state.faceup_damage_inspection != null) \
+			or \
 			(pending_inspection != null and not pending_inspection.is_satisfied()) \
 			or (pending_maneuver != null \
 				and pending_maneuver.has_active_maneuver_execution()) \
@@ -1400,6 +1403,8 @@ func _finalize_ready_sequence() -> bool:
 	# The state and projection are now fully reconstructed. A satisfied durable
 	# inspection may release exactly one existing consumer on live authority.
 	GameManager.release_reconstructed_completed_attack_inspection()
+	if game_state != null and not game_state.terminal_match_result.is_empty():
+		GameManager.end_game()
 	return true
 
 

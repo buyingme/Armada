@@ -31,6 +31,11 @@ static func capture_authority(state: GameState) -> Dictionary:
 
 static func _current_view(state: GameState, ship: ShipInstance,
 		owner: int, index: int) -> Dictionary:
+	for record: Dictionary in [ship.pending_obstacle_pre_effect_snapshot(),
+			ship.asteroid_completion_outstanding_snapshot()]:
+		if not record.is_empty():
+			return {"kind": "obstacle", "obstacle_id":
+				record["obstacle_id"]}
 	for record: Dictionary in [
 		ship.active_asteroid_resolution_snapshot(),
 		ship.active_debris_resolution_snapshot(),
@@ -147,6 +152,9 @@ static func public_state_error(state: GameState,
 		return "Maneuver consequence execution mismatch."
 	var view: Dictionary = replacement["consequence_view"] as Dictionary
 	if view.is_empty():
+		if not ship.pending_obstacle_pre_effect_snapshot().is_empty() \
+				or not ship.asteroid_completion_outstanding_snapshot().is_empty():
+			return "Pending obstacle context has no consequence view."
 		return ""
 	var kind: String = view["kind"]
 	var effect: String = ""
@@ -196,6 +204,8 @@ static func public_state_error(state: GameState,
 			or obstacle_id not in execution["obstacle_resolution_order"]:
 		return "Current obstacle is outside the committed overlap order."
 	for record: Dictionary in [
+		ship.pending_obstacle_pre_effect_snapshot(),
+		ship.asteroid_completion_outstanding_snapshot(),
 		ship.active_asteroid_resolution_snapshot(),
 		ship.active_debris_resolution_snapshot(),
 		ship.active_station_resolution_snapshot(),
@@ -495,7 +505,9 @@ static func _public_overlaps_at_transition(state: GameState,
 
 
 static func _active_obstacle_id(ship: ShipInstance) -> String:
-	for record: Dictionary in [ship.active_asteroid_resolution_snapshot(),
+	for record: Dictionary in [ship.pending_obstacle_pre_effect_snapshot(),
+			ship.asteroid_completion_outstanding_snapshot(),
+			ship.active_asteroid_resolution_snapshot(),
 			ship.active_debris_resolution_snapshot(),
 			ship.active_station_resolution_snapshot()]:
 		if not record.is_empty():
@@ -506,8 +518,9 @@ static func _active_obstacle_id(ship: ShipInstance) -> String:
 static func _command_completes_obstacle(command: GameCommand,
 		result: Dictionary, obstacle_id: String) -> bool:
 	if command.command_type == "resolve_asteroid_overlap":
-		return command.payload.get("obstacle_id") == obstacle_id \
-				and result.get("immediate_resolution_id") == ""
+		return false
+	if command.command_type == CompleteAsteroidOverlapCommand.TYPE:
+		return command.payload.get("obstacle_id") == obstacle_id
 	if command.command_type in ["resolve_debris_overlap",
 			"resolve_station_overlap"]:
 		return command.payload.get("obstacle_id") == obstacle_id

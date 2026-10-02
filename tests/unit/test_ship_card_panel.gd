@@ -6,6 +6,13 @@
 ## Requirements: GC-005, GC-011, UI-006, UI-016, UI-017, UI-018.
 extends GutTest
 
+class ShipNodeStub:
+	extends Node
+	var instance: ShipInstance
+
+	func get_ship_instance() -> ShipInstance:
+		return instance
+
 
 ## Creates a minimal ShipData with the given faction and defense tokens.
 func _make_ship_data(
@@ -405,6 +412,35 @@ func test_accepted_lethal_damage_projection_ghosts_without_magnification() -> vo
 	assert_true(panel._entries[0].get("ghosted", false),
 			"Accepted damage projection should ghost a canonically destroyed ship "
 			+ "without reopening or magnifying its card.")
+
+
+func test_destruction_signal_refreshes_only_the_cleaned_ship_damage_column() \
+		-> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["evade"])
+	var destroyed: ShipInstance = _make_instance("destroyed", data, 0)
+	var survivor: ShipInstance = _make_instance("survivor", data, 0)
+	destroyed.add_facedown_damage(DamageCard.create("Ship", "Old damage"))
+	survivor.add_facedown_damage(DamageCard.create("Ship", "Other damage"))
+	panel.add_ship_entry(destroyed)
+	panel.add_ship_entry(survivor)
+	var cleaned_column: VBoxContainer = panel._entries[0]["damage_col"]
+	var other_column: VBoxContainer = panel._entries[1]["damage_col"]
+	assert_gt(cleaned_column.get_child_count(), 0)
+	var other_count: int = other_column.get_child_count()
+	destroyed.mark_destroyed()
+	destroyed.clear_all_damage_cards()
+	var node := ShipNodeStub.new()
+	node.instance = destroyed
+	add_child_autofree(node)
+	panel._on_ship_destroyed(node)
+	assert_eq(cleaned_column.get_child_count(), 0)
+	assert_eq(other_column.get_child_count(), other_count)
+	assert_true(bool(panel._entries[0]["ghosted"]))
+	assert_false(bool(panel._entries[1].get("ghosted", false)))
 
 
 func test_is_ship_phase_eligible_false_when_destroyed() -> void:

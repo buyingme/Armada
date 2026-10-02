@@ -210,6 +210,80 @@ func test_activation_ended_advances_turn() -> void:
 			"Turn should pass to player 1 after player 0 activates")
 
 
+func test_last_ship_signal_preserves_new_squadron_selection() -> void:
+	var rebel: ShipInstance = _create_ship_with_dials(0, 1)
+	var imperial: ShipInstance = _create_ship_with_dials(1, 1)
+	_setup_game_in_ship_phase([rebel], [imperial])
+	imperial.activated_this_round = true
+	var state: GameState = GameManager.current_game_state
+	var data := SquadronData.new()
+	data.squadron_name = "Selection evidence"
+	data.hull = 3
+	data.speed = 3
+	data.defense_tokens = []
+	var squadron := SquadronInstance.create_from_data("selection", data, 0)
+	state.get_player_state(0).squadrons.append(squadron)
+	var second := SquadronInstance.create_from_data("selection_2", data, 0)
+	state.get_player_state(0).squadrons.append(second)
+	var squadron_controller := SquadronPhaseController.new()
+	add_child_autofree(squadron_controller)
+	var token_container := Node2D.new()
+	add_child_autofree(token_container)
+	var first_token := SquadronToken.new()
+	first_token.bind_instance(squadron)
+	token_container.add_child(first_token)
+	var second_token := SquadronToken.new()
+	second_token.bind_instance(second)
+	token_container.add_child(second_token)
+	squadron_controller.initialize(token_container,
+			func() -> Array[SquadronToken]: return [first_token, second_token],
+			Callable(), Callable(), Callable())
+	var layer := CanvasLayer.new()
+	add_child_autofree(layer)
+	squadron_controller.create_ui(layer, func(_widget: Variant,
+			_method: Variant, _visible_only: Variant) -> void: pass)
+	var ship_controller := ShipActivationController.new()
+	add_child_autofree(ship_controller)
+	ship_controller._activation_ctx = ActivationContext.new()
+	ship_controller._panel_mgr = UIPanelManager.new()
+	add_child_autofree(ship_controller._panel_mgr)
+	ship_controller._panel_mgr.end_activation_button = EndActivationButton.new()
+	ship_controller._panel_mgr.add_child(
+			ship_controller._panel_mgr.end_activation_button)
+	ship_controller._squadron_phase_controller = squadron_controller
+	var project_selection := func(command: GameCommand,
+			_result: Dictionary) -> void:
+		if command.command_type == "advance_phase":
+			squadron_controller.restore_phase_selection_from_interaction_state(
+					state)
+	CommandProcessor.command_executed.connect(project_selection)
+	EventBus.activation_ended.connect(
+			ship_controller._on_board_activation_ended)
+	GameManager.activate_ship(rebel)
+	_complete_active_ship(rebel)
+	assert_eq(state.current_phase, Constants.GamePhase.SQUADRON)
+	assert_true(squadron_controller.is_modal_visible(),
+			"The later ship teardown listener must preserve accepted selection.")
+	assert_eq(squadron_controller.get_modal().get_state(),
+			SquadronActivationModal.State.WAITING_FOR_SELECTION)
+	assert_eq(state.squadron_phase_activations_committed, 0)
+	assert_false(squadron.activated_this_round)
+	assert_true(squadron_controller.try_handle_squadron_click(first_token))
+	assert_true(squadron_controller.try_handle_squadron_click(second_token))
+	assert_eq(squadron_controller.get_modal().get_selected_token(),
+			second_token)
+	assert_eq(state.squadron_phase_activations_committed, 0,
+			"Cycling candidates must not commit a canonical activation.")
+	squadron_controller.get_modal().activation_intent_requested.emit(
+			second_token, "skip")
+	assert_eq(GameManager.get_activating_squadron(), second,
+			"One chosen legal intent commits through ActivateSquadronCommand.")
+	assert_true(second.has_activation_action_state())
+	CommandProcessor.command_executed.disconnect(project_selection)
+	EventBus.activation_ended.disconnect(
+			ship_controller._on_board_activation_ended)
+
+
 func test_network_client_end_activation_uses_player_submission_boundary() -> void:
 	var rebel: ShipInstance = _create_ship_with_dials(0, 1)
 	var imperial: ShipInstance = _create_ship_with_dials(1, 1)

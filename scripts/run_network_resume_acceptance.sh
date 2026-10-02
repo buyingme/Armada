@@ -27,6 +27,7 @@ RUN_SECTION_D_ONLY=false
 RUN_BUG031_ONLY=false
 RUN_COMMANDED_ONLY=false
 RUN_BUG043_ONLY=false
+RUN_FRESH_ONLY=false
 if [[ "${1:-}" == "--section-d-only" ]]; then
   RUN_SECTION_D_ONLY=true
 elif [[ "${1:-}" == "--bug-031-only" ]]; then
@@ -35,8 +36,10 @@ elif [[ "${1:-}" == "--commanded-squadron-only" ]]; then
   RUN_COMMANDED_ONLY=true
 elif [[ "${1:-}" == "--bug-043-only" ]]; then
   RUN_BUG043_ONLY=true
+elif [[ "${1:-}" == "--fresh-only" ]]; then
+  RUN_FRESH_ONLY=true
 elif [[ $# -ne 0 ]]; then
-  echo "Usage: $0 [--section-d-only|--bug-031-only|--commanded-squadron-only|--bug-043-only]" >&2
+  echo "Usage: $0 [--section-d-only|--bug-031-only|--commanded-squadron-only|--bug-043-only|--fresh-only]" >&2
   exit 2
 fi
 wait_for_child() {
@@ -258,6 +261,9 @@ run_bug043_stabilization() {
 }
 if [[ "$RUN_BUG043_ONLY" == true ]]; then
   run_bug043_stabilization $((28100 + ($$ % 700)))
+elif [[ "$RUN_FRESH_ONLY" == true ]]; then
+  run_mapping 0 $((26000 + ($$ % 1000)))
+  run_mapping 1 $((27000 + ($$ % 1000)))
 elif [[ "$RUN_COMMANDED_ONLY" == true ]]; then
   run_commanded_squadron $((27500 + ($$ % 400)))
 elif [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false ]]; then
@@ -266,6 +272,7 @@ elif [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false ]]; then
   run_commanded_squadron $((27500 + ($$ % 400)))
 fi
 if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_COMMANDED_ONLY" == false \
+    && "$RUN_FRESH_ONLY" == false \
     && "$RUN_BUG043_ONLY" == false ]]; then
   run_bug031_scenario commanded_decline \
     "BUG-031 commanded Move decline" $((27700 + ($$ % 120)))
@@ -275,11 +282,13 @@ if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_COMMANDED_ONLY" == false \
     "BUG-031 activation rejection recovery" $((27880 + ($$ % 20)))
 fi
 if [[ "$RUN_SECTION_D_ONLY" == false && "$RUN_BUG031_ONLY" == false \
+    && "$RUN_FRESH_ONLY" == false \
     && "$RUN_COMMANDED_ONLY" == false && "$RUN_BUG043_ONLY" == false ]]; then
   run_ship_end_activation $((27900 + ($$ % 80)))
   run_reconnect $((28000 + ($$ % 1000)))
 fi
 if [[ "$RUN_BUG031_ONLY" == false && "$RUN_COMMANDED_ONLY" == false \
+    && "$RUN_FRESH_ONLY" == false \
     && "$RUN_BUG043_ONLY" == false ]]; then
   run_compatibility_network $((29000 + ($$ % 1000)))
   run_compatibility_hot_seat
@@ -291,6 +300,6 @@ HOME="$RUN_ROOT/home-assertions" "$GODOT_BIN" --headless --path "$PROJECT_DIR" -
   --logs="$LOGS" \
 	--section-d-only="$RUN_SECTION_D_ONLY" --bug-031-only="$RUN_BUG031_ONLY" \
 	--commanded-squadron-only="$RUN_COMMANDED_ONLY" \
-	--bug-043-only="$RUN_BUG043_ONLY"
+	--bug-043-only="$RUN_BUG043_ONLY" --fresh-only="$RUN_FRESH_ONLY"
 echo "PASS: MATCH-003 real ENet fresh-resume and compatibility scenarios completed."
 RESULT="passed"

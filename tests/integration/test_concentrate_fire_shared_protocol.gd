@@ -88,8 +88,8 @@ func test_save_load_and_reconnect_rederive_pending_choice_at_version_three() -> 
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 7)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 7)
+	assert_eq(metadata.save_format_version, 8)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 8)
 	assert_eq(GameReplay.FORMAT_VERSION, 10)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			expected_projection)

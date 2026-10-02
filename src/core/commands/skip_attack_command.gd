@@ -185,6 +185,14 @@ func _validate_declaration_skip(game_state: GameState) -> String:
 		return "Stale or wrong-context squadron activation identity."
 	if not squadron.has_remaining_attack_action(_is_rogue(squadron)):
 		return "Squadron attack action is not available."
+	var all_squadrons: Array[Dictionary] = \
+			SquadronKeywordRuleHelper.positions_from_state(game_state)
+	var obstructions: Array = \
+			EngagementResolver.obstruction_bodies_from_state(game_state)
+	if SquadronKeywordRuleHelper.is_engaged_by_non_heavy(
+			squadron, SquadronKeywordRuleHelper.position_from_state(squadron),
+			all_squadrons, obstructions):
+		return "Engaged squadron must attack an engaged enemy squadron."
 	if context == SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
 		if game_state.current_phase != Constants.GamePhase.SQUADRON \
 				or player_index != game_state.squadron_phase_controller_player:

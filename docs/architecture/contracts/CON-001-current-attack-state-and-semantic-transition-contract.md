@@ -4,7 +4,7 @@ Contract ID: CON-001
 Title: Current Attack State And Semantic Transition Contract
 Status: Accepted
 Derived From: ADR-001
-Related ADRs: ADR-001, ADR-003, ADR-004, ADR-005, ADR-012 (Draft)
+Related ADRs: ADR-001, ADR-003, ADR-004, ADR-005, ADR-012
 Related Contracts: CON-003, CON-004, CON-005
 Related Verification: TEST-003 where timing-window behavior is involved
 
@@ -15,30 +15,27 @@ BUG-070 / BUG-071 refinement date: 2026-10-03
 Supersedes: None
 Superseded by: None
 
-## Draft Note
+## Authority Note
 
 This Contract translates the accepted architecture in ADR-001 into mandatory,
 testable implementation obligations.
 
-Until accepted by the Project Owner, this document is a Draft and is not yet
-normative implementation authority. After acceptance, implementations of
-`CurrentAttackState`, semantic attack transitions, attack capabilities, and
-attack timing-window consumers SHALL conform to this Contract.
+As an accepted Contract, implementations of `CurrentAttackState`, semantic
+attack transitions, attack capabilities, and attack timing-window consumers
+SHALL conform to this Contract.
 
-After acceptance, TWI-002 and later implementation workbooks SHALL consume
-ADR-001 and CON-001 as their architecture and implementation authorities for
-this scope.
+TWI-002 and later implementation workbooks SHALL consume ADR-001 and CON-001 as
+their architecture and implementation authorities for this scope.
 
 This Contract does not decide architecture. ADR-001 remains the normative
 architecture source.
 
-### Pending BUG-042 amendment
+### ADR-012-derived obligations
 
-The Project Owner has selected authority-only RNG for live Network play. The
-two `CON-001-NET` obligations marked **Pending ADR-012 acceptance** below are a
-Draft refinement derived from ADR-012. They are not part of the accepted
-CON-001 baseline until ADR-012 and this amendment are accepted. All other
-CON-001 obligations retain their accepted status unchanged.
+Accepted ADR-012 establishes authority-only RNG for live Network play. The two
+`CON-001-NET` obligations below express ADR-012's requirements for current-
+attack command result application and are part of this accepted Contract. All
+other CON-001 obligations retain their accepted status unchanged.
 
 ## 1. Purpose
 
@@ -566,7 +563,7 @@ CON-001-NET-009: Visibility and transport filtering SHALL remain separate from
 command authorization. Hidden or filtered information SHALL neither grant nor
 remove semantic command authority.
 
-**Pending ADR-012 acceptance — CON-001-NET-010:** At a passive live Network
+**CON-001-NET-010:** At a passive live Network
 mirror, an RNG-dependent semantic attack command SHALL consume its validated
 authority-resolved outcome inside the same replayable command transaction. The
 result SHALL contain only the viewer-authorized realized facts required for
@@ -574,7 +571,7 @@ that mirror's application. The command SHALL remain the owner of canonical
 mutation; the mirror SHALL NOT require hidden authority-only inputs,
 reconstruct or advance live RNG, or reproduce the random calculation.
 
-**Pending ADR-012 acceptance — CON-001-NET-011:** Before canonical mutation, a
+**CON-001-NET-011:** Before canonical mutation, a
 passive mirror SHALL validate the authoritative result using the command,
 authoritative sequence/order, its accepted filtered pre-state, and result
 fields authorized for that peer. A missing, malformed, stale, duplicated,
@@ -719,7 +716,7 @@ the following matrix:
 | Serialization | Canonical active and inactive forms, deterministic round trip, invalid-state rejection, and compatibility behavior. |
 | Save/load | Mid-attack resume, post-terminal non-resurrection, legal-next-transition equivalence, and stale identity rejection. |
 | Replay | Semantic command order, deterministic reconstruction, exact-once terminal transitions, and no dependency on calculation or UI records. |
-| Networking | Authoritative command order, shared-state agreement, stale/duplicate/out-of-order rejection, no client-synthesized semantic transitions, and—after ADR-012 acceptance—command-owned validated application of viewer-authorized authority-resolved random outcomes without passive RNG execution or hidden authority-only validation inputs. |
+| Networking | Authoritative command order, shared-state agreement, stale/duplicate/out-of-order rejection, no client-synthesized semantic transitions, and command-owned validated application of viewer-authorized authority-resolved random outcomes under accepted ADR-012, without passive RNG execution or hidden authority-only validation inputs. |
 | Reconnect | Canonical state reconstruction before projection, lifecycle identity preservation, and correct live interaction resumption. |
 | Projection and visibility | Viewer-specific filtering, non-authoritative projection, command-side authorization, and absence of hidden-information authority. |
 | Ownership boundaries | Runtime rule state, timing-window state, and current-attack state remain on their accepted owners during coordinated transactions. |

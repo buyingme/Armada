@@ -121,6 +121,26 @@ gameplay semantics.
 
 The following decisions resolve that stop.
 
+### Gameplay-rules provenance
+
+A subsequent independent rules audit and focused rules clarification established that two BUG-070 edge cases are not explicitly resolved by the repository's official Star Wars: Armada rules material.
+
+Specifically, the Rules Reference and Learn to Play do not establish:
+
+1. the outcome when an attack successfully gathers one or more range-appropriate dice but mandatory pre-roll effects subsequently remove the final die; or
+2. whether an affected individual anti-squadron attack may then proceed to additional eligible squadron targets.
+
+See `BUG-070-pre-roll-empty-pool-rules-clarification.md`.
+
+Accordingly, the applicable Owner decisions below are **project gameplay rulings for otherwise unspecified edge cases**. They must not be represented as direct rulings of the Rules Reference or Learn to Play.
+
+The Owner ruling is:
+
+- after all applicable Gather Attack Dice effects have completed, if mandatory pre-roll effects have reduced an initially valid gathered pool to zero dice, the committed individual attack is cancelled;
+- for an anti-squadron attack, cancellation of that individual target attack does not terminate the enclosing anti-squadron opportunity; remaining eligible squadron targets may still be attacked through the existing anti-squadron sequence.
+
+These rulings preserve the previously accepted BUG-070 semantics. They clarify their rules provenance; they do not reopen or change the prior Owner decisions.
+
 ### Q1 — Zero-dice outcome
 
 **Decision: Cancel the individual attack.**

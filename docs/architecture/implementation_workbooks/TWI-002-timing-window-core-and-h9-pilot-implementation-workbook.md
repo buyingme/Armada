@@ -19,6 +19,22 @@ with separate shared-core and Model C-S/H9 stop/go gates. It is not an ADR, a
 Contract, a TEST document, an implementation authorization, or a replacement
 for CAP-H9-001.
 
+### BUG-071 timing reconciliation (2026-10-03)
+
+The pre-roll Concentrate Fire dial statements in §15.3.3 item 2, §15.5.1
+item 1, and §16.3 step 2 are superseded for future implementation and
+verification by [CON-001 §5.4](../contracts/CON-001-current-attack-state-and-semantic-transition-contract.md#L418), following the [BUG-070 Owner Resolution](../evidence/UX-006-UX-012-post-implementation-smoke-defect-diagnosis-2.md#L114) and [joint diagnosis](../evidence/BUG-070-BUG-071-joint-production-diagnosis.md#L134).
+Those statements remain below as provenance of the accepted TWI-002 plan and
+the production timing defect. The corrected sequence completes Gather Attack
+Dice and evaluates its final pool before rolling; a nonempty attack rolls,
+then both Concentrate Fire effects belong to Resolve Attack Effects. The dial
+adds and rolls a die into existing results; the token's existing post-roll
+reroll timing remains correct. The dial is no longer a pre-roll pool addition
+or a means of preventing gather cancellation. TWI-002's ownership and shared
+timing-window requirements otherwise remain applicable. Focused BUG-070 and
+BUG-071 evidence must replace the superseded command-sequence oracle before
+implementation acceptance.
+
 ## 1. Purpose
 
 TWI-002 translates the accepted timing-window architecture into a
@@ -1712,7 +1728,7 @@ Use these replayable atomic transactions:
 
 1. `BeginAttackCommand` creates the complete individual-attack state described
    above.
-2. Explicit Concentrate Fire dial use/decline commands record the pre-roll
+2. [Superseded for timing by the BUG-071 reconciliation note above.] Explicit Concentrate Fire dial use/decline commands record the pre-roll
    decision and canonical dice-pool change; scene callbacks no longer own that
    choice.
 3. `RollDiceCommand` validates attack identity, stores its deterministic result,
@@ -1818,7 +1834,7 @@ Accuracy/defense legality still depends on writable scene-only state.
 Repository evidence identifies these existing choices around the roll/confirm
 boundary:
 
-- the Concentrate Fire dial adds a die before `RollDiceCommand`; Slice 8A moves
+- [Superseded for timing by the BUG-071 reconciliation note above.] The Concentrate Fire dial adds a die before `RollDiceCommand`; Slice 8A moves
   that decision to canonical semantic commands, but it is not an Attack Modify
   participant;
 - the Concentrate Fire token offers one reroll after roll and before confirm for
@@ -2315,7 +2331,7 @@ Compare explicit command sequences, not only final state.
 Minimum H9 use sequence:
 
 1. the replayable attack-entry command creates canonical current-attack state;
-2. optional Concentrate Fire dial use/decline resolves canonically before roll;
+2. [Superseded for timing by the BUG-071 reconciliation note above.] Optional Concentrate Fire dial use/decline resolves canonically before roll;
 3. `RollDiceCommand` records canonical dice, progresses semantic stage to
    `ATTACK_MODIFY`, and the post-success seam opens one timing lifecycle;
 4. `UseH9Command` resolves one H9 source;

@@ -11,6 +11,7 @@ Related Verification: TEST-003 where timing-window behavior is involved
 Accepted by: Owner
 Accepted date: 2026-07-18
 Accepted update date: 2026-09-01
+BUG-070 / BUG-071 refinement date: 2026-10-03
 Supersedes: None
 Superseded by: None
 
@@ -413,6 +414,20 @@ recover from command failure.
 CON-001-FAIL-006: Delayed, duplicated, or out-of-order replay or network
 delivery SHALL NOT cause a semantic transaction to be applied more than once.
 
+### 5.4 Gather Attack Dice And Resolve Attack Effects
+
+This bounded attack-step refinement records the [BUG-070 Owner Resolution](../evidence/UX-006-UX-012-post-implementation-smoke-defect-diagnosis-2.md#L114) and the [joint production diagnosis](../evidence/BUG-070-BUG-071-joint-production-diagnosis.md#L134). It does not prescribe a new state machine, command type, or continuation owner.
+
+CON-001-STEP-001: After attack entry, the authoritative attack lifecycle SHALL complete every applicable effect belonging to **Gather Attack Dice** before treating the gathered pool as final. An intermediate empty pool MAY remain active while applicable gathering effects are unresolved. Presentation state, a scene stage, or a single pending-rule hint SHALL NOT establish gather completion or authorize rolling past an unresolved effect.
+
+CON-001-STEP-002: Only after Gather Attack Dice is complete SHALL the authoritative attack lifecycle evaluate the final pool. If it contains zero dice, an explicit replayable semantic cancellation transaction SHALL cancel that individual attack before rolling or Resolve Attack Effects. If it contains at least one die, the attack SHALL proceed to roll and then Resolve Attack Effects, including when rolled results are blank or otherwise ineffective. An individual gathering effect SHALL NOT cancel the attack merely because its own application empties the pool.
+
+CON-001-STEP-003: Cancellation is a forward transition. It SHALL retain already committed declaration, target/attack history, opportunity consumption, and legally consumed resources or effects; it SHALL NOT refund them or permit a retry absent another rule. It SHALL retire the individual current attack and return eligibility to the existing enclosing Ship or Squadron owner. For ship anti-squadron iteration, the existing owner SHALL re-evaluate remaining eligible targets independently and, on exhaustion, use its existing iteration-termination and enclosing progression boundaries. Gather cancellation SHALL NOT establish a resolved-damage completed-result inspection or invoke CON-007's inspection-release protocol.
+
+CON-001-STEP-004: The Concentrate Fire dial and token effects SHALL be available only in the later **Resolve Attack Effects** step after a successful roll. Neither SHALL contribute to the initial gathered pool or rescue an attack canceled at gather completion. Dial use adds a die of a colour present in the current attack pool and follows the post-roll added-die semantics in CON-001-STEP-005; token use rerolls a legal existing result. Where both are available, the choice of dial, token, or both SHALL precede resolving that command's effects, and the applicable once-per-round constraint SHALL hold. Use, decline, costs, ordering, and coexistence with other Attack Modify opportunities SHALL remain under their applicable rule and timing-window authorities. The corrected timing supersedes the pre-roll dial statements in accepted TWI-002 as identified in that workbook's BUG-071 reconciliation note.
+
+CON-001-STEP-005: For any attack effect that adds a die, timing relative to the initial attack-dice roll determines how its result is established. Before the attack dice are rolled, the added die SHALL join the pool that will subsequently be rolled. After the attack dice have been rolled, the newly added die SHALL be authoritatively rolled and its result added to the existing attack results. If the specific rule explicitly prescribes the added die's face or result, that prescription SHALL override the otherwise applicable roll of that die. This clause does not change when a particular effect is permitted or who owns its semantic mutation.
+
 ## 6. Serialization Obligations
 
 ### 6.1 Canonical Serialization
@@ -749,6 +764,23 @@ and SHALL NOT establish full CON-001 conformance.
 CON-001-TEST-012: Codex MAY recommend implementation readiness. Codex SHALL NOT
 approve Contract acceptance, Rule Capability Package integration, or evidence
 waivers.
+
+CON-001-TEST-013: The Gather Attack Dice boundary and Concentrate Fire timing
+SHALL have focused evidence for temporary versus final empty pools, every
+applicable mandatory removal and obstruction, direct-roll admission, individual
+cancellation and enclosing continuation, nonempty blank results, dial/token
+use and decline, and coexistence with other Attack Modify opportunities.
+Evidence SHALL cover command failure and recovery, save/load, replay, reconnect,
+and authoritative/passive Network application through the affected boundaries.
+Changed state, command-result, or replay semantics SHALL receive an explicit
+compatibility decision under the existing version authorities. CON-003 Rule
+Capability Packages SHALL trace each affected behavior-changing rule slice;
+shared attack protocol evidence SHALL NOT replace that rule-specific evidence.
+The [BUG-070 / BUG-071 traceability map](../evidence/BUG-070-BUG-071-normative-refinement-traceability.md)
+identifies the affected slices without asserting integration.
+Any replay fixture renewal SHALL follow the Owner-recorded manual capture
+policy in `CODEX_WORKFLOW.md`; existing fixtures SHALL NOT be transformed to
+fit the corrected semantics.
 
 ## 10. Explicit Non-Goals
 

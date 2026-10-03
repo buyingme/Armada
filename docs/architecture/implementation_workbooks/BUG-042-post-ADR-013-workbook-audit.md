@@ -27,7 +27,7 @@ Current mirror execution already:
 - suppresses passive observer follow-ups;
 - buffers out-of-order network results and ignores stale/duplicate sequences.
 
-Evidence: [command_processor.gd](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:268), [command_processor.gd](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:557), [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2674).
+Evidence: [command_processor.gd](../../../src/autoload/command_processor.gd#L268), [command_processor.gd](../../../src/autoload/command_processor.gd#L557), [game_manager.gd](../../../src/autoload/game_manager.gd#L2674).
 
 The workbook’s narrow passive-result command hook therefore satisfies ADR-012 without creating a generic snapshot/result mutation owner. Its strict separation of command, application result, presentation result, and routing metadata is also sound.
 
@@ -74,12 +74,12 @@ However, this is not an exact valid target catalog: `DebugDealDamageCommand` can
 
 The workbook’s file inventory is incomplete:
 
-- `DebugController` queries hidden draw-pile membership to set each damage option’s `available` flag. It is absent from Section 8. [debug_controller.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/debug_controller.gd:445)
-- `CommandSubmitter.submit_authoritative()` delegates to ordinary `submit()` on clients. Therefore a passive presentation reaction can send a supposedly engine-owned `DestroyUnitCommand` back to the authority. [command_submitter.gd](/Users/Katharina/godot/Armada/src/core/commands/command_submitter.gd:19)
-- `ResolveDamageCommand` restores a deck by deserializing a replacement instance, losing its RNG reference. [resolve_damage_command.gd](/Users/Katharina/godot/Armada/src/core/commands/resolve_damage_command.gd:250)
-- `DefenseTokenResolver.apply_evade_reroll()` calls `Dice.roll_die()` without `GameState.rng`. Its current helper has no reachable caller; classify it explicitly as legacy/dead, not as a fifth live consumer. [defense_token_resolver.gd](/Users/Katharina/godot/Armada/src/core/combat/defense_token_resolver.gd:231)
+- `DebugController` queries hidden draw-pile membership to set each damage option’s `available` flag. It is absent from Section 8. [debug_controller.gd](../../../src/scenes/game_board/debug_controller.gd#L445)
+- `CommandSubmitter.submit_authoritative()` delegates to ordinary `submit()` on clients. Therefore a passive presentation reaction can send a supposedly engine-owned `DestroyUnitCommand` back to the authority. [command_submitter.gd](../../../src/core/commands/command_submitter.gd#L19)
+- `ResolveDamageCommand` restores a deck by deserializing a replacement instance, losing its RNG reference. [resolve_damage_command.gd](../../../src/core/commands/resolve_damage_command.gd#L250)
+- `DefenseTokenResolver.apply_evade_reroll()` calls `Dice.roll_die()` without `GameState.rng`. Its current helper has no reachable caller; classify it explicitly as legacy/dead, not as a fifth live consumer. [defense_token_resolver.gd](../../../src/core/combat/defense_token_resolver.gd#L231)
 - Lobby/setup tie-break fallbacks use global randomness. They are setup-choice generation, not live `GameState.rng` command consumption, but should be explicitly excluded rather than omitted.
-- Existing format-7 replay fixtures contain the damage payload forms that the workbook removes. [replay_20260830_080743.json](/Users/Katharina/godot/Armada/docs/qa/bugs/closed/BUG-039/replay_20260830_080743.json:841)
+- Existing format-7 replay fixtures contain the damage payload forms that the workbook removes. [replay_20260830_080743.json](../../qa/bugs/closed/BUG-039/replay_20260830_080743.json#L841)
 
 ### Reachable versus dead helpers
 
@@ -101,7 +101,7 @@ The actual path is:
 8. contiguous entries call `submit_mirror`;
 9. only successful mirror execution reaches presentation and clears the submission gate.
 
-Evidence: [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:1436), [command_processor.gd](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:285), [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2708).
+Evidence: [network_manager.gd](../../../src/autoload/network_manager.gd#L1436), [command_processor.gd](../../../src/autoload/command_processor.gd#L285), [game_manager.gd](../../../src/autoload/game_manager.gd#L2708).
 
 Accordingly:
 
@@ -114,7 +114,7 @@ Accordingly:
 - **Later sequence after rejected contiguous entry:** correctly remains blocked.
 - **No generic mutation service:** the proposed narrow opt-in hook is acceptable.
 
-The current `__remote_authored` contamination is real: the authority inserts it directly into the result dictionary before broadcasting. [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:1481) Moving it to host-local transport metadata is required.
+The current `__remote_authored` contamination is real: the authority inserts it directly into the result dictionary before broadcasting. [network_manager.gd](../../../src/autoload/network_manager.gd#L1481) Moving it to host-local transport metadata is required.
 
 One transaction boundary remains broken: destruction cleanup is generated later by presentation signals, not by the accepted damage transaction/follow-up owner. That exception prevents an overall atomicity finding.
 
@@ -167,7 +167,7 @@ The workbook’s ledger therefore has the right information and no excess hidden
 | Structural Damage | Consume one aggregate draw and move known immediate card faceup→facedown | No remaining facedown identity |
 | Resume/reconnect | Reinstall the same ledger projection | No reconstruction |
 
-The workbook correctly requires faceup cards drawn after a public-discard reshuffle to be members of the pre-reshuffle public multiset. [workbook](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/BUG-042-network-rng-authority-result-application-implementation-workbook.md:347)
+The workbook correctly requires faceup cards drawn after a public-discard reshuffle to be members of the pre-reshuffle public multiset. [workbook](BUG-042-network-rng-authority-result-application-implementation-workbook.md#L347)
 
 Projection equivalence is an effective primary oracle: after each accepted sequence, filtering authority state must equal the normalized passive state for the viewer. The incremental ledger rules are sufficient to satisfy it.
 
@@ -189,7 +189,7 @@ The debug UI exposes whether each named effect remains in the hidden draw pile:
 "available": _has_effect_available(effect_id)
 ```
 
-and `_has_effect_available()` queries the authority deck directly. [debug_controller.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/debug_controller.gd:568)
+and `_has_effect_available()` queries the authority deck directly. [debug_controller.gd](../../../src/scenes/game_board/debug_controller.gd#L568)
 
 This reveals hidden deck membership to the host player. By combining public faceup/discard facts and known deck composition, it can also identify or narrow identities presently facedown. A rejected request for an unavailable effect is a second oracle.
 
@@ -201,7 +201,7 @@ The narrow correction is to make debug damage non-admissible in live Network pla
 
 The workbook makes application-result schemas exact but does not state equally explicit unknown-field rejection for changed semantic command payloads.
 
-Current canonicalization duplicates and preserves arbitrary payload fields. [game_command.gd](/Users/Katharina/godot/Armada/src/core/commands/game_command.gd:226) Merely ceasing to read `moving_card`, `other_card`, `card_data`, or `draw_from_deck` does not prevent a stale or malicious sender from placing those identities in:
+Current canonicalization duplicates and preserves arbitrary payload fields. [game_command.gd](../../../src/core/commands/game_command.gd#L226) Merely ceasing to read `moving_card`, `other_card`, `card_data`, or `draw_from_deck` does not prevent a stale or malicious sender from placing those identities in:
 
 - the command envelope;
 - accepted semantic history;
@@ -219,12 +219,12 @@ Current `StateFilter`:
 - removes RNG;
 - emits `draw_count` plus discard;
 - hides opponent facedown cards;
-- returns the owning player’s full facedown arrays unchanged. [state_filter.gd](/Users/Katharina/godot/Armada/src/core/network/state_filter.gd:55)
+- returns the owning player’s full facedown arrays unchanged. [state_filter.gd](../../../src/core/network/state_filter.gd#L55)
 
 Current ordinary deserialization then loses the filtered-only facts:
 
-- `GameState.deserialize()` understands only full `damage_deck` data and ignores `draw_count`; [game_state.gd](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:703)
-- `ShipInstance.deserialize()` reads `facedown_damage` but not `facedown_count`. [ship_instance.gd](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:897)
+- `GameState.deserialize()` understands only full `damage_deck` data and ignores `draw_count`; [game_state.gd](../../../src/core/state/game_state.gd#L703)
+- `ShipInstance.deserialize()` reads `facedown_damage` but not `facedown_count`. [ship_instance.gd](../../../src/core/state/ship_instance.gd#L897)
 
 The workbook correctly requires a passive-aware installer to consume and validate the ledger before ordinary full-state deserialization discards it.
 
@@ -236,7 +236,7 @@ Production code currently assuming a usable `DamageDeck` includes `GameBoard`, `
 
 ## 9. Fresh-bootstrap and protocol assessment
 
-Current fresh Network start distributes a shared seed and each peer constructs state after scene entry. [lobby_manager.gd](/Users/Katharina/godot/Armada/src/autoload/lobby_manager.gd:145), [game_board.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/game_board.gd:1283) That must change.
+Current fresh Network start distributes a shared seed and each peer constructs state after scene entry. [lobby_manager.gd](../../../src/autoload/lobby_manager.gd#L145), [game_board.gd](../../../src/scenes/game_board/game_board.gd#L1283) That must change.
 
 Current resume already provides most of the needed ownership split:
 
@@ -255,7 +255,7 @@ Current resume already provides most of the needed ownership split:
 
 ### Unsupported part of the proposed exact order
 
-Workbook step 3 installs the authority state and executes initial commands before client staging, while the failure text later says a pre-publication failure can roll back to the lobby. [workbook](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/BUG-042-network-rng-authority-result-application-implementation-workbook.md:539)
+Workbook step 3 installs the authority state and executes initial commands before client staging, while the failure text later says a pre-publication failure can roll back to the lobby. [workbook](BUG-042-network-rng-authority-result-application-implementation-workbook.md#L539)
 
 Current `GameManager.start_new_game()` installation:
 
@@ -264,9 +264,9 @@ Current `GameManager.start_new_game()` installation:
 - installs submitters;
 - marks the game active;
 - emits `game_started`;
-- starts the round. [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:317)
+- starts the round. [game_manager.gd](../../../src/autoload/game_manager.gd#L317)
 
-There is no current reversible tentative-install transaction covering those effects. Existing resume deliberately stages first and calls `start_new_game_from_state()` only at commit. [lobby_manager.gd](/Users/Katharina/godot/Armada/src/autoload/lobby_manager.gd:367)
+There is no current reversible tentative-install transaction covering those effects. Existing resume deliberately stages first and calls `start_new_game_from_state()` only at commit. [lobby_manager.gd](../../../src/autoload/lobby_manager.gd#L367)
 
 The workbook must either:
 
@@ -277,7 +277,7 @@ It may not leave the implementer to invent a generic candidate-state processor o
 
 ### Protocol cutover
 
-A protocol bump is mandatory. Current version is 4, and the handshake already rejects unequal versions before admission. [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:29), [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:1239)
+A protocol bump is mandatory. Current version is 4, and the handshake already rejects unequal versions before admission. [network_manager.gd](../../../src/autoload/network_manager.gd#L29), [network_manager.gd](../../../src/autoload/network_manager.gd#L1239)
 
 Protocol 5 coherently groups:
 
@@ -298,11 +298,11 @@ Authority saves correctly retain full RNG, full deck order, discard, faceup/face
 
 ### BLOCKER: RNG rebinding after load and rollback
 
-`GameState.deserialize()` restores `DamageDeck` and `GameRng` independently but never calls `damage_deck.set_rng(state.rng)`. [game_state.gd](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:703)
+`GameState.deserialize()` restores `DamageDeck` and `GameRng` independently but never calls `damage_deck.set_rng(state.rng)`. [game_state.gd](../../../src/core/state/game_state.gd#L703)
 
-`DamageDeck.deserialize()` creates a deck with no RNG reference. [damage_deck.gd](/Users/Katharina/godot/Armada/src/core/damage/damage_deck.gd:176)
+`DamageDeck.deserialize()` creates a deck with no RNG reference. [damage_deck.gd](../../../src/core/damage/damage_deck.gd#L176)
 
-At the next discard reshuffle it silently falls back to global `Array.shuffle()`. [damage_deck.gd](/Users/Katharina/godot/Armada/src/core/damage/damage_deck.gd:133)
+At the next discard reshuffle it silently falls back to global `Array.shuffle()`. [damage_deck.gd](../../../src/core/damage/damage_deck.gd#L133)
 
 The same defect occurs when `ResolveDamageCommand` restores a deck after a failed atomic attempt.
 
@@ -319,9 +319,9 @@ New replays can remain seed-plus-corrected-semantic-history and need no live res
 
 The current compatibility claim is not resolved, however:
 
-- replay format 7 owns the accepted command model and is rejected strictly on mismatch; [game_replay.gd](/Users/Katharina/godot/Armada/src/core/commands/game_replay.gd:119)
-- current format-7 fixtures contain `persistent_effect_damage.card_data` and `draw_from_deck`; [replay_20260830_080743.json](/Users/Katharina/godot/Armada/docs/qa/bugs/closed/BUG-039/replay_20260830_080743.json:841)
-- the repository workflow says semantic command-model migrations require explicit replay-format treatment and new reviewed fixtures. [REPLAY_BASELINE_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/development/REPLAY_BASELINE_WORKFLOW.md:471)
+- replay format 7 owns the accepted command model and is rejected strictly on mismatch; [game_replay.gd](../../../src/core/commands/game_replay.gd#L119)
+- current format-7 fixtures contain `persistent_effect_damage.card_data` and `draw_from_deck`; [replay_20260830_080743.json](../../qa/bugs/closed/BUG-039/replay_20260830_080743.json#L841)
+- the repository workflow says semantic command-model migrations require explicit replay-format treatment and new reviewed fixtures. [REPLAY_BASELINE_WORKFLOW.md](../../development/REPLAY_BASELINE_WORKFLOW.md#L471)
 
 Keeping format 7 while rejecting the old fields makes existing format-7 artifacts fail after acceptance. Keeping the fields silently contradicts the workbook’s strict removal and live-history secrecy unless a replay-only normalization boundary is defined.
 
@@ -434,13 +434,13 @@ The host debug modal and unsuccessful effect selection reveal hidden deck member
 
 ### BLOCKER 2 — Destruction is not authority-follow-up-owned
 
-Current presentation emits `EventBus.ship_destroyed`; `GameManager` then submits `DestroyUnitCommand`. [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2568)
+Current presentation emits `EventBus.ship_destroyed`; `GameManager` then submits `DestroyUnitCommand`. [game_manager.gd](../../../src/autoload/game_manager.gd#L2568)
 
 The passive submitter delegates `submit_authoritative()` to ordinary network submission. Depending on which player authored the lethal damage:
 
 - the passive attempt may be rejected by principal ownership;
 - or both authority and passive can submit cleanup;
-- a duplicate cleanup currently validates because `DestroyUnitCommand` checks only that the ship exists. [destroy_unit_command.gd](/Users/Katharina/godot/Armada/src/core/commands/destroy_unit_command.gd:35)
+- a duplicate cleanup currently validates because `DestroyUnitCommand` checks only that the ship exists. [destroy_unit_command.gd](../../../src/core/commands/destroy_unit_command.gd#L35)
 
 The order relative to BUG-035 attack continuation also varies by submission route. The workbook must define one authority-only generation point and remove semantic submission from presentation.
 

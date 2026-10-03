@@ -6,27 +6,27 @@ Audit scope: the current working-tree implementation, including the completed bu
 
 Before inspecting the TWI-002 authorities or implementation, I read these startup documents in full, in this order:
 
-1. [ARCHITECTURE.md](/Users/Katharina/godot/Armada/ARCHITECTURE.md:1)
-2. [AI_DEVELOPMENT_PRINCIPLES.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PRINCIPLES.md:1)
-3. [AI_DEVELOPMENT_PROCESS.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PROCESS.md:1)
-4. [AI_STARTUP_GUARDRAILS.md](/Users/Katharina/godot/Armada/.ai/instructions/AI_STARTUP_GUARDRAILS.md:1)
-5. [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md:1)
-6. [ARCHITECTURE_ROADMAP.md](/Users/Katharina/godot/Armada/docs/architecture/ARCHITECTURE_ROADMAP.md:1)
-7. [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md:1)
+1. [ARCHITECTURE.md](../../../ARCHITECTURE.md#L1)
+2. [AI_DEVELOPMENT_PRINCIPLES.md](../../development/AI_DEVELOPMENT_PRINCIPLES.md#L1)
+3. [AI_DEVELOPMENT_PROCESS.md](../../development/AI_DEVELOPMENT_PROCESS.md#L1)
+4. [AI_STARTUP_GUARDRAILS.md](../../../.ai/instructions/AI_STARTUP_GUARDRAILS.md#L1)
+5. [DOCUMENT_AUTHORITY.md](../DOCUMENT_AUTHORITY.md#L1)
+6. [ARCHITECTURE_ROADMAP.md](../ARCHITECTURE_ROADMAP.md#L1)
+7. [CODEX_WORKFLOW.md](../CODEX_WORKFLOW.md#L1)
 
 I then read the complete accepted authority set required by TWI-002:
 
-- [ADR-001](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md:1)
-- [ADR-003](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-003-rule-and-validation-surfaces.md:1)
-- [ADR-004](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-004-upgrade-runtime-ownership.md:1)
-- [ADR-005](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-005-timing-window-ownership-and-continuation.md:1)
-- [CON-001](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md:1)
-- [CON-003](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-003-rule-capability-contract.md:1)
-- [CON-004](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-004-upgrade-runtime-contract.md:1)
-- [CON-005](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-005-timing-window-implementation-contract.md:1)
-- [TEST-003](/Users/Katharina/godot/Armada/docs/architecture/tests/TEST-003-interactive-rule-timing-window-verification.md:1)
-- [TWI-001](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/TWI-001-timing-window-state-implementation-workbook.md:1)
-- [TWI-002](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/TWI-002-timing-window-core-and-h9-pilot-implementation-workbook.md:1)
+- [ADR-001](../adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md#L1)
+- [ADR-003](../adr/ADR-003-rule-and-validation-surfaces.md#L1)
+- [ADR-004](../adr/ADR-004-upgrade-runtime-ownership.md#L1)
+- [ADR-005](../adr/ADR-005-timing-window-ownership-and-continuation.md#L1)
+- [CON-001](../contracts/CON-001-current-attack-state-and-semantic-transition-contract.md#L1)
+- [CON-003](../contracts/CON-003-rule-capability-contract.md#L1)
+- [CON-004](../contracts/CON-004-upgrade-runtime-contract.md#L1)
+- [CON-005](../contracts/CON-005-timing-window-implementation-contract.md#L1)
+- [TEST-003](../tests/TEST-003-interactive-rule-timing-window-verification.md#L1)
+- [TWI-001](TWI-001-timing-window-state-implementation-workbook.md#L1)
+- [TWI-002](TWI-002-timing-window-core-and-h9-pilot-implementation-workbook.md#L1)
 
 I also read the complete TWI-002 execution companion and inspected CAP-H9 as non-authoritative evidence. CAP-H9 correctly remains Draft/NOT_INTEGRATED.
 
@@ -60,13 +60,13 @@ One narrow but direct TWI-002 protocol deviation exists: H9 and Concentrate Fire
 
 ### Supporting evidence
 
-- [`GameState`](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:46) owns both canonical state objects, clones them at its public boundary, and serializes/reconstructs them.
-- [`TimingWindowState`](/Users/Katharina/godot/Armada/src/core/state/timing_window_state.gd:48) explicitly excludes rule, opportunity, command, and presentation authority.
-- The [`TimingWindowOrchestrator`](/Users/Katharina/godot/Armada/src/core/timing_windows/timing_window_orchestrator.gd:38) owns opening, replacement, re-derivation, blocker determination, completion, continuation creation, reconstruction, and cleanup.
-- [`CommandProcessor`](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:237) provides the single ordered post-success orchestration seam and preserves command sequence identity.
-- [`RuleRegistry`](/Users/Katharina/godot/Armada/src/core/effects/rule_registry.gd:141) is a static participant index only.
-- [`ShipInstance`](/Users/Katharina/godot/Armada/src/core/entities/ship_instance.gd:531) owns runtime-upgrade construction, state, serialization, and reconstruction.
-- [`UIProjector`](/Users/Katharina/godot/Armada/src/core/network/ui_projector.gd:405) derives timing-window presentation and controller-only intents without mutating authority.
+- [`GameState`](../../../src/core/state/game_state.gd#L46) owns both canonical state objects, clones them at its public boundary, and serializes/reconstructs them.
+- [`TimingWindowState`](../../../src/core/state/timing_window_state.gd#L48) explicitly excludes rule, opportunity, command, and presentation authority.
+- The [`TimingWindowOrchestrator`](../../../src/core/timing_windows/timing_window_orchestrator.gd#L38) owns opening, replacement, re-derivation, blocker determination, completion, continuation creation, reconstruction, and cleanup.
+- [`CommandProcessor`](../../../src/autoload/command_processor.gd#L237) provides the single ordered post-success orchestration seam and preserves command sequence identity.
+- [`RuleRegistry`](../../../src/core/effects/rule_registry.gd#L141) is a static participant index only.
+- [`ShipInstance`](../../../src/core/entities/ship_instance.gd#L531) owns runtime-upgrade construction, state, serialization, and reconstruction.
+- [`UIProjector`](../../../src/core/network/ui_projector.gd#L405) derives timing-window presentation and controller-only intents without mutating authority.
 
 ### Verification performed
 
@@ -104,14 +104,14 @@ All functional TWI-002 slices are present:
 
 ### Partially implemented requirement
 
-The accepted workbook defines source enumeration as returning only stable authoritative source identities. Concrete activation and dice legality must be evaluated later during opportunity derivation ([TWI-002 §11.5](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/TWI-002-timing-window-core-and-h9-pilot-implementation-workbook.md:998)).
+The accepted workbook defines source enumeration as returning only stable authoritative source identities. Concrete activation and dice legality must be evaluated later during opportunity derivation ([TWI-002 §11.5](TWI-002-timing-window-core-and-h9-pilot-implementation-workbook.md#L998)).
 
 The current implementation filters too early:
 
-- [`H9.enumerate_timing_window_sources()`](/Users/Katharina/godot/Armada/src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd:43) calls `_is_h9_source_on_ship()`, which excludes discarded or disabled matching runtime instances during enumeration.
+- [`H9.enumerate_timing_window_sources()`](../../../src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd#L43) calls `_is_h9_source_on_ship()`, which excludes discarded or disabled matching runtime instances during enumeration.
 - The workbook explicitly requires every matching H9 runtime identity to be enumerated in `runtime_upgrade_id` order, with activation legality checked during derivation.
 - The H9 function iterates `runtime_upgrades` directly and relies on the orchestrator’s later sorting rather than returning the required ordering itself.
-- [`ConcentrateFireToken.enumerate_timing_window_sources()`](/Users/Katharina/godot/Armada/src/core/effects/rules/concentrate_fire_token.gd:36) calls `pending_source()`, which evaluates attack stage, CF resolution state, lifecycle context, and token legality before returning the source identity.
+- [`ConcentrateFireToken.enumerate_timing_window_sources()`](../../../src/core/effects/rules/concentrate_fire_token.gd#L36) calls `pending_source()`, which evaluates attack stage, CF resolution state, lifecycle context, and token legality before returning the source identity.
 
 This does not create mutable authority or incorrect results. It is nevertheless a direct implementation-protocol deviation and a shortcut future participants could copy.
 
@@ -123,7 +123,7 @@ The narrow omission is focused evidence proving the raw enumeration boundary ind
 
 ### Other implementation deviation
 
-Commit `e9d2f5e` added [TWI-002-remaining-implementation-execution-map.md](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/TWI-002-remaining-implementation-execution-map.md:1) alongside implementation work. It correctly labels itself an “Execution Companion” and does not amend an accepted authority, but this does not literally satisfy the workbook checklist item that no CAP or architecture document be modified by implementation work.
+Commit `e9d2f5e` added [TWI-002-remaining-implementation-execution-map.md](TWI-002-remaining-implementation-execution-map.md#L1) alongside implementation work. It correctly labels itself an “Execution Companion” and does not amend an accepted authority, but this does not literally satisfy the workbook checklist item that no CAP or architecture document be modified by implementation work.
 
 This is scope/document hygiene, not a runtime architecture violation.
 
@@ -186,7 +186,7 @@ A non-authoritative architecture execution companion was added in an implementat
 - Runtime-upgrade identities and rule state survive serialization without embedding scripts or scene objects.
 - Save and replay format changes reject obsolete formats before deserialization or command application.
 - Network ordering broadcasts the authoritative command before draining generated continuation commands.
-- ECM cleanup is verified across hot-seat, host/mirror, and replay in [the shared protocol integration test](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:817).
+- ECM cleanup is verified across hot-seat, host/mirror, and replay in [the shared protocol integration test](../../../tests/integration/test_current_attack_shared_protocol.gd#L817).
 - H9’s CAP and resource metadata correctly remain NOT_INTEGRATED; implementation evidence has not been mistaken for owner acceptance.
 
 ## 7. Required Corrections

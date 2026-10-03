@@ -55,7 +55,7 @@
 
 ### Setup
 
-Open `/Users/Katharina/godot/Armada/src/scenes/game_board/game_board.tscn` in the editor and press **F6** to run it.
+Open [src/scenes/game_board/game_board.tscn](../../src/scenes/game_board/game_board.tscn) in the editor and press **F6** to run it.
 
 ---
 
@@ -240,7 +240,7 @@ macOS only.
 
 ### Setup
 
-Open `/Users/Katharina/godot/Armada/src/scenes/game_board/game_board.tscn` in the editor and press **F6** to run it.
+Open [src/scenes/game_board/game_board.tscn](../../src/scenes/game_board/game_board.tscn) in the editor and press **F6** to run it.
 
 ---
 

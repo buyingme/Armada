@@ -11,7 +11,7 @@ This follows the accepted authority more directly than the workbook’s current 
 - **Production fact:** `mark_destroyed()` clears those activation/immediate/obstacle facts but leaves card transfer to a later `DestroyUnitCommand`. The processor preserves the interrupted-turn information only in a temporary follow-up payload.
 - **Conclusion:** production’s split is implementation evidence, not authority to introduce a recoverable wait between those mutations. The workbook’s instruction to block destruction cleanup behind inspection conflicts with that atomic boundary.
 
-Sources: [ADR-014 §2.3–2.4](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-014-canonical-immediate-faceup-damage-card-resolution.md:229), [ADR-006 §3.5](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-006-canonical-ship-activation-boundary-ownership.md:274), [mark_destroyed](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:274), [temporary destruction follow-up](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:383), [workbook §4.1](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/UX-006-UX-012-ux-integration-implementation-workbook.md:75).
+Sources: [ADR-014 §2.3–2.4](../adr/ADR-014-canonical-immediate-faceup-damage-card-resolution.md#L229), [ADR-006 §3.5](../adr/ADR-006-canonical-ship-activation-boundary-ownership.md#L274), [mark_destroyed](../../../src/core/state/ship_instance.gd#L274), [temporary destruction follow-up](../../../src/autoload/command_processor.gd#L383), [workbook §4.1](../implementation_workbooks/UX-006-UX-012-ux-integration-implementation-workbook.md#L75).
 
 The precise resolution is:
 
@@ -23,7 +23,7 @@ The precise resolution is:
 
 The last point needs a narrow canonical phase representation: current cleanup writes the next controller only into `InteractionFlow`, and load reads it back from there. Make that outcome a GameState-owned Ship Phase fact, maintained by the relevant existing turn transitions; projection reads it. This closes the specific recovery gap without deciding the wider Ship Phase controller architecture.
 
-Sources: [DestroyUnit cleanup and exceptional return](/Users/Katharina/godot/Armada/src/core/commands/destroy_unit_command.gd:146), [current recovery dependence on InteractionFlow](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2381), [discard behavior](/Users/Katharina/godot/Armada/src/core/damage/damage_deck.gd:126), [ADR-010 ownership restrictions](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-010-gameplay-interaction-decision-equivalent-recovery.md:88).
+Sources: [DestroyUnit cleanup and exceptional return](../../../src/core/commands/destroy_unit_command.gd#L146), [current recovery dependence on InteractionFlow](../../../src/autoload/game_manager.gd#L2381), [discard behavior](../../../src/core/damage/damage_deck.gd#L126), [ADR-010 ownership restrictions](../adr/ADR-010-gameplay-interaction-decision-equivalent-recovery.md#L88).
 
 The required lifecycle cases then resolve as follows:
 
@@ -34,7 +34,7 @@ The required lifecycle cases then resolve as follows:
 | Nonlethal assignment, lethal immediate effect | Faceup inspection finishes first. The immediate command executes, then atomically performs destruction/card cleanup if lethal. Structural Damage’s additional card is facedown, so it creates no second UX-006 inspection. |
 | Save/load or reconnect during lethal faceup inspection | Restore the destroyed, cleaned ship; committed phase outcome; surviving Attack owner where applicable; and the original inspection/acknowledgments. With one Network acknowledgment received, only the other remains required. |
 
-These distinctions are explicit in the [asteroid lethal branch](/Users/Katharina/godot/Armada/src/core/commands/candidate_resolve_asteroid_overlap_command.gd:50), [immediate-effect lethal branch and Structural Damage](/Users/Katharina/godot/Armada/src/core/commands/candidate_resolve_immediate_effect_command.gd:365), and [ADR-014 §2.4](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-014-canonical-immediate-faceup-damage-card-resolution.md:263).
+These distinctions are explicit in the [asteroid lethal branch](../../../src/core/commands/candidate_resolve_asteroid_overlap_command.gd#L50), [immediate-effect lethal branch and Structural Damage](../../../src/core/commands/candidate_resolve_immediate_effect_command.gd#L365), and [ADR-014 §2.4](../adr/ADR-014-canonical-immediate-faceup-damage-card-resolution.md#L263).
 
 A destruction-specific durable aftermath record is technically possible without becoming generic infrastructure. **It is unnecessary for this recommendation and cannot justify delaying card transfer under unchanged ADR-014.** Exact-once source transitions, permanent destruction, transferred card ownership and the existing inspection identity prevent duplicate cleanup and reopened inspection.
 
@@ -42,7 +42,7 @@ A destruction-specific durable aftermath record is technically possible without 
 
 **Separate terminal-condition detection from terminal-result installation.** Detection immediately closes ordinary gameplay admission; installation waits for required inspection and terminal cleanup.
 
-This preserves the existing “game ends immediately” requirement while honoring the settled inspection decisions. It does not give the two-second timer authority. [WN-001–004](/Users/Katharina/godot/Armada/docs/requirements/mvp_learning_scenario.md:552)
+This preserves the existing “game ends immediately” requirement while honoring the settled inspection decisions. It does not give the two-second timer authority. [WN-001–004](../../requirements/mvp_learning_scenario.md#L552)
 
 **Detection must use canonical post-transaction facts:**
 
@@ -50,7 +50,7 @@ This preserves the existing “game ends immediately” requirement while honori
 - **Mutual destruction:** currently possible through one collision transaction damaging and destroying both ships. Evaluate both fleets after that transaction, before choosing the reason.
 - **Final round:** require completion of the final Status boundary, including existing unresolved ready-cost choices. `current_round == 6` or `phase == STATUS` alone is insufficient.
 
-Production evidence: [collision transaction](/Users/Katharina/godot/Armada/src/core/commands/candidate_resolve_ship_collision_damage_command.gd:103), [elimination and winner calculation](/Users/Katharina/godot/Armada/src/core/state/scoring_calculator.gd:60), [Status cleanup](/Users/Katharina/godot/Armada/src/core/commands/status_phase_cleanup_command.gd:68), [Status continuation](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2595).
+Production evidence: [collision transaction](../../../src/core/commands/candidate_resolve_ship_collision_damage_command.gd#L103), [elimination and winner calculation](../../../src/core/state/scoring_calculator.gd#L60), [Status cleanup](../../../src/core/commands/status_phase_cleanup_command.gd#L68), [Status continuation](../../../src/autoload/game_manager.gd#L2595).
 
 **Before installation, require:**
 
@@ -65,7 +65,7 @@ Do **not** require another ordinary Attack, Move, obstacle consequence, activati
 
 The existing post-attack release paths can otherwise expose another attack or a remaining squadron Move. Therefore the workbook must explicitly add **terminal match completion as the context-specific release consumer**. `CompleteMatchCommand` validates terminal readiness and atomically consumes any matching satisfied completed-attack inspection while installing the single terminal result. Failure leaves both unchanged.
 
-Sources: [current release derivation](/Users/Katharina/godot/Armada/src/core/state/current_attack_continuation.gd:83), [CompleteAttack creation of inspection](/Users/Katharina/godot/Armada/src/core/commands/complete_attack_command.gd:25), [CON-007 release and exact-once rules](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-007-post-attack-continuation-release-contract.md:147).
+Sources: [current release derivation](../../../src/core/state/current_attack_continuation.gd#L83), [CompleteAttack creation of inspection](../../../src/core/commands/complete_attack_command.gd#L25), [CON-007 release and exact-once rules](../contracts/CON-007-post-attack-continuation-release-contract.md#L147).
 
 Ownership remains bounded:
 
@@ -102,7 +102,7 @@ Key invariants:
 - Recovery never reconstructs cleanup, acknowledgments or exceptional return from history.
 - A new stable state containing destroyed-but-not-cleaned ships is rejected under this design.
 
-These preserve [ADR-006’s exceptional-termination rule](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-006-canonical-ship-activation-boundary-ownership.md:397) and [ADR-007’s damage-before-completed-inspection ordering](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-007-purpose-specific-completed-attack-result-inspection-lifecycle.md:108).
+These preserve [ADR-006’s exceptional-termination rule](../adr/ADR-006-canonical-ship-activation-boundary-ownership.md#L397) and [ADR-007’s damage-before-completed-inspection ordering](../adr/ADR-007-purpose-specific-completed-attack-result-inspection-lifecycle.md#L108).
 
 ## 4. Required authority/document amendments
 
@@ -123,7 +123,7 @@ Representation consequences:
 | Application results | Revise lethal-source contracts to include atomic cleanup/public discards and phase effects; include inspection and Status-proof changes where produced. Version each actually changed contract; new terminal contract starts at its initial version. |
 | Replay 10 | No demonstrated replay-container schema change. Changed command sequences/results require compatibility decisions and fresh Owner replay captures, not an automatic format bump. |
 
-Atomic cross-owner coordination remains consistent with [ADR-001 §2.4](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md:122); passive damage application remains governed by [ADR-013 §2.3](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-013-passive-network-damage-state-representation.md:112).
+Atomic cross-owner coordination remains consistent with [ADR-001 §2.4](../adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md#L122); passive damage application remains governed by [ADR-013 §2.3](../adr/ADR-013-passive-network-damage-state-representation.md#L112).
 
 ## 5. Remaining Owner decisions
 

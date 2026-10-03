@@ -4,35 +4,35 @@ Repository facts are marked Proven/Normative; conclusions are marked Inference.
 
 1. Current effective RNG architecture
 
-- Proven: `GameState` structurally owns `GameRng`; it serializes both initial seed and current PRNG state. That state is sufficient to clone and continue the stream. [game_rng.gd](/Users/Katharina/godot/Armada/src/core/state/game_rng.gd:14), [game_state.gd](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:643)
+- Proven: `GameState` structurally owns `GameRng`; it serializes both initial seed and current PRNG state. That state is sufficient to clone and continue the stream. [game_rng.gd](../../../../../src/core/state/game_rng.gd#L14), [game_state.gd](../../../../../src/core/state/game_state.gd#L643)
 - Proven: the host/server `GameState` is the writable Network authority. Fresh Network bootstrap nevertheless distributes one seed and constructs equivalent local RNGs on both peers.
 - Proven: setup advances the stream while shuffling the damage deck. Each RNG-dependent command then advances its local stream; the commands restore the previous RNG state if their canonical mutation fails.
-- Proven: save/load is host-only in Network mode and persists/restores the full current RNG state. [save_game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:125)
-- Proven: filtered resume/reconnect removes RNG. Deserialization accepts the missing field and leaves `rng == null`; live-installation validation does not require RNG. [state_filter.gd](/Users/Katharina/godot/Armada/src/core/network/state_filter.gd:1), [game_state.gd](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:673), [game_state.gd](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:417)
-- Proven: `submit_mirror()` still performs sequence/preflight/command validation, calls the normal `execute()`, records the command, increments the cursor, and suppresses passive observer-generated follow-ups. It does not consume, validate, or compare the transported authoritative result. [command_processor.gd](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:192)
-- Proven: command transport carries the serialized command and a separate result dictionary. History and replay persist only serialized commands, not results. [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:1549), [command_processor.gd](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:458)
-- Proven: ordered client application invokes `submit_mirror(cmd)` before using the result for presentation. A failed mirror leaves the cursor unchanged and stops queue draining. [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2696)
+- Proven: save/load is host-only in Network mode and persists/restores the full current RNG state. [save_game_manager.gd](../../../../../src/autoload/save_game_manager.gd#L125)
+- Proven: filtered resume/reconnect removes RNG. Deserialization accepts the missing field and leaves `rng == null`; live-installation validation does not require RNG. [state_filter.gd](../../../../../src/core/network/state_filter.gd#L1), [game_state.gd](../../../../../src/core/state/game_state.gd#L673), [game_state.gd](../../../../../src/core/state/game_state.gd#L417)
+- Proven: `submit_mirror()` still performs sequence/preflight/command validation, calls the normal `execute()`, records the command, increments the cursor, and suppresses passive observer-generated follow-ups. It does not consume, validate, or compare the transported authoritative result. [command_processor.gd](../../../../../src/autoload/command_processor.gd#L192)
+- Proven: command transport carries the serialized command and a separate result dictionary. History and replay persist only serialized commands, not results. [network_manager.gd](../../../../../src/autoload/network_manager.gd#L1549), [command_processor.gd](../../../../../src/autoload/command_processor.gd#L458)
+- Proven: ordered client application invokes `submit_mirror(cmd)` before using the result for presentation. A failed mirror leaves the cursor unchanged and stops queue draining. [game_manager.gd](../../../../../src/autoload/game_manager.gd#L2696)
 
 2. Normative architecture and evidence
 
-The task correctly routes as Uncertain/High-Risk Architecture. Repository authority requires Owner guidance when accepted sources do not resolve a conflict. [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md:15), [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md:10)
+The task correctly routes as Uncertain/High-Risk Architecture. Repository authority requires Owner guidance when accepted sources do not resolve a conflict. [CODEX_WORKFLOW.md](../../../../architecture/CODEX_WORKFLOW.md#L15), [DOCUMENT_AUTHORITY.md](../../../../architecture/DOCUMENT_AUTHORITY.md#L10)
 
 Normative facts:
 
-- ADR-008 makes the host/server `GameState` the writable Network authority; client mirrors reproduce semantics without becoming independent owners. [ADR-008](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-008-durable-match-lifetime-player-principal-binding.md:94)
-- ADR-001 and CON-001 require semantic attack mutation to remain command-owned and atomic. History records accepted decisions/order rather than calculation outcomes. Replay re-executes deterministic calculations from the same initial authoritative state. [ADR-001](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md:74), [CON-001](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md:301)
-- CON-001 requires ordered mirrored commands, host/mirror agreement on shared attack facts, and permits differences only under accepted visibility filtering. It does not explicitly decide whether mirror application recalculates randomness or consumes an authority-resolved result. [CON-001](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md:511)
-- ADR-011 requires resume/reconnect to install only the correctly filtered current state and restore every canonical fact needed for the next legal decision before command admission. [ADR-011](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-011-network-match-resume-and-principal-entitlement.md:172)
-- The accepted MATCH-003 implementation workbook explicitly preserves `StateFilter`, `GameState`, command ownership, and save/replay schemas. Changing these is an Owner stop gate in that scope. [MATCH-003](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/MATCH-003-network-match-resume-explicit-side-assignment-implementation-workbook.md:98), [MATCH-003 stop gates](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/MATCH-003-network-match-resume-explicit-side-assignment-implementation-workbook.md:812)
-- The accepted BUG-011 repair established identical seed-based reconstruction on both peers for Network replay and preserved the same-seed fresh Network setup. It was explicitly bounded away from normal save/resume and command-result semantics. [BUG-011 repair](/Users/Katharina/godot/Armada/docs/qa/bugs/closed/BUG-011/issue-network-replay-rng-bootstrap-repair-plan.md:120)
+- ADR-008 makes the host/server `GameState` the writable Network authority; client mirrors reproduce semantics without becoming independent owners. [ADR-008](../../../../architecture/adr/ADR-008-durable-match-lifetime-player-principal-binding.md#L94)
+- ADR-001 and CON-001 require semantic attack mutation to remain command-owned and atomic. History records accepted decisions/order rather than calculation outcomes. Replay re-executes deterministic calculations from the same initial authoritative state. [ADR-001](../../../../architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md#L74), [CON-001](../../../../architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md#L301)
+- CON-001 requires ordered mirrored commands, host/mirror agreement on shared attack facts, and permits differences only under accepted visibility filtering. It does not explicitly decide whether mirror application recalculates randomness or consumes an authority-resolved result. [CON-001](../../../../architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md#L511)
+- ADR-011 requires resume/reconnect to install only the correctly filtered current state and restore every canonical fact needed for the next legal decision before command admission. [ADR-011](../../../../architecture/adr/ADR-011-network-match-resume-and-principal-entitlement.md#L172)
+- The accepted MATCH-003 implementation workbook explicitly preserves `StateFilter`, `GameState`, command ownership, and save/replay schemas. Changing these is an Owner stop gate in that scope. [MATCH-003](../../../../architecture/implementation_workbooks/MATCH-003-network-match-resume-explicit-side-assignment-implementation-workbook.md#L98), [MATCH-003 stop gates](../../../../architecture/implementation_workbooks/MATCH-003-network-match-resume-explicit-side-assignment-implementation-workbook.md#L812)
+- The accepted BUG-011 repair established identical seed-based reconstruction on both peers for Network replay and preserved the same-seed fresh Network setup. It was explicitly bounded away from normal save/resume and command-result semantics. [BUG-011 repair](../../closed/BUG-011/issue-network-replay-rng-bootstrap-repair-plan.md#L120)
 
 Inference: no accepted ADR or contract currently resolves RNG ownership consistently across fresh live Network play, filtered reconstruction, and passive mirror execution.
 
 3. StateFilter rationale
 
-- Proven: the filter describes RNG and damage-deck order as secrets and unconditionally removes RNG. Unit tests require removal for both players. This is deliberate behavior, not an accidental omission. [state_filter.gd](/Users/Katharina/godot/Armada/src/core/network/state_filter.gd:1), [test_state_filter.gd](/Users/Katharina/godot/Armada/tests/unit/test_state_filter.gd:104)
-- Historical evidence: the approved but now historical G4 plan explicitly chose server-only RNG, never transmitted during play, with clients receiving realized results only. [g4_network_plan.md](/Users/Katharina/godot/Armada/docs/old/g4_network_plan.md:111)
-- The same historical plan later added shared-seed client initialization, creating an internal contradiction that the current implementation inherited. [g4_network_plan.md](/Users/Katharina/godot/Armada/docs/old/g4_network_plan.md:438)
+- Proven: the filter describes RNG and damage-deck order as secrets and unconditionally removes RNG. Unit tests require removal for both players. This is deliberate behavior, not an accidental omission. [state_filter.gd](../../../../../src/core/network/state_filter.gd#L1), [test_state_filter.gd](../../../../../tests/unit/test_state_filter.gd#L104)
+- Historical evidence: the approved but now historical G4 plan explicitly chose server-only RNG, never transmitted during play, with clients receiving realized results only. [g4_network_plan.md](../../../../old/g4_network_plan.md#L111)
+- The same historical plan later added shared-seed client initialization, creating an internal contradiction that the current implementation inherited. [g4_network_plan.md](../../../../old/g4_network_plan.md#L438)
 - Normative qualification: no current accepted ADR explicitly names RNG state as secret. However, ADR-011 and MATCH-003 require correctly filtered views and preserve the existing filter unchanged.
 
 Classification: an explicit information-hiding requirement with historical authority, current implementation/tests, and indirect accepted resume authority—not merely legacy behavior, but also not yet a complete current RNG authority decision.
@@ -42,7 +42,7 @@ Classification: an explicit information-hiding requirement with historical autho
 The production chain is:
 
 1. The host’s full save contains the current RNG state.
-2. Fresh resume or reconnect sends `StateFilter.filter_for_player(...)`. [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:530)
+2. Fresh resume or reconnect sends `StateFilter.filter_for_player(...)`. [network_manager.gd](../../../../../src/autoload/network_manager.gd#L530)
 3. Client deserialization produces `rng == null`.
 4. The state passes staging/live-installation validation and is installed at the current accepted cursor.
 5. The next authority result is handled by `submit_mirror()`.
@@ -51,16 +51,16 @@ The production chain is:
 
 This simultaneously violates reconstruction completeness and host/mirror convergence, but accepted authority does not choose whether the missing prerequisite should be RNG state or an authority-resolved application mechanism.
 
-The supplied log confirms host success through sequences 599–602, including `roll_dice`; it does not contain the client exception or stalled cursor. The issue record and current code independently establish that client path. [BUG-042 record](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-042/issue-Network-resume-loses-deterministic-RNG-required-by-mirrored-RollDiceCommand.md:49)
+The supplied log confirms host success through sequences 599–602, including `roll_dice`; it does not contain the client exception or stalled cursor. The issue record and current code independently establish that client path. [BUG-042 record](issue-Network-resume-loses-deterministic-RNG-required-by-mirrored-RollDiceCommand.md#L49)
 
 5. Affected RNG-dependent command scope
 
 Four current gameplay commands directly consume `GameState.rng`:
 
-- `RollDiceCommand`: complete attack pool. [roll_dice_command.gd](/Users/Katharina/godot/Armada/src/core/commands/roll_dice_command.gd:58)
-- `RerollAttackDieCommand`: one attack die. [reroll_attack_die_command.gd](/Users/Katharina/godot/Armada/src/core/commands/reroll_attack_die_command.gd:66)
-- `UseConcentrateFireTokenRerollCommand`: die reroll plus token/resolution mutation. [use_concentrate_fire_token_reroll_command.gd](/Users/Katharina/godot/Armada/src/core/commands/use_concentrate_fire_token_reroll_command.gd:52)
-- `SelectEvadeDieCommand`: medium/close reroll; it also dereferences RNG at long range even though that branch removes rather than rerolls the die. [select_evade_die_command.gd](/Users/Katharina/godot/Armada/src/core/commands/select_evade_die_command.gd:84)
+- `RollDiceCommand`: complete attack pool. [roll_dice_command.gd](../../../../../src/core/commands/roll_dice_command.gd#L58)
+- `RerollAttackDieCommand`: one attack die. [reroll_attack_die_command.gd](../../../../../src/core/commands/reroll_attack_die_command.gd#L66)
+- `UseConcentrateFireTokenRerollCommand`: die reroll plus token/resolution mutation. [use_concentrate_fire_token_reroll_command.gd](../../../../../src/core/commands/use_concentrate_fire_token_reroll_command.gd#L52)
+- `SelectEvadeDieCommand`: medium/close reroll; it also dereferences RNG at long range even though that branch removes rather than rerolls the die. [select_evade_die_command.gd](../../../../../src/core/commands/select_evade_die_command.gd#L84)
 
 Their current results contain resolved dice outcomes and relevant identity/index data, but no RNG seed or post-command RNG state.
 

@@ -78,27 +78,27 @@ identity, no shared static timing-window definition owner in use, and no
 
 | Area | Classification | Evidence |
 |---|---:|---|
-| 1. TimingWindowState ownership | Non-Compliant | `GameState` serializes `interaction_flow`, not `TimingWindowState`: [game_state.gd:151](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:151). |
+| 1. TimingWindowState ownership | Non-Compliant | `GameState` serializes `interaction_flow`, not `TimingWindowState`: [game_state.gd:151](../../../src/core/state/game_state.gd#L151). |
 | 2. Lifecycle identity | Non-Compliant | Commands validate phase/flow/runtime id, but no active lifecycle identity is serialized or checked. |
-| 3. Static timing-window definition ownership | Non-Compliant | Policy is spread across `FlowSpec`, ECM helper, `CommandApplicability`, and `GameManager`: [flow_spec.gd:247](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd:247). |
-| 4. RuleRegistry participant discovery | Partially Compliant | ECM registers static enablers, but status ready-cost candidates are locally scanned by ECM helper: [electronic_countermeasures.gd:26](/Users/Katharina/godot/Armada/src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd:26), [electronic_countermeasures.gd:721](/Users/Katharina/godot/Armada/src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd:721). |
-| 5. Opportunity derivation | Partially Compliant | Opportunities are derived from runtime state, but not through the orchestrator protocol: [electronic_countermeasures.gd:457](/Users/Katharina/godot/Armada/src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd:457). |
+| 3. Static timing-window definition ownership | Non-Compliant | Policy is spread across `FlowSpec`, ECM helper, `CommandApplicability`, and `GameManager`: [flow_spec.gd:247](../../../src/core/state/flow_spec.gd#L247). |
+| 4. RuleRegistry participant discovery | Partially Compliant | ECM registers static enablers, but status ready-cost candidates are locally scanned by ECM helper: [electronic_countermeasures.gd:26](../../../src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd#L26), [electronic_countermeasures.gd:721](../../../src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd#L721). |
+| 5. Opportunity derivation | Partially Compliant | Opportunities are derived from runtime state, but not through the orchestrator protocol: [electronic_countermeasures.gd:457](../../../src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd#L457). |
 | 6. Canonical opportunity identity | Partially Compliant | Uses `runtime_upgrade_id` and owner/source facts, but no CON-005 canonical opportunity record. |
-| 7. Controller policy | Partially Compliant | Owner checks exist in command validation; no window-defined controller policy: [electronic_countermeasures.gd:781](/Users/Katharina/godot/Armada/src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd:781). |
-| 8. Explicit Use command | Fully Compliant locally | `use_ecm` and `ready_ecm` are replayable commands: [use_ecm_command.gd:14](/Users/Katharina/godot/Armada/src/core/commands/use_ecm_command.gd:14), [ready_ecm_command.gd:15](/Users/Katharina/godot/Armada/src/core/commands/ready_ecm_command.gd:15). |
-| 9. Explicit Decline command | Fully Compliant locally | `decline_ecm` and `decline_ecm_ready` exist: [decline_ecm_command.gd:14](/Users/Katharina/godot/Armada/src/core/commands/decline_ecm_command.gd:14), [decline_ecm_ready_command.gd:14](/Users/Katharina/godot/Armada/src/core/commands/decline_ecm_ready_command.gd:14). |
-| 10. Replayability | Partially Compliant | Commands serialize/replay, but lifecycle identity and orchestrator continuation are missing. Tests: [test_ecm_status_ready_cost_command.gd:487](/Users/Katharina/godot/Armada/tests/unit/test_ecm_status_ready_cost_command.gd:487). |
-| 11. Continuation derivation | Non-Compliant | `GameManager` synthesizes `start_round` after ECM choices: [game_manager.gd:1308](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:1308), [game_manager.gd:1984](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:1984). |
+| 7. Controller policy | Partially Compliant | Owner checks exist in command validation; no window-defined controller policy: [electronic_countermeasures.gd:781](../../../src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd#L781). |
+| 8. Explicit Use command | Fully Compliant locally | `use_ecm` and `ready_ecm` are replayable commands: [use_ecm_command.gd:14](../../../src/core/commands/use_ecm_command.gd#L14), [ready_ecm_command.gd:15](../../../src/core/commands/ready_ecm_command.gd#L15). |
+| 9. Explicit Decline command | Fully Compliant locally | `decline_ecm` and `decline_ecm_ready` exist: [decline_ecm_command.gd:14](../../../src/core/commands/decline_ecm_command.gd#L14), [decline_ecm_ready_command.gd:14](../../../src/core/commands/decline_ecm_ready_command.gd#L14). |
+| 10. Replayability | Partially Compliant | Commands serialize/replay, but lifecycle identity and orchestrator continuation are missing. Tests: [test_ecm_status_ready_cost_command.gd:487](../../../tests/unit/test_ecm_status_ready_cost_command.gd#L487). |
+| 11. Continuation derivation | Non-Compliant | `GameManager` synthesizes `start_round` after ECM choices: [game_manager.gd:1308](../../../src/autoload/game_manager.gd#L1308), [game_manager.gd:1984](../../../src/autoload/game_manager.gd#L1984). |
 | 12. Continuation failure behavior | Non-Compliant | No CON-005 failure semantics for failed continuation; local helper simply calls `advance_phase()`. |
-| 13. Cleanup ownership | Partially Compliant | Rule state cleanup is replayable through `start_round`, but lifecycle cleanup is not orchestrator-owned: [start_round_command.gd:67](/Users/Katharina/godot/Armada/src/core/commands/start_round_command.gd:67). |
+| 13. Cleanup ownership | Partially Compliant | Rule state cleanup is replayable through `start_round`, but lifecycle cleanup is not orchestrator-owned: [start_round_command.gd:67](../../../src/core/commands/start_round_command.gd#L67). |
 | 14. Cleanup trigger coverage | Partially Compliant | Some local cleanup tests exist; CON-005 failure/identity/duplicate categories are missing. |
-| 15. Projection | Partially Compliant | Projection is derived via `UIProjector`/RuleRegistry enablers, but not from shared opportunity records: [ui_projector.gd:355](/Users/Katharina/godot/Armada/src/core/network/ui_projector.gd:355). |
-| 16. Visibility | Fully Compliant for current ECM scope | ECM is public; tests cover both owner/opponent projection: [test_ecm_status_ready_cost_command.gd:371](/Users/Katharina/godot/Armada/tests/unit/test_ecm_status_ready_cost_command.gd:371). |
-| 17. Save/load | Partially Compliant | Runtime upgrade state and flow serialize; timing-window lifecycle identity does not: [ship_instance.gd:430](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:430). |
+| 15. Projection | Partially Compliant | Projection is derived via `UIProjector`/RuleRegistry enablers, but not from shared opportunity records: [ui_projector.gd:355](../../../src/core/network/ui_projector.gd#L355). |
+| 16. Visibility | Fully Compliant for current ECM scope | ECM is public; tests cover both owner/opponent projection: [test_ecm_status_ready_cost_command.gd:371](../../../tests/unit/test_ecm_status_ready_cost_command.gd#L371). |
+| 17. Save/load | Partially Compliant | Runtime upgrade state and flow serialize; timing-window lifecycle identity does not: [ship_instance.gd:430](../../../src/core/state/ship_instance.gd#L430). |
 | 18. Replay | Partially Compliant | Command replay exists; no lifecycle identity or continuation-failure replay proof. |
-| 19. Reconnect | Partially Compliant | Projection reconstructs from filtered state, but no active `TimingWindowState`: [test_ecm_status_ready_cost_command.gd:406](/Users/Katharina/godot/Armada/tests/unit/test_ecm_status_ready_cost_command.gd:406). |
-| 20. Networking invariants | Partially Compliant | Ordered mirror handling exists; stale-window identity checks do not: [game_manager.gd:2113](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2113). |
-| 21. CAP obligations | Non-Compliant | CAP is Draft and stale against implementation/CON-005: [CAP-ECM-001-electronic-countermeasures.md:5](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-ECM-001-electronic-countermeasures.md:5), [CAP-ECM-001-electronic-countermeasures.md:1200](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-ECM-001-electronic-countermeasures.md:1200). |
+| 19. Reconnect | Partially Compliant | Projection reconstructs from filtered state, but no active `TimingWindowState`: [test_ecm_status_ready_cost_command.gd:406](../../../tests/unit/test_ecm_status_ready_cost_command.gd#L406). |
+| 20. Networking invariants | Partially Compliant | Ordered mirror handling exists; stale-window identity checks do not: [game_manager.gd:2113](../../../src/autoload/game_manager.gd#L2113). |
+| 21. CAP obligations | Non-Compliant | CAP is Draft and stale against implementation/CON-005: [CAP-ECM-001-electronic-countermeasures.md:5](../rule_capability_packages/CAP-ECM-001-electronic-countermeasures.md#L5), [CAP-ECM-001-electronic-countermeasures.md:1200](../rule_capability_packages/CAP-ECM-001-electronic-countermeasures.md#L1200). |
 | 22. TEST-003 obligations | Partially Compliant | Good legacy tests, but missing full protocol evidence categories required by CON-005. |
 
 ## Strengths
@@ -106,13 +106,13 @@ identity, no shared static timing-window definition owner in use, and no
 - ECM uses explicit replayable use/decline commands for both attack-time and
   Status Phase choices.
 - Runtime upgrade mutable state is correctly on the source `ShipInstance`
-  runtime upgrade, consistent with ADR-004/CON-004: [ship_instance.gd:525](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:525).
+  runtime upgrade, consistent with ADR-004/CON-004: [ship_instance.gd:525](../../../src/core/state/ship_instance.gd#L525).
 - Command validation rejects wrong phase, wrong player, missing source, invalid
   card state, duplicate ready/decline, and missing Repair token.
 - Save/load and reconnect tests prove current projection can be reconstructed
   from serialized runtime state.
 - Network clients do not locally synthesize ready-cost execution in the tested
-  path: [test_ecm_status_ready_cost_command.gd:309](/Users/Katharina/godot/Armada/tests/unit/test_ecm_status_ready_cost_command.gd:309).
+  path: [test_ecm_status_ready_cost_command.gd:309](../../../tests/unit/test_ecm_status_ready_cost_command.gd#L309).
 
 ## Non-Compliant Obligations
 

@@ -25,14 +25,14 @@ reduction.
 
 Before beginning the audit, I read these required startup documents in full:
 
-1. [AGENTS.md](/Users/Katharina/godot/Armada/AGENTS.md)
-2. [ARCHITECTURE.md](/Users/Katharina/godot/Armada/ARCHITECTURE.md)
-3. [AI_DEVELOPMENT_PRINCIPLES.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PRINCIPLES.md)
-4. [AI_DEVELOPMENT_PROCESS.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PROCESS.md)
-5. [AI_STARTUP_GUARDRAILS.md](/Users/Katharina/godot/Armada/.ai/instructions/AI_STARTUP_GUARDRAILS.md)
-6. [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md)
-7. [ARCHITECTURE_ROADMAP.md](/Users/Katharina/godot/Armada/docs/architecture/ARCHITECTURE_ROADMAP.md)
-8. [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md)
+1. [AGENTS.md](../../../AGENTS.md)
+2. [ARCHITECTURE.md](../../../ARCHITECTURE.md)
+3. [AI_DEVELOPMENT_PRINCIPLES.md](../../development/AI_DEVELOPMENT_PRINCIPLES.md)
+4. [AI_DEVELOPMENT_PROCESS.md](../../development/AI_DEVELOPMENT_PROCESS.md)
+5. [AI_STARTUP_GUARDRAILS.md](../../../.ai/instructions/AI_STARTUP_GUARDRAILS.md)
+6. [DOCUMENT_AUTHORITY.md](../DOCUMENT_AUTHORITY.md)
+7. [ARCHITECTURE_ROADMAP.md](../ARCHITECTURE_ROADMAP.md)
+8. [CODEX_WORKFLOW.md](../CODEX_WORKFLOW.md)
 
 I then read both primary audit inputs in full, the listed accepted ADRs/contracts/workbooks/test strategy, the complete current UX-005 issue and relevant history, setup/replay compatibility authority, and the requested implementation and test surfaces.
 
@@ -72,7 +72,7 @@ The Draft is not ready for Project Owner acceptance because it materially crosse
 | MP-OD-007 | PASS | Keeps the binding stable across disconnect/reconnect and separates it from peer identity. The authentication stop does not weaken this decision. |
 | MP-OD-008 | PASS | Correctly rejects peer ID, display name, UI/controller state, connected membership, and player index as sufficient identity. |
 | MP-OD-009 | PASS | Uses match-scoped identity and avoids turning `PlayerProfile.client_id` into an account identity. |
-| MP-OD-010 | **PARTIAL** | The durability obligation is faithful, but mandatory legacy-save reconstruction and mandatory replay rerecord/cutover policy strengthen the decision despite its explicit compatibility deferral at [MATCH-001 owner decisions:84](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/MATCH-001-player-principal-binding-owner-decisions.md:84). |
+| MP-OD-010 | **PARTIAL** | The durability obligation is faithful, but mandatory legacy-save reconstruction and mandatory replay rerecord/cutover policy strengthen the decision despite its explicit compatibility deferral at [MATCH-001 owner decisions:84](MATCH-001-player-principal-binding-owner-decisions.md#L84). |
 | MP-OD-011 | PASS | Selects a narrow GameState-owned value without adding general session state. “Semantic owner” wording should be simplified, but the model itself is faithful. |
 | MP-OD-012 | PASS | Does not introduce bot logic, generic routing, accounts, matchmaking, a session framework, or controller FSM. |
 
@@ -83,8 +83,8 @@ The Draft is not ready for Project Owner acceptance because it materially crosse
 | **BLOCKING** | The Draft makes Owner-deferred compatibility decisions. Section 8 requires otherwise-valid legacy saves to be accepted and reconstructed from `game_mode`; Section 9 requires legacy replays to be rerecorded rather than converted. MP-OD-010 defers exact serialization and compatibility, and ADR-007 assigns accept/migrate/reject and replay cutover to the implementation workbook. |
 | **BLOCKING** | The ADR/workbook boundary is materially violated. Candidate inventories, exact bootstrap seams, detailed compatibility behavior, state-filter mechanics, twelve implementation gate items, test organization, and cutover sequencing occupy a large part of the 917-line Draft. This must be reduced before acceptance under the requested audit standard. |
 | **HIGH** | Sections 8 and 9 turn reasonable implementation options into architecture obligations. The mode-cardinality semantics are architectural; the legacy acceptance, resave, failure branches, carrier placement, format cutover, and rerecord procedure are not. |
-| **MEDIUM** | The Draft says GameState owns the value while the value is the “sole semantic owner” at [ADR-008:147](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-008-durable-match-lifetime-player-principal-binding.md:147). This creates avoidable two-level ownership language. GameState should be the canonical owner; the value should encapsulate the facts and invariants. |
-| **MEDIUM** | The reconnect stop correctly requires proof of entitlement, but the mandatory future-decision scope extends unnecessarily into privacy, expiry, rotation, and replacement policy at [ADR-008:599](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-008-durable-match-lifetime-player-principal-binding.md:599). Those concerns belong only if the later mechanism actually needs them. |
+| **MEDIUM** | The Draft says GameState owns the value while the value is the “sole semantic owner” at [ADR-008:147](../adr/ADR-008-durable-match-lifetime-player-principal-binding.md#L147). This creates avoidable two-level ownership language. GameState should be the canonical owner; the value should encapsulate the facts and invariants. |
+| **MEDIUM** | The reconnect stop correctly requires proof of entitlement, but the mandatory future-decision scope extends unnecessarily into privacy, expiry, rotation, and replacement policy at [ADR-008:599](../adr/ADR-008-durable-match-lifetime-player-principal-binding.md#L599). Those concerns belong only if the later mechanism actually needs them. |
 | **MEDIUM** | “Public between participating humans” and exact state-filter pass-through are stronger than required here. The architectural rule is that principal IDs are not authentication proof and credentials must not enter the public binding. Exact projection belongs in MATCH-001. |
 | **LOW** | Accepted ADR/contract content and Owner decisions are restated repeatedly across context, relationships, invariants, non-goals, alternatives, mapping, consequences, and implementation obligations. |
 | **NOTE** | No contradiction was found with ADR-001/CON-001, ADR-005/CON-005, ADR-006/CON-006, ADR-007, TWI-003, or TEST-003. No amendment is required merely to mention ADR-008. |
@@ -132,11 +132,11 @@ It must not contain:
 
 Current implementation evidence supports this boundary:
 
-- [GameState](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:6) already owns canonical match gameplay state and serialization.
-- [PlayerState](/Users/Katharina/godot/Armada/src/core/state/player_state.gd:5) is per-gameplay-side state.
-- [FleetSetupPackage](/Users/Katharina/godot/Armada/src/core/setup/fleet_setup_package.gd:6) is consumed setup input.
-- [PlayMode](/Users/Katharina/godot/Armada/src/autoload/play_mode.gd:13) is process-level mode selection, not durable participant identity.
-- [PlayerProfile](/Users/Katharina/godot/Armada/src/autoload/player_profile.gd:4) is installation-local profile identity.
+- [GameState](../../../src/core/state/game_state.gd#L6) already owns canonical match gameplay state and serialization.
+- [PlayerState](../../../src/core/state/player_state.gd#L5) is per-gameplay-side state.
+- [FleetSetupPackage](../../../src/core/setup/fleet_setup_package.gd#L6) is consumed setup input.
+- [PlayMode](../../../src/autoload/play_mode.gd#L13) is process-level mode selection, not durable participant identity.
+- [PlayerProfile](../../../src/autoload/player_profile.gd#L4) is installation-local profile identity.
 
 # 8. Hot-Seat assessment
 
@@ -171,9 +171,9 @@ Neither principal is a peer ID, lobby slot, display name, current connection, UI
 
 Current implementation confirms why the separation is necessary:
 
-- [NetworkManager](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:420) accepts a client-supplied profile ID during handshake.
-- It assigns the first available player slot at [NetworkManager:907](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:907).
-- Command authorization currently compares the command player index with the transient peer slot at [NetworkManager:608](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:608).
+- [NetworkManager](../../../src/autoload/network_manager.gd#L420) accepts a client-supplied profile ID during handshake.
+- It assigns the first available player slot at [NetworkManager:907](../../../src/autoload/network_manager.gd#L907).
+- Command authorization currently compares the command player index with the transient peer slot at [NetworkManager:608](../../../src/autoload/network_manager.gd#L608).
 - Disconnect removes transient peer state.
 - Lobby rows are similarly current-connectivity/setup records, not durable principals.
 
@@ -219,9 +219,9 @@ The architecture obligations that belong in ADR-008 are:
 - restored identity must not depend on current peers, UI, names, or current `PlayMode`;
 - any supported reconstruction must produce Hot-Seat one-human/two-player semantics or Network two-distinct-human semantics.
 
-The Draft goes too far at [ADR-008:477](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-008-durable-match-lifetime-player-principal-binding.md:477) by requiring all otherwise-valid pre-MATCH saves to be accepted through `game_mode` reconstruction and resaved.
+The Draft goes too far at [ADR-008:477](../adr/ADR-008-durable-match-lifetime-player-principal-binding.md#L477) by requiring all otherwise-valid pre-MATCH saves to be accepted through `game_mode` reconstruction and resaved.
 
-That reconstruction is an evidence-supported implementation possibility because signed save metadata already contains `game_mode`. It is not forced by accepted architecture. Current save loading rejects non-current versions at [SaveGameManager:213](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:213), and ADR-007 explicitly assigns accept/equivalent/migrate/reject to the implementation workbook at [ADR-007:589](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-007-purpose-specific-completed-attack-result-inspection-lifecycle.md:589).
+That reconstruction is an evidence-supported implementation possibility because signed save metadata already contains `game_mode`. It is not forced by accepted architecture. Current save loading rejects non-current versions at [SaveGameManager:213](../../../src/autoload/save_game_manager.gd#L213), and ADR-007 explicitly assigns accept/equivalent/migrate/reject to the implementation workbook at [ADR-007:589](../adr/ADR-007-purpose-specific-completed-attack-result-inspection-lifecycle.md#L589).
 
 The exact version, algorithm, branches, resave behavior, and reject rules must move to MATCH-001.
 
@@ -233,9 +233,9 @@ The sound architecture requirement is:
 - replay must not simulate live peers merely to construct principals;
 - recorded identity must not change according to whether the runner uses one process or the network harness.
 
-The Draft overreaches by requiring the complete table in a particular initial carrier and by mandating that old replays be rerecorded at [ADR-008:523](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-008-durable-match-lifetime-player-principal-binding.md:523).
+The Draft overreaches by requiring the complete table in a particular initial carrier and by mandating that old replays be rerecorded at [ADR-008:523](../adr/ADR-008-durable-match-lifetime-player-principal-binding.md#L523).
 
-Current `GameReplay` lacks play mode and binding data and accepts only its exact current format at [game_replay.gd:32](/Users/Katharina/godot/Armada/src/core/commands/game_replay.gd:32). Therefore compatibility work is genuinely required. But the [Replay Baseline Workflow](/Users/Katharina/godot/Armada/docs/development/REPLAY_BASELINE_WORKFLOW.md:1) explicitly says it does not define replay semantics or format policy. Its rerecord procedure applies after an owning compatibility decision; it does not itself make that decision.
+Current `GameReplay` lacks play mode and binding data and accepts only its exact current format at [game_replay.gd:32](../../../src/core/commands/game_replay.gd#L32). Therefore compatibility work is genuinely required. But the [Replay Baseline Workflow](../../development/REPLAY_BASELINE_WORKFLOW.md#L1) explicitly says it does not define replay semantics or format policy. Its rerecord procedure applies after an owning compatibility decision; it does not itself make that decision.
 
 Carrier placement, format allocation, old-replay disposition, and fixture rerecording belong in MATCH-001.
 
@@ -266,7 +266,7 @@ ADR-008 provides the missing authority conceptually:
 - Two-human Network: distinct `HUMAN` set cardinality is two.
 - Human plus automated: only the human principal enters the human acknowledgement set.
 
-This directly addresses the Entry Gate A failure described at [ADR-007:504](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-007-purpose-specific-completed-attack-result-inspection-lifecycle.md:504) and the UX-005 failure where transient local acknowledgement allowed automatic continuation at [UX-005 issue:246](/Users/Katharina/godot/Armada/docs/qa/ux/verify/UX-005/issue-Allow-player-to-inspect-anti-squadron-attack-result-before-continuing.md:246).
+This directly addresses the Entry Gate A failure described at [ADR-007:504](../adr/ADR-007-purpose-specific-completed-attack-result-inspection-lifecycle.md#L504) and the UX-005 failure where transient local acknowledgement allowed automatic continuation at [UX-005 issue:246](../../qa/ux/verify/UX-005/issue-Allow-player-to-inspect-anti-squadron-attack-result-before-continuing.md#L246).
 
 A design pre-check can occur after ADR-008 acceptance, but the formal Entry Gate A pass should be rerun only after MATCH-001 implementation provides the actual authoritative source and mode derivation. Reconnect acknowledgement remains subject to the separate entitlement stop.
 

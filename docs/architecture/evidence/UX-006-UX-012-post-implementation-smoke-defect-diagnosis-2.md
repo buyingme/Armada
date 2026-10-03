@@ -26,19 +26,19 @@ The production path is:
 
 `Move intent → ActivateSquadronCommand → accepted Move → modal.notify_move_completed → activation_done → CompleteSquadronActivationCommand → GameState commits next controller → command-result projection opens selection → original activation_done callback resumes → hide_ui`.
 
-The **first incorrect transition** is the final `hide_ui()` in [SquadronPhaseController](/Users/Katharina/godot/Armada/src/scenes/game_board/squadron_phase_controller.gd:893). It tests whether the *completed squadron’s owner* still controls the phase, then hides the already-projected next controller’s selection. It also hides the reopen button. The [first log](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-069/game_20261001_203118.log:673) explicitly records successful completion, controller change, modal opening, and the retiring callback continuing afterward.
+The **first incorrect transition** is the final `hide_ui()` in [SquadronPhaseController](../../../src/scenes/game_board/squadron_phase_controller.gd#L893). It tests whether the *completed squadron’s owner* still controls the phase, then hides the already-projected next controller’s selection. It also hides the reopen button. The [first log](../../qa/bugs/open/BUG-069/game_20261001_203118.log#L673) explicitly records successful completion, controller change, modal opening, and the retiring callback continuing afterward.
 
-**Why Network works:** Hot-Seat deliberately skips passive-peer advancement. Network additionally refreshes the observer through `active_player_changed → should_begin_passive_squadron_observer → begin_activation_flow`; the remote controlling peer receives its own accepted-result projection. The [Network capture](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-070/game_20261001_203718.log:612) shows the observer reopening after the same retiring callback. Network success therefore does not prove the shared teardown is correct.
+**Why Network works:** Hot-Seat deliberately skips passive-peer advancement. Network additionally refreshes the observer through `active_player_changed → should_begin_passive_squadron_observer → begin_activation_flow`; the remote controlling peer receives its own accepted-result projection. The [Network capture](../../qa/bugs/open/BUG-070/game_20261001_203718.log#L612) shows the observer reopening after the same retiring callback. Network success therefore does not prove the shared teardown is correct.
 
 **Why it appears inconsistent:** Skip completes within the command-result callback, allowing the subsequent router projection to reopen selection. Movement submits completion from an outer callback, which resumes and hides selection **after** projection. The second capture demonstrates both orders.
 
 - **Authority/workbook mapping:** UX-010 Slice 8 requires banner-independent continuation; UX-011 §4.4/Slice 6 requires actionable selection after canonical completion. CON-007-SQMOVE-007/008 and ADR-010 require equivalent decisions across supported modes and callback histories.
-- **Why previous verification missed it:** The [BUG-065 regression](/Users/Katharina/godot/Armada/tests/integration/test_ship_activation.gd:213) verifies last-ship teardown and initial squadron intent, then stops before that squadron completes. Turn-count tests assert canonical controller changes; the relevant modal integration test exercises Skip and same-player continuation.
+- **Why previous verification missed it:** The [BUG-065 regression](../../../tests/integration/test_ship_activation.gd#L213) verifies last-ship teardown and initial squadron intent, then stops before that squadron completes. Turn-count tests assert canonical controller changes; the relevant modal integration test exercises Skip and same-player continuation.
 - **Proposed repair:** Make retiring activation cleanup preserve/rederive selection from the **current canonical phase/controller**, including a different controller. Remove the stale callback’s authority over next-turn visibility. Keep Network admission, result application, and working observer behavior intact; do not restore banners or compensate with delayed reopening.
 
 **3. BUG-070**
 
-- **Symptom:** Network host CR90, carrying Point-Defense Failure, attacks a TIE with one blue die. `begin_attack` succeeds at sequence 56; sequence 57 publishes presentation. Mandatory die removal is rejected, leaving `attack:56` active in `pre_roll`, pool `{"BLUE":1}`, with no resolved pool choice. The [log](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-070/game_20261001_203718.log:976) identifies the rejection precisely.
+- **Symptom:** Network host CR90, carrying Point-Defense Failure, attacks a TIE with one blue die. `begin_attack` succeeds at sequence 56; sequence 57 publishes presentation. Mandatory die removal is rejected, leaving `attack:56` active in `pre_roll`, pool `{"BLUE":1}`, with no resolved pool choice. The [log](../../qa/bugs/open/BUG-070/game_20261001_203718.log#L976) identifies the rejection precisely.
 - **Expected, established by evidence:** Mandatory removal must remove the last die and yield a valid, recoverable continuation. Rejection followed by an inert interface is incorrect.
 - **Root cause:** The rule permits removal to zero, but the command/state integration assumes every active attack retains a positive pool.
 
@@ -46,12 +46,12 @@ The production path is:
 
 `Target confirmation → BeginAttackCommand derives one blue die → accepted attack/progress commitment → AttackExecutor derives mandatory rule choice → single available colour auto-submits ResolveAttackPoolChoiceCommand → PointDefenseFailure removes blue → command rejects zero`.
 
-The **first incorrect seam** is [ResolveAttackPoolChoiceCommand._resolve_rule_choice](/Users/Katharina/godot/Armada/src/core/commands/resolve_attack_pool_choice_command.gd:115): `after_count <= 0` rejects the otherwise correct one-die reduction.
+The **first incorrect seam** is [ResolveAttackPoolChoiceCommand._resolve_rule_choice](../../../src/core/commands/resolve_attack_pool_choice_command.gd#L115): `after_count <= 0` rejects the otherwise correct one-die reduction.
 
 Two further barriers matter:
 
-1. [CurrentAttackState._validated_pool](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd:391) independently rejects an empty pool. Removing only the command check cannot repair this.
-2. [AttackExecutor’s automatic-choice branch](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:1670) returns “handled” despite submission failure, after hiding Confirm/Skip. Existing empty-pool presentation does not itself guarantee canonical termination or recovery.
+1. [CurrentAttackState._validated_pool](../../../src/core/state/current_attack_state.gd#L391) independently rejects an empty pool. Removing only the command check cannot repair this.
+2. [AttackExecutor’s automatic-choice branch](../../../src/scenes/game_board/attack_executor.gd#L1670) returns “handled” despite submission failure, after hiding Confirm/Skip. Existing empty-pool presentation does not itself guarantee canonical termination or recovery.
 
 - **Authority/workbook mapping:** ADR-001/CON-001 own attack mutation and terminal transactions; ADR-003/CON-003 require rule integration across command, state, presentation, and persistence; ADR-010 requires recoverable continuation. UX-006 exposes the persistent card but does not define a new zero-dice attack semantic.
 - **Why verification missed it:** Point-Defense Failure tests cover multi-die removal and an already-empty input, not **one die → zero through the production command**. The state test explicitly enforces non-empty active pools. The previous repairs addressed other boundaries. Both rejecting guards already existed in commit `7bc978a`; this is not evidence that the recent UX repair introduced them.
@@ -97,7 +97,7 @@ Any later rule repair needs CON-003 traceability; Codex must not mark a capabili
 
 **BUG-070: confirm the outcome when mandatory pre-roll removal removes the last gathered die:** does the individual attack cancel, preserving already-committed attack/target consumption and returning through the existing enclosing attack owner, or continue through a zero-dice resolution?
 
-Cancellation is suggested by existing UI branches, but those branches are inconsistent/incomplete. The repository’s [rules reference](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:99) explicitly addresses inability to gather dice; it does not unambiguously settle this post-gather removal boundary. Accepted architecture specifies ownership without selecting that gameplay outcome.
+Cancellation is suggested by existing UI branches, but those branches are inconsistent/incomplete. The repository’s [rules reference](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L99) explicitly addresses inability to gather dice; it does not unambiguously settle this post-gather removal boundary. Accepted architecture specifies ownership without selecting that gameplay outcome.
 
 **Stop before implementing that semantic choice**, as requested. No architecture redesign is proposed.
 

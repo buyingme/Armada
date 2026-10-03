@@ -21,19 +21,19 @@ No repository files were modified and no tests were executed.
 
 Startup documents:
 
-- [AGENTS.md](/Users/Katharina/godot/Armada/AGENTS.md)
-- [ARCHITECTURE.md](/Users/Katharina/godot/Armada/ARCHITECTURE.md)
-- [AI_DEVELOPMENT_PRINCIPLES.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PRINCIPLES.md)
-- [AI_DEVELOPMENT_PROCESS.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PROCESS.md)
-- [AI_STARTUP_GUARDRAILS.md](/Users/Katharina/godot/Armada/.ai/instructions/AI_STARTUP_GUARDRAILS.md)
-- [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md)
-- [ARCHITECTURE_ROADMAP.md](/Users/Katharina/godot/Armada/docs/architecture/ARCHITECTURE_ROADMAP.md)
-- [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md)
+- [AGENTS.md](../../../AGENTS.md)
+- [ARCHITECTURE.md](../../../ARCHITECTURE.md)
+- [AI_DEVELOPMENT_PRINCIPLES.md](../../development/AI_DEVELOPMENT_PRINCIPLES.md)
+- [AI_DEVELOPMENT_PROCESS.md](../../development/AI_DEVELOPMENT_PROCESS.md)
+- [AI_STARTUP_GUARDRAILS.md](../../../.ai/instructions/AI_STARTUP_GUARDRAILS.md)
+- [DOCUMENT_AUTHORITY.md](../DOCUMENT_AUTHORITY.md)
+- [ARCHITECTURE_ROADMAP.md](../ARCHITECTURE_ROADMAP.md)
+- [CODEX_WORKFLOW.md](../CODEX_WORKFLOW.md)
 
 Implementation authority and evidence:
 
-- [TWI-002](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/TWI-002-timing-window-core-and-h9-pilot-implementation-workbook.md)
-- [TWI-003](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/TWI-003-authoritative-current-attack-state-implementation-workbook.md)
+- [TWI-002](TWI-002-timing-window-core-and-h9-pilot-implementation-workbook.md)
+- [TWI-003](TWI-003-authoritative-current-attack-state-implementation-workbook.md)
 - The completed TWI-002 implementation investigation in the current task context
 - Current repository implementation at revision `28440bfaa70adea31bfb8f7d79b34fdc14dfb7ba`, with a clean worktree
 
@@ -50,7 +50,7 @@ Implementation authority and evidence:
 
 The repository currently supports shared timing windows and canonical attack state, but normal ship attack progression does not enter the shared Attack Modify lifecycle. The only observed calls opening that lifecycle are test fixtures and tests.
 
-The existing Concentrate Fire token choice is still driven by [attack_executor.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd), using the older `RerollAttackDieCommand` and `SkipAttackModifierCommand` paths. Squadron Swarm also uses those legacy command surfaces and must remain procedural and unchanged in this tranche.
+The existing Concentrate Fire token choice is still driven by [attack_executor.gd](../../../src/scenes/game_board/attack_executor.gd), using the older `RerollAttackDieCommand` and `SkipAttackModifierCommand` paths. Squadron Swarm also uses those legacy command surfaces and must remain procedural and unchanged in this tranche.
 
 Save version 2 and replay format 4 were documented but never activated. Repository history showed no evidence that they were implemented and later reverted.
 
@@ -84,12 +84,12 @@ None of these conditions currently holds.
 - New direct participant under `src/core/effects/rules/`
 - New `UseConcentrateFireTokenRerollCommand`
 - New `DeclineConcentrateFireTokenRerollCommand`
-- [rule_bootstrap.gd](/Users/Katharina/godot/Armada/src/autoload/rule_bootstrap.gd)
-- [command_processor.gd](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd)
-- [command_applicability.gd](/Users/Katharina/godot/Armada/src/core/commands/command_applicability.gd)
-- [flow_spec.gd](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd)
-- [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd), if required for handled remote-command classification
-- [current_attack_state.gd](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd) only where the existing canonical token-resolution operations require completion
+- [rule_bootstrap.gd](../../../src/autoload/rule_bootstrap.gd)
+- [command_processor.gd](../../../src/autoload/command_processor.gd)
+- [command_applicability.gd](../../../src/core/commands/command_applicability.gd)
+- [flow_spec.gd](../../../src/core/state/flow_spec.gd)
+- [game_manager.gd](../../../src/autoload/game_manager.gd), if required for handled remote-command classification
+- [current_attack_state.gd](../../../src/core/state/current_attack_state.gd) only where the existing canonical token-resolution operations require completion
 
 The production opener, version constants, and normal AttackExecutor flow must remain unchanged.
 
@@ -134,12 +134,12 @@ The production opener, version constants, and normal AttackExecutor flow must re
 - New H9 rule under `src/core/effects/rules/upgrades/`
 - New `UseH9Command`
 - New `DeclineH9Command`
-- [rule_bootstrap.gd](/Users/Katharina/godot/Armada/src/autoload/rule_bootstrap.gd)
-- [command_processor.gd](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd)
-- [command_applicability.gd](/Users/Katharina/godot/Armada/src/core/commands/command_applicability.gd)
-- [flow_spec.gd](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd)
+- [rule_bootstrap.gd](../../../src/autoload/rule_bootstrap.gd)
+- [command_processor.gd](../../../src/autoload/command_processor.gd)
+- [command_applicability.gd](../../../src/core/commands/command_applicability.gd)
+- [flow_spec.gd](../../../src/core/state/flow_spec.gd)
 - Relevant existing semantic terminal commands for H9 guard cleanup
-- [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd), if required for remote-command result handling
+- [game_manager.gd](../../../src/autoload/game_manager.gd), if required for remote-command result handling
 - Existing projection/filter files only if the generic shared representation lacks an already-required field; no H9-specific modal or continuation path
 
 **Tests expected to change:**
@@ -176,15 +176,15 @@ The production opener, version constants, and normal AttackExecutor flow must re
 
 **Production files expected to change:**
 
-- [timing_window_orchestrator.gd](/Users/Katharina/godot/Armada/src/core/timing_windows/timing_window_orchestrator.gd)
-- The post-success command-processing seam in [command_processor.gd](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd)
-- [confirm_attack_dice_command.gd](/Users/Katharina/godot/Armada/src/core/commands/confirm_attack_dice_command.gd)
-- [attack_executor.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd)
+- [timing_window_orchestrator.gd](../../../src/core/timing_windows/timing_window_orchestrator.gd)
+- The post-success command-processing seam in [command_processor.gd](../../../src/autoload/command_processor.gd)
+- [confirm_attack_dice_command.gd](../../../src/core/commands/confirm_attack_dice_command.gd)
+- [attack_executor.gd](../../../src/scenes/game_board/attack_executor.gd)
 - CF-specific legacy branches in `RerollAttackDieCommand`, `SkipAttackModifierCommand`, and associated submission helpers, while preserving Swarm behavior
-- [save_game_metadata.gd](/Users/Katharina/godot/Armada/src/core/state/save_game_metadata.gd)
-- [save_game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd)
-- [game_replay.gd](/Users/Katharina/godot/Armada/src/core/commands/game_replay.gd)
-- [replay_driver.gd](/Users/Katharina/godot/Armada/src/autoload/replay_driver.gd)
+- [save_game_metadata.gd](../../../src/core/state/save_game_metadata.gd)
+- [save_game_manager.gd](../../../src/autoload/save_game_manager.gd)
+- [game_replay.gd](../../../src/core/commands/game_replay.gd)
+- [replay_driver.gd](../../../src/autoload/replay_driver.gd)
 - Reconstruction/reconnect validation seams
 - Existing projection and routing files only as needed to consume the already-established generic opportunity projection
 

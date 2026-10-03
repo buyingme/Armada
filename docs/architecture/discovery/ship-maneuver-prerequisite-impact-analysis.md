@@ -21,14 +21,14 @@ Tabletop requirements are explicit:
 - Obstacles neither prohibit displacement placement nor trigger an obstacle effect.
 - Tabletop shield-dial assemblies count as ship base, but the Owner-settled digital footprint is the existing simplified rotated `ShipBase` rectangle.
 
-Evidence: [RRG Overlapping](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:856), [RRG FAQ](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:2396), [Learn to Play](/Users/Katharina/godot/Armada/Resources/SWM01-ARMADA-LEARN-TO-PLAY/SWM01-ARMADA-LEARN-TO-PLAY.md:885), [accepted SMI-062](/Users/Katharina/godot/Armada/docs/requirements/gameplay_interactions/ship_maneuver_interaction.md:497).
+Evidence: [RRG Overlapping](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L856), [RRG FAQ](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L2396), [Learn to Play](../../../Resources/SWM01-ARMADA-LEARN-TO-PLAY/SWM01-ARMADA-LEARN-TO-PLAY.md#L885), [accepted SMI-062](../../requirements/gameplay_interactions/ship_maneuver_interaction.md#L497).
 
 Geometry:
 
-- Every squadron is the same circle: fixed diameter 34.2 mm, approximately 80.73 px under the current 720 px/305 mm scale. No heterogeneous-size support is needed. [scale data](/Users/Katharina/godot/Armada/Resources/Game_Components/scale/scale_config.json:5), [SquadronBase](/Users/Katharina/godot/Armada/src/core/state/squadron_base.gd:21)
+- Every squadron is the same circle: fixed diameter 34.2 mm, approximately 80.73 px under the current 720 px/305 mm scale. No heterogeneous-size support is needed. [scale data](../../../Resources/Game_Components/scale/scale_config.json#L5), [SquadronBase](../../../src/core/state/squadron_base.gd#L21)
 - The legal center locus for direct touching is the boundary of the ship rectangle offset outward by one squadron radius: four parallel segments plus four corner arcs, clipped by board limits and other ship/squadron exclusions.
 - Remaining placements lie on radius-`2r` arcs around at least one directly touching squadron, again clipped by the board and blockers.
-- Touching must be distinguished from overlapping with a consistent numerical policy. Current helpers classify exact tangency as overlap (`<=`) and then introduce a 1 px snap gap and a separate 5 px touching tolerance. Those predicates are not strong enough for authoritative maximum-touch proof. [current predicates](/Users/Katharina/godot/Armada/src/core/state/squadron_base.gd:42), [current placement validation](/Users/Katharina/godot/Armada/src/core/movement/overlap_resolver.gd:184)
+- Touching must be distinguished from overlapping with a consistent numerical policy. Current helpers classify exact tangency as overlap (`<=`) and then introduce a 1 px snap gap and a separate 5 px touching tolerance. Those predicates are not strong enough for authoritative maximum-touch proof. [current predicates](../../../src/core/state/squadron_base.gd#L42), [current placement validation](../../../src/core/movement/overlap_resolver.gd#L184)
 
 Maximum-touch implications:
 
@@ -39,17 +39,17 @@ Maximum-touch implications:
 
 Current gaps:
 
-- Production detects affected squadrons and validates one direct-touch placement at a time. It has no play-area footprint test, second-ring support, full-batch legality, exact affected-set validation, or maximum-capacity proof. [OverlapResolver](/Users/Katharina/godot/Armada/src/core/movement/overlap_resolver.gd:160)
-- The controller always snaps every squadron directly to the ship, then submits one batch. [DisplacementController](/Users/Katharina/godot/Armada/src/scenes/game_board/displacement_controller.gd:172)
-- `CommitDisplacementCommand` validates controller, references, and normalized center coordinates only; it does not validate geometry or completeness. [CommitDisplacementCommand](/Users/Katharina/godot/Armada/src/core/commands/commit_displacement_command.gd:37)
-- Tests cover individual contact/snap and command serialization, not maximum touching, chains, full-base board containment, or batch legality. [geometry tests](/Users/Katharina/godot/Armada/tests/unit/test_overlap_resolver.gd:179), [command tests](/Users/Katharina/godot/Armada/tests/unit/test_displacement_commands.gd:234)
+- Production detects affected squadrons and validates one direct-touch placement at a time. It has no play-area footprint test, second-ring support, full-batch legality, exact affected-set validation, or maximum-capacity proof. [OverlapResolver](../../../src/core/movement/overlap_resolver.gd#L160)
+- The controller always snaps every squadron directly to the ship, then submits one batch. [DisplacementController](../../../src/scenes/game_board/displacement_controller.gd#L172)
+- `CommitDisplacementCommand` validates controller, references, and normalized center coordinates only; it does not validate geometry or completeness. [CommitDisplacementCommand](../../../src/core/commands/commit_displacement_command.gd#L37)
+- Tests cover individual contact/snap and command serialization, not maximum touching, chains, full-base board containment, or batch legality. [geometry tests](../../../tests/unit/test_overlap_resolver.gd#L179), [command tests](../../../tests/unit/test_displacement_commands.gd#L234)
 
 Canonical state:
 
 - With atomic batch commit, tentative drag positions and placement order need not be canonical. Save/load or reconnect can reconstruct from the final ship pose, active Maneuver identity, canonical squadron positions, and a recoverable unresolved displacement identity/set.
 - If the exact affected set is reliably re-derived from those facts, no additional placement-progress state is necessary. Otherwise, the minimum durable displacement state is the Maneuver identity, controller, and affected squadron references—not tentative positions.
 - Incremental per-squadron commits would require canonical committed/remaining sets and make reconstruction, rollback, and maximum-proof semantics materially more complex.
-- This follows accepted reconstruction and non-authority rules. [SMI-080/081](/Users/Katharina/godot/Armada/docs/requirements/gameplay_interactions/ship_maneuver_interaction.md:653), [ADR-010](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-010-gameplay-interaction-decision-equivalent-recovery.md:73)
+- This follows accepted reconstruction and non-authority rules. [SMI-080/081](../../requirements/gameplay_interactions/ship_maneuver_interaction.md#L653), [ADR-010](../adr/ADR-010-gameplay-interaction-decision-equivalent-recovery.md#L73)
 
 ## 2. Viable displacement approaches
 
@@ -80,22 +80,22 @@ The current processor independently evaluates five post-success sources:
 4. declined Squadron Move completion;
 5. Ship Phase termination after persistent damage.
 
-If more than one returns a command, it logs a conflict and enqueues none; there is no current priority rule. [CommandProcessor](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:397)
+If more than one returns a command, it logs a conflict and enqueues none; there is no current priority rule. [CommandProcessor](../../../src/autoload/command_processor.gd#L397)
 
 Concrete competition scenarios:
 
 - A command closes a timing opportunity while also satisfying an attack or Maneuver enclosing boundary.
 - A Maneuver damage command destroys the active ship while Maneuver would otherwise resume; destruction/phase termination must prevent return to a nonexistent Maneuver.
-- Existing Maneuver damage observers enqueue damage before post-success continuations. A simultaneously queued Maneuver continuation could become stale after that damage. Existing tests prove observer follow-ups precede and can invalidate a timing continuation. [ordering test](/Users/Katharina/godot/Armada/tests/unit/test_timing_window_command_protocol.gd:173)
+- Existing Maneuver damage observers enqueue damage before post-success continuations. A simultaneously queued Maneuver continuation could become stale after that damage. Existing tests prove observer follow-ups precede and can invalidate a timing continuation. [ordering test](../../../tests/unit/test_timing_window_command_protocol.gd#L173)
 - `resolve_immediate_effect` participates in attack continuation when an attack is active. A valid active attack and executable Maneuver should be mutually exclusive; coexistence is an invariant failure, not a case for arbitrary priority.
 - Commanded-Squadron completion and declined-Move completion belong to Squadron Activation contexts and should likewise be ineligible during a live Maneuver consequence.
 
 Accepted architecture already determines composition:
 
-- Nested work returns through existing enclosing purpose-specific owners; no stored generic continuation exists. [ODR-001](/Users/Katharina/godot/Armada/docs/architecture/decision_workbooks/ODR-001-composed-return-convergence-principle.md:49)
-- ADR-006 explicitly assigns nested Maneuver consequences back to the active Maneuver boundary. [ADR-006](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-006-canonical-ship-activation-boundary-ownership.md:229)
-- TimingWindowOrchestrator owns timing-window completion and re-derivation. [ADR-005](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-005-timing-window-ownership-and-continuation.md:88)
-- The existing post-success seam may perform bounded purpose-specific evaluation but cannot become a manager, stack, queue, or FSM. [CON-007](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-007-post-attack-continuation-release-contract.md:242)
+- Nested work returns through existing enclosing purpose-specific owners; no stored generic continuation exists. [ODR-001](../decision_workbooks/ODR-001-composed-return-convergence-principle.md#L49)
+- ADR-006 explicitly assigns nested Maneuver consequences back to the active Maneuver boundary. [ADR-006](../adr/ADR-006-canonical-ship-activation-boundary-ownership.md#L229)
+- TimingWindowOrchestrator owns timing-window completion and re-derivation. [ADR-005](../adr/ADR-005-timing-window-ownership-and-continuation.md#L88)
+- The existing post-success seam may perform bounded purpose-specific evaluation but cannot become a manager, stack, queue, or FSM. [CON-007](../contracts/CON-007-post-attack-continuation-release-contract.md#L242)
 
 Conclusion: `ManeuverExecutionContinuation` can compose without new architecture. Priority is derivable from enclosing ownership:
 
@@ -108,7 +108,7 @@ Therefore **B8 is an implementation-allocation and guard-definition problem, not
 
 ## 5. Minimum obstacle capability prerequisites
 
-The standard game uses the six core-set shapes: three asteroid fields, two debris fields, and one station. [RRG standard pool](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:789)
+The standard game uses the six core-set shapes: three asteroid fields, two debris fields, and one station. [RRG standard pool](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L789)
 
 | Type | Maneuver effect and choice | Current status | Minimum prerequisite |
 |---|---|---|---|
@@ -116,11 +116,11 @@ The standard game uses the six core-set shapes: three asteroid fields, two debri
 | **Debris field** | Suffer two damage on one hull zone; ship owner chooses the zone | No gameplay obstacle integration | Missing obstacle RCP; new authoritative hull-zone choice and damage invocation |
 | **Station** | Ship may discard one faceup or facedown damage card; owner chooses whether and which card | No gameplay obstacle integration | Missing obstacle RCP; new optional choice/visibility/semantic discard path |
 
-Rules evidence: [obstacle effects](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:730), [unspecified hull-zone ownership](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:275).
+Rules evidence: [obstacle effects](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L730), [unspecified hull-zone ownership](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L275).
 
-No obstacle Rule Capability Package currently exists. Catalog metadata explicitly says `NOT_INTEGRATED`. [representative asteroid record](/Users/Katharina/godot/Armada/Resources/Game_Components/obstacles/asteroid_1.json:17)
+No obstacle Rule Capability Package currently exists. Catalog metadata explicitly says `NOT_INTEGRATED`. [representative asteroid record](../../../Resources/Game_Components/obstacles/asteroid_1.json#L17)
 
-Minimum package work is the three Maneuver-overlap behavior slices above, covering authoritative geometry, invocation, player choices, command/state ownership, save/load, replay, Network/visibility, and tests. Attack obstruction can remain a separate slice; CON-003 permits coherent partial capabilities. [CON-003 granularity](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-003-rule-capability-contract.md:349)
+Minimum package work is the three Maneuver-overlap behavior slices above, covering authoritative geometry, invocation, player choices, command/state ownership, save/load, replay, Network/visibility, and tests. Attack obstruction can remain a separate slice; CON-003 permits coherent partial capabilities. [CON-003 granularity](../contracts/CON-003-rule-capability-contract.md#L349)
 
 ## 6. Minimum Maneuver-triggered damage-card prerequisites
 
@@ -130,13 +130,13 @@ Minimum package work is the three Maneuver-overlap behavior slices above, coveri
 | **Damaged Controls** | During Move Ship, overlapping a ship or obstacle deals one additional facedown card | Registered observer exists, but current `did_overlap` coverage is incomplete without obstacles | Missing RCP; existing implementation needs obstacle and Maneuver-boundary integration |
 | **Ruptured Engine** | After executing a maneuver at speed greater than one, suffer one damage | Registered observer and command-backed damage exist | Missing RCP; existing implementation needs composed-return/exact-once integration |
 
-Evidence: [card data](/Users/Katharina/godot/Armada/Resources/Game_Components/damage_cards.json:36), [ManeuverRuleResolver](/Users/Katharina/godot/Armada/src/core/movement/maneuver_rule_resolver.gd:9), [registered production rules](/Users/Katharina/godot/Armada/src/autoload/rule_bootstrap.gd:9), [damage command](/Users/Katharina/godot/Armada/src/core/commands/persistent_effect_damage_command.gd:1).
+Evidence: [card data](../../../Resources/Game_Components/damage_cards.json#L36), [ManeuverRuleResolver](../../../src/core/movement/maneuver_rule_resolver.gd#L9), [registered production rules](../../../src/autoload/rule_bootstrap.gd#L9), [damage command](../../../src/core/commands/persistent_effect_damage_command.gd#L1).
 
-The existing implementations are not sufficient RCP evidence by themselves; CON-003 explicitly says a hook, metadata claim, or individual test does not establish integration. [CON-003 checklist](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-003-rule-capability-contract.md:206)
+The existing implementations are not sufficient RCP evidence by themselves; CON-003 explicitly says a hook, metadata claim, or individual test does not establish integration. [CON-003 checklist](../contracts/CON-003-rule-capability-contract.md#L206)
 
 `Thrust Control Malfunction` modifies Maneuver yaw but is not a Maneuver-triggered effect, so it is outside this prerequisite list under the settled Owner scope. Likewise, asteroid draws do not expand this prerequisite exercise into packages for every possible immediate damage card.
 
-The three packages must pin exact timing. Current implementation collapses all three into `ExecuteManeuverCommand` observers, while the RRG distinguishes “when,” “during Move Ship,” and “after” timings and gives a player ordering control over their same-timing effects. [RRG timing](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:356), [Damaged Controls FAQ timing](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:2571)
+The three packages must pin exact timing. Current implementation collapses all three into `ExecuteManeuverCommand` observers, while the RRG distinguishes “when,” “during Move Ship,” and “after” timings and gives a player ordering control over their same-timing effects. [RRG timing](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L356), [Damaged Controls FAQ timing](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L2571)
 
 ## 7. Geometry/data prerequisites
 
@@ -148,9 +148,9 @@ Required before obstacle consumption:
 - Defined boundary semantics for “part of base on top”: touching alone versus positive-area intersection, with robust deterministic numerical predicates.
 - Tests for rotation, containment, edge/corner contact, multiple overlaps, speed zero, save/load, replay, and Network catalog consistency.
 
-Current setup state already records `data_key`, normalized position, rotation, placing player, and placement order, which is enough to locate an authoritative contour once supplied. [setup obstacle state](/Users/Katharina/godot/Armada/src/core/commands/commit_setup_obstacle_command.gd:79)
+Current setup state already records `data_key`, normalized position, rotation, placing player, and placement order, which is enough to locate an authoritative contour once supplied. [setup obstacle state](../../../src/core/commands/commit_setup_obstacle_command.gd#L79)
 
-Current obstacle geometry is explicitly an oriented box derived from sprite-bound factors and is therefore unsuitable as rules authority. [shape metadata](/Users/Katharina/godot/Armada/Resources/Game_Components/obstacles/asteroid_1.json:17), [current box construction](/Users/Katharina/godot/Armada/src/core/setup/setup_obstacle_validator.gd:134)
+Current obstacle geometry is explicitly an oriented box derived from sprite-bound factors and is therefore unsuitable as rules authority. [shape metadata](../../../Resources/Game_Components/obstacles/asteroid_1.json#L17), [current box construction](../../../src/core/setup/setup_obstacle_validator.gd#L134)
 
 For squadrons, the fixed circular diameter and board dimensions already exist. Required work is a single authoritative circle/contact policy—not additional base-size data.
 

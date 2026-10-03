@@ -6,7 +6,7 @@ The August 1 incidents do not contain `SHIP_ACTIVATION / ATTACK_STEP` at capture
 - `step_id: 7` = `MANEUVER_STEP`
 - `ATTACK_STEP` is enum value `10`
 
-This mapping is defined in [constants.gd](/Users/Katharina/godot/Armada/src/autoload/constants.gd:147).
+This mapping is defined in [constants.gd](../../../../../src/autoload/constants.gd#L147).
 
 The earliest incorrect production boundary is the activation modal’s scene-local auto-skip from Repair into Attack. That path does not submit `AdvanceActivationStepCommand("attack_step")`, so `ShipInstance.begin_attack_step()` is never called. The later `MANEUVER_STEP` snapshots are the downstream result.
 
@@ -16,29 +16,29 @@ No files were modified.
 
 Startup documents read and retained in context, as required by AGENTS.md:
 
-- [AGENTS.md](/Users/Katharina/godot/Armada/AGENTS.md)
-- [ARCHITECTURE.md](/Users/Katharina/godot/Armada/ARCHITECTURE.md)
-- [AI_DEVELOPMENT_PRINCIPLES.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PRINCIPLES.md)
-- [AI_DEVELOPMENT_PROCESS.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PROCESS.md)
-- [AI_STARTUP_GUARDRAILS.md](/Users/Katharina/godot/Armada/.ai/instructions/AI_STARTUP_GUARDRAILS.md)
-- [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md)
-- [ARCHITECTURE_ROADMAP.md](/Users/Katharina/godot/Armada/docs/architecture/ARCHITECTURE_ROADMAP.md)
-- [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md)
+- [AGENTS.md](../../../../../AGENTS.md)
+- [ARCHITECTURE.md](../../../../../ARCHITECTURE.md)
+- [AI_DEVELOPMENT_PRINCIPLES.md](../../../../development/AI_DEVELOPMENT_PRINCIPLES.md)
+- [AI_DEVELOPMENT_PROCESS.md](../../../../development/AI_DEVELOPMENT_PROCESS.md)
+- [AI_STARTUP_GUARDRAILS.md](../../../../../.ai/instructions/AI_STARTUP_GUARDRAILS.md)
+- [DOCUMENT_AUTHORITY.md](../../../../architecture/DOCUMENT_AUTHORITY.md)
+- [ARCHITECTURE_ROADMAP.md](../../../../architecture/ARCHITECTURE_ROADMAP.md)
+- [CODEX_WORKFLOW.md](../../../../architecture/CODEX_WORKFLOW.md)
 
 Authority and supporting evidence read:
 
-- [BUG-002 issue](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-002/issue_attack-sequence-early-termination.md)
-- [Accepted BUG-002 forensic analysis](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-002/forensic-analysis-report.md)
-- [ADR-001](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
-- [CON-001](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
-- [CON-006](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md)
-- [Rules Reference](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:90)
+- [BUG-002 issue](../../open/BUG-002/issue_attack-sequence-early-termination.md)
+- [Accepted BUG-002 forensic analysis](../../open/BUG-002/forensic-analysis-report.md)
+- [ADR-001](../../../../architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
+- [CON-001](../../../../architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
+- [CON-006](../../../../architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md)
+- [Rules Reference](../../../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L90)
 - Current uncommitted BUG-002 implementation diff
 
 Only these annotations were used as fresh incident evidence:
 
-- [annotation_20260801_075338_001.json](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-002/annotation_20260801_075338_001.json:1)
-- [annotation_20260801_075833_003.json](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-002/annotation_20260801_075833_003.json:1)
+- [annotation_20260801_075338_001.json](../../open/BUG-002/annotation_20260801_075338_001.json#L1)
+- [annotation_20260801_075833_003.json](../../open/BUG-002/annotation_20260801_075833_003.json#L1)
 
 The July 27 annotations were not used to explain the post-repair failures.
 
@@ -60,14 +60,14 @@ The July 27 annotations were not used to explain the post-repair failures.
 | Actual state | No continuation available | No second declaration available |
 | Captured flow | `SHIP_ACTIVATION / MANEUVER_STEP` | `SHIP_ACTIVATION / MANEUVER_STEP` |
 
-The VSD fields appear at [lines 667–734](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-002/annotation_20260801_075338_001.json:667). The Nebulon-B fields appear at [lines 540–599](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-002/annotation_20260801_075833_003.json:540). Both flow snapshots contain `step_id: 7` at line 469.
+The VSD fields appear at [lines 667–734](../../open/BUG-002/annotation_20260801_075338_001.json#L667). The Nebulon-B fields appear at [lines 540–599](../../open/BUG-002/annotation_20260801_075833_003.json#L540). Both flow snapshots contain `step_id: 7` at line 469.
 
 Both ships also satisfy the modal’s unavailable-command auto-skip conditions:
 
 - The Victory II has no Squadron command resource. Although it has a Repair token, it is fully healthy, so `_has_repair_resources()` returns false.
 - The Nebulon-B has a Navigate dial and no command tokens, so it has neither Squadron nor Repair resources.
 
-The resource checks are defined in [game_board.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/game_board.gd:1145).
+The resource checks are defined in [game_board.gd](../../../../../src/scenes/game_board/game_board.gd#L1145).
 
 ## 3. Attack-step entry timeline
 
@@ -82,10 +82,10 @@ The resource checks are defined in [game_board.gd](/Users/Katharina/godot/Armada
 
 Evidence:
 
-- Controller submission: [ship_activation_controller.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/ship_activation_controller.gd:1132)
-- Owner-local identity construction: [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:1578)
-- Atomic progress/flow mutation: [advance_activation_step_command.gd](/Users/Katharina/godot/Armada/src/core/commands/advance_activation_step_command.gd:63)
-- Owner-local lookup: [game_state.gd](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:110)
+- Controller submission: [ship_activation_controller.gd](../../../../../src/scenes/game_board/ship_activation_controller.gd#L1132)
+- Owner-local identity construction: [game_manager.gd](../../../../../src/autoload/game_manager.gd#L1578)
+- Atomic progress/flow mutation: [advance_activation_step_command.gd](../../../../../src/core/commands/advance_activation_step_command.gd#L63)
+- Owner-local lookup: [game_state.gd](../../../../../src/core/state/game_state.gd#L110)
 
 No command-backed production path publishes `SHIP_ACTIVATION / ATTACK_STEP` without calling `begin_attack_step()`.
 
@@ -103,9 +103,9 @@ No command-backed production path publishes `SHIP_ACTIVATION / ATTACK_STEP` with
 10. The executor sees no authoritative Step 6 or second-attack availability, finishes the Attack step, and submits `AdvanceActivationStepCommand("maneuver_step")`.
 11. That command publishes the captured `SHIP_ACTIVATION / MANEUVER_STEP` state.
 
-The bypass is in [activation_modal.gd](/Users/Katharina/godot/Armada/src/ui/combat/activation_modal.gd:949). Its transition at line 1025 changes only `ShipActivationState`.
+The bypass is in [activation_modal.gd](../../../../../src/ui/combat/activation_modal.gd#L949). Its transition at line 1025 changes only `ShipActivationState`.
 
-The downstream finish is in [attack_executor.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:4052).
+The downstream finish is in [attack_executor.gd](../../../../../src/scenes/game_board/attack_executor.gd#L4052).
 
 ## 4. Identity propagation
 
@@ -139,7 +139,7 @@ The downstream finish is in [attack_executor.gd](/Users/Katharina/godot/Armada/s
 | Complete | May close an exhausted Step 6 iteration; otherwise derives continuation without resetting the tracker |
 | `SkipAttackCommand("squadron_done")` | Ends Step 6 while preserving normal attack count and used hull zone |
 
-The field implementation is centralized in [ship_instance.gd](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:338).
+The field implementation is centralized in [ship_instance.gd](../../../../../src/core/state/ship_instance.gd#L338).
 
 For both August incidents, the data was never initialized. It was not initialized on another ship, written and reset, overwritten by completion, or lost through serialization. The final Maneuver command called `end_attack_step()` on already-default state.
 
@@ -164,7 +164,7 @@ Hot-seat, host, and controlling-client presentations can all traverse the bypass
 
 Permissive Begin is a second defect, not the earliest root cause.
 
-[BeginAttackCommand](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:97) currently behaves as follows:
+[BeginAttackCommand](../../../../../src/core/commands/begin_attack_command.gd#L97) currently behaves as follows:
 
 - `_tracked_attacker_ship()` returns null if `attack_step_active` is false.
 - `_validate_ship_attack_progress()` treats that null as success.
@@ -196,10 +196,10 @@ Hot-seat, host, client, replay, save/load, and reconnect must therefore consume 
 
 The passing tests separate the relevant boundaries:
 
-- [test_activation_modal.gd](/Users/Katharina/godot/Armada/tests/unit/test_activation_modal.gd:256) proves only that scene-local auto-skip reaches Attack.
-- [test_ship_activation_controller.gd](/Users/Katharina/godot/Armada/tests/unit/test_ship_activation_controller.gd:65) begins from a synthetic `REPAIR_STEP` and uses a recording submitter that does not execute the command.
-- [test_advance_activation_step_command.gd](/Users/Katharina/godot/Armada/tests/unit/test_advance_activation_step_command.gd:71) executes the command directly.
-- [test_current_attack_shared_protocol.gd](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:126) manually calls `ship.begin_attack_step()`.
+- [test_activation_modal.gd](../../../../../tests/unit/test_activation_modal.gd#L256) proves only that scene-local auto-skip reaches Attack.
+- [test_ship_activation_controller.gd](../../../../../tests/unit/test_ship_activation_controller.gd#L65) begins from a synthetic `REPAIR_STEP` and uses a recording submitter that does not execute the command.
+- [test_advance_activation_step_command.gd](../../../../../tests/unit/test_advance_activation_step_command.gd#L71) executes the command directly.
+- [test_current_attack_shared_protocol.gd](../../../../../tests/integration/test_current_attack_shared_protocol.gd#L126) manually calls `ship.begin_attack_step()`.
 - Production-resume fixtures likewise construct progress directly.
 
 The missing high-value test is an end-to-end production activation beginning at `ACTIVATION_MODAL_OPEN` with:

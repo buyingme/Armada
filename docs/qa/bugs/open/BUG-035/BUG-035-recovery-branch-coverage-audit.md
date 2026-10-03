@@ -40,7 +40,7 @@ Dial and dial+token are equivalent for the acknowledgement release decision when
 
 ## 4. Latest token-only root cause
 
-The first divergence is in [`current_attack_continuation.gd`](/Users/Katharina/godot/Armada/src/core/state/current_attack_continuation.gd:146), before `SquadronCommandResolver` capacity is consulted.
+The first divergence is in [`current_attack_continuation.gd`](../../../../../src/core/state/current_attack_continuation.gd#L146), before `SquadronCommandResolver` capacity is consulted.
 
 The captured squadron state is:
 
@@ -48,9 +48,9 @@ The captured squadron state is:
 - `move_action_committed == false`
 - `activation_context == "ship_squadron_command"`
 
-For commanded squadrons, [`SquadronInstance.has_remaining_move_action()`](/Users/Katharina/godot/Armada/src/core/state/squadron_instance.gd:194) therefore returns true. The processor returns no `CompleteSquadronActivationCommand`, leaving the satisfied inspection installed.
+For commanded squadrons, [`SquadronInstance.has_remaining_move_action()`](../../../../../src/core/state/squadron_instance.gd#L194) therefore returns true. The processor returns no `CompleteSquadronActivationCommand`, leaving the satisfied inspection installed.
 
-That same nominal-action condition causes [`CompleteSquadronActivationCommand`](/Users/Katharina/godot/Armada/src/core/commands/complete_squadron_activation_command.gd:56) to reject completion. But actual movement legality is separately evaluated by [`MoveSquadronCommand`](/Users/Katharina/godot/Armada/src/core/commands/move_squadron_command.gd:68) using `SquadronKeywordRuleHelper.can_move_with_heavy_rule`.
+That same nominal-action condition causes [`CompleteSquadronActivationCommand`](../../../../../src/core/commands/complete_squadron_activation_command.gd#L56) to reject completion. But actual movement legality is separately evaluated by [`MoveSquadronCommand`](../../../../../src/core/commands/move_squadron_command.gd#L68) using `SquadronKeywordRuleHelper.can_move_with_heavy_rule`.
 
 So the token is not the causal branch. It makes the defect immediately terminal once completion is possible. The missing case is: “attack performed, move uncommitted, but movement is not legally available.” Existing dial tests pre-commit movement or use a no-target Skip path, so they never enter this state.
 
@@ -60,8 +60,8 @@ Confirmed independent race:
 
 1. `CommitAccuracyCommand` writes `DEFENSE_COMPLETE` when no defense interaction exists.
 2. `CommandProcessor` queues its authoritative `resolve_damage` follow-up before emitting `command_executed`.
-3. [`AttackPanelController`](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_panel_controller.gd:96) synchronously calls `AttackExecutor.apply_accuracy_result`.
-4. [`_attack_exec_start_defense()`](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:2234) sees no spendable defense and directly submits `resolve_damage`.
+3. [`AttackPanelController`](../../../../../src/scenes/game_board/attack_panel_controller.gd#L96) synchronously calls `AttackExecutor.apply_accuracy_result`.
+4. [`_attack_exec_start_defense()`](../../../../../src/scenes/game_board/attack_executor.gd#L2306) sees no spendable defense and directly submits `resolve_damage`.
 5. The processor then drains its already-queued `resolve_damage`; validation correctly rejects it because damage resolution has advanced.
 
 The previous guard is in `_process_next_defense_commit`, which is not reached by this accuracy/no-defense auto-skip route.

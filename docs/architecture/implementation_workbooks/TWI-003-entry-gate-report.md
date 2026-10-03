@@ -6,14 +6,14 @@ All remaining checks passed, and the repository remained clean.
 
 Required startup documents read in full before verification:
 
-1. [AGENTS.md](/Users/Katharina/godot/Armada/AGENTS.md)
-2. [ARCHITECTURE.md](/Users/Katharina/godot/Armada/ARCHITECTURE.md)
-3. [AI_DEVELOPMENT_PRINCIPLES.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PRINCIPLES.md)
-4. [AI_DEVELOPMENT_PROCESS.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PROCESS.md)
-5. [AI_STARTUP_GUARDRAILS.md](/Users/Katharina/godot/Armada/.ai/instructions/AI_STARTUP_GUARDRAILS.md)
-6. [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md)
-7. [ARCHITECTURE_ROADMAP.md](/Users/Katharina/godot/Armada/docs/architecture/ARCHITECTURE_ROADMAP.md)
-8. [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md)
+1. [AGENTS.md](../../../AGENTS.md)
+2. [ARCHITECTURE.md](../../../ARCHITECTURE.md)
+3. [AI_DEVELOPMENT_PRINCIPLES.md](../../development/AI_DEVELOPMENT_PRINCIPLES.md)
+4. [AI_DEVELOPMENT_PROCESS.md](../../development/AI_DEVELOPMENT_PROCESS.md)
+5. [AI_STARTUP_GUARDRAILS.md](../../../.ai/instructions/AI_STARTUP_GUARDRAILS.md)
+6. [DOCUMENT_AUTHORITY.md](../DOCUMENT_AUTHORITY.md)
+7. [ARCHITECTURE_ROADMAP.md](../ARCHITECTURE_ROADMAP.md)
+8. [CODEX_WORKFLOW.md](../CODEX_WORKFLOW.md)
 
 Required authority and evidence read in full:
 
@@ -51,8 +51,8 @@ Required authority and evidence read in full:
 | 3 | TWI-002 production activation present and passing | PASS | Accepted implementation audit is present; production Attack Modify opening and confirmation boundaries exist; full suite and baselines passed. |
 | 4 | ADR-006 Accepted | PASS | Accepted status, Project Owner metadata, and acceptance commit are present. |
 | 5 | ShipInstance is sole writable ADR-006 owner; GameState aggregate-only | PASS | ADR-006 assigns all four activation-local concepts to `ShipInstance`; repository and accepted-authority searches found no competing canonical owner. |
-| 6 | Save version exactly 2 | PASS | [save_game_metadata.gd](/Users/Katharina/godot/Armada/src/core/state/save_game_metadata.gd:39): `CURRENT_VERSION = 2`. |
-| 7 | Replay format exactly 4; signed format is alias | PASS | [game_replay.gd](/Users/Katharina/godot/Armada/src/core/commands/game_replay.gd:32): `FORMAT_VERSION = 4`; line 35 aliases `SIGNED_FORMAT_VERSION`. |
+| 6 | Save version exactly 2 | PASS | [save_game_metadata.gd](../../../src/core/state/save_game_metadata.gd#L39): `CURRENT_VERSION = 2`. |
+| 7 | Replay format exactly 4; signed format is alias | PASS | [game_replay.gd](../../../src/core/commands/game_replay.gd#L32): `FORMAT_VERSION = 4`; line 35 aliases `SIGNED_FORMAT_VERSION`. |
 | 8 | Every §5.2 fact maps to its accepted owner | PASS | Phase facts map to `GameState`; squadron action facts to `SquadronInstance`; the four ADR-006 facts to `ShipInstance`. Production existence is correctly deferred. |
 | 9 | Required ADR-006 semantic boundaries identified | PASS | All ten required seams are recorded in §5 below. |
 | 10 | No conflicting canonical owner exists | PASS | Current scene, flow, modal, GameManager, and resolver values are legacy/transient caches, not accepted canonical owners. |

@@ -7,30 +7,30 @@ The workbook as a whole is not implementation-ready because its fresh filtered-b
 2. Implementation-direction assessment
 
 - NO ISSUE — Result-aware passive execution belongs in the existing command transaction. The proposed `GameManager → CommandProcessor → concrete command` path correctly implements ADR-012 and does not create a second mutator.
-- NO ISSUE — `GameManager`’s existing ordered buffer and `CommandProcessor`’s authoritative cursor are the smallest existing ordering/exact-once seams. Current code confirms that only the result is missing from the processor call: [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2708), [command_processor.gd](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:192).
+- NO ISSUE — `GameManager`’s existing ordered buffer and `CommandProcessor`’s authoritative cursor are the smallest existing ordering/exact-once seams. Current code confirms that only the result is missing from the processor call: [game_manager.gd](../../../../../src/autoload/game_manager.gd#L2708), [command_processor.gd](../../../../../src/autoload/command_processor.gd#L192).
 - BLOCKER — The proposed fresh filtered bootstrap is not viable through the unchanged filtered reconstruction surface.
 
 3. Blockers
 
 BLOCKER — Filtered damage-deck state is not reconstructible or usable.
 
-`StateFilter` replaces the hidden draw pile with `draw_count` and replaces opponent facedown cards with `facedown_count` [state_filter.gd](/Users/Katharina/godot/Armada/src/core/network/state_filter.gd:47). But:
+`StateFilter` replaces the hidden draw pile with `draw_count` and replaces opponent facedown cards with `facedown_count` [state_filter.gd](../../../../../src/core/network/state_filter.gd#L47). But:
 
-- `DamageDeck.deserialize()` ignores `draw_count`, reconstructing an empty deck [damage_deck.gd](/Users/Katharina/godot/Armada/src/core/damage/damage_deck.gd:176).
-- `ShipInstance.deserialize()` ignores `facedown_count`, losing the opponent’s public damage count [ship_instance.gd](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:897).
-- `ResolveDamageCommand` validates the local deck count and draws cards locally [resolve_damage_command.gd](/Users/Katharina/godot/Armada/src/core/commands/resolve_damage_command.gd:91).
-- Structural Damage also draws locally [resolve_immediate_effect_command.gd](/Users/Katharina/godot/Armada/src/core/commands/resolve_immediate_effect_command.gd:191).
+- `DamageDeck.deserialize()` ignores `draw_count`, reconstructing an empty deck [damage_deck.gd](../../../../../src/core/damage/damage_deck.gd#L176).
+- `ShipInstance.deserialize()` ignores `facedown_count`, losing the opponent’s public damage count [ship_instance.gd](../../../../../src/core/state/ship_instance.gd#L897).
+- `ResolveDamageCommand` validates the local deck count and draws cards locally [resolve_damage_command.gd](../../../../../src/core/commands/resolve_damage_command.gd#L91).
+- Structural Damage also draws locally [resolve_immediate_effect_command.gd](../../../../../src/core/commands/resolve_immediate_effect_command.gd#L191).
 
 Current fresh Network avoids this immediate failure only because both peers construct the same hidden deck from the shared seed. Removing that seed and installing the existing filtered state would let Roll Dice and reroll pass, then make ordinary ship-damage resolution fail or diverge.
 
-This contradicts the workbook’s claim that setup/deck effects already reach the passive peer sufficiently through filtered publication [workbook](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/BUG-042-network-rng-authority-result-application-implementation-workbook.md:144). It activates the workbook’s own stop gate against broader `StateFilter`, `GameState`, and damage-deck changes.
+This contradicts the workbook’s claim that setup/deck effects already reach the passive peer sufficiently through filtered publication [workbook](../../../../architecture/implementation_workbooks/BUG-042-network-rng-authority-result-application-implementation-workbook.md#L144). It activates the workbook’s own stop gate against broader `StateFilter`, `GameState`, and damage-deck changes.
 
 4. Important findings
 
 - IMPORTANT — `src/core/commands/game_command.gd` is missing from authorized production scope. The cleanest narrow seam is a base command result-application operation that rejects by default and is implemented only by authorized commands. Otherwise `CommandProcessor` needs a hard-coded four-command allowlist or untyped method probing.
-- IMPORTANT — Fresh bootstrap ordering is underspecified. Ordinary Learning Scenario canonical construction still occurs in `GameBoard` after scene entry [game_board.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/game_board.gd:297), while the lobby currently publishes seed/config before transition [lobby_manager.gd](/Users/Katharina/godot/Armada/src/autoload/lobby_manager.gd:192). The workbook must specify host construction, initial command/cursor capture, targeted filtered staging, installation ACK, admission, and scene release—and prevent early `StartRound`/fixed-command result broadcasts from reaching an uninstalled client.
-- IMPORTANT — A protocol version bump is required, not merely a possible stop gate. Protocol 4 is explicitly defined to change whenever message format changes [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:28). Removing the seed/config RPC contract and changing mirror result semantics makes old/new builds incompatible.
-- IMPORTANT — Result schemas need exact allowed keys and types, not only minimum fields. Current transport adds `__remote_authored` inside the result dictionary [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:1481). The workbook must require transport metadata to be separated or stripped before strict command-result validation.
+- IMPORTANT — Fresh bootstrap ordering is underspecified. Ordinary Learning Scenario canonical construction still occurs in `GameBoard` after scene entry [game_board.gd](../../../../../src/scenes/game_board/game_board.gd#L297), while the lobby currently publishes seed/config before transition [lobby_manager.gd](../../../../../src/autoload/lobby_manager.gd#L192). The workbook must specify host construction, initial command/cursor capture, targeted filtered staging, installation ACK, admission, and scene release—and prevent early `StartRound`/fixed-command result broadcasts from reaching an uninstalled client.
+- IMPORTANT — A protocol version bump is required, not merely a possible stop gate. Protocol 4 is explicitly defined to change whenever message format changes [network_manager.gd](../../../../../src/autoload/network_manager.gd#L28). Removing the seed/config RPC contract and changing mirror result semantics makes old/new builds incompatible.
+- IMPORTANT — Result schemas need exact allowed keys and types, not only minimum fields. Current transport adds `__remote_authored` inside the result dictionary [network_manager.gd](../../../../../src/autoload/network_manager.gd#L1481). The workbook must require transport metadata to be separated or stripped before strict command-result validation.
 - IMPORTANT — The non-command/random inventory is incomplete. It should classify setup tie-break randomness, the legacy global-RNG Evade helper, scene-side damage-deck draws, and command paths consuming the hidden shuffled deck, even when the conclusion is “outside BUG-042 and unchanged.”
 - IMPORTANT — BUG-035 shares `CommandProcessor`, `GameManager`, and current-attack regression files. Behavioral scope can remain isolated, but file-level isolation is impossible. The exact BUG-035 command-continuation and presentation/reconstruction suites must be mandatory regression gates.
 
@@ -70,7 +70,7 @@ The contracts must additionally prescribe strict integer/dictionary/array shapes
 8. Replay/save/non-command RNG assessment
 
 - NO ISSUE — Authority save/load can remain unchanged and continue persisting full RNG state.
-- NO ISSUE — Replay can remain seed-plus-command-history deterministic re-execution with no live result persistence, as ADR-012 requires [ADR-012](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-012-live-network-rng-authority-and-result-application.md:174).
+- NO ISSUE — Replay can remain seed-plus-command-history deterministic re-execution with no live result persistence, as ADR-012 requires [ADR-012](../../../../architecture/adr/ADR-012-live-network-rng-authority-and-result-application.md#L174).
 - IMPORTANT — Non-command setup RNG should remain outside the new command-result mechanism, but the workbook has not proven that its realized hidden-deck effects have a sufficient existing publication path. They do not currently.
 - No replay format or save-schema migration is justified.
 
@@ -78,7 +78,7 @@ The contracts must additionally prescribe strict integer/dictionary/array shapes
 
 The RNG-specific matrix is strong, but it can pass while fresh production remains defective.
 
-The fresh test presently stops after Roll Dice plus one reroll [workbook](/Users/Katharina/godot/Armada/docs/architecture/implementation_workbooks/BUG-042-network-rng-authority-result-application-implementation-workbook.md:254). It must also:
+The fresh test presently stops after Roll Dice plus one reroll [workbook](../../../../architecture/implementation_workbooks/BUG-042-network-rng-authority-result-application-implementation-workbook.md#L254). It must also:
 
 - exercise the real lobby start for both ordinary scenario and setup-package variants;
 - continue a ship attack through `ResolveDamageCommand`;
@@ -109,7 +109,7 @@ Slice 3 must not begin merely because the four dice commands pass.
 
 A stop gate is triggered now.
 
-The current filtered pre-state cannot support all canonical mutations needed after fresh bootstrap without hidden deck inputs, broader filtered-state representation, or additional viewer-specific result application. This matches ADR-012’s prohibition on requiring hidden authority inputs [ADR-012](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-012-live-network-rng-authority-and-result-application.md:125).
+The current filtered pre-state cannot support all canonical mutations needed after fresh bootstrap without hidden deck inputs, broader filtered-state representation, or additional viewer-specific result application. This matches ADR-012’s prohibition on requiring hidden authority inputs [ADR-012](../../../../architecture/adr/ADR-012-live-network-rng-authority-and-result-application.md#L125).
 
 Protocol versioning is not itself a stop gate; it is a required narrow implementation action.
 

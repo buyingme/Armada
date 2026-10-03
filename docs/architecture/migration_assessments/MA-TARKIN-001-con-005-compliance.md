@@ -72,26 +72,26 @@ plus `TimingWindowOrchestrator`.
 
 | Area | Classification | Evidence |
 |---|---:|---|
-| 1. TimingWindowState ownership | Non-Compliant | `GameState` owns `interaction_flow`, not `TimingWindowState`: [game_state.gd:34](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:34), [game_state.gd:150](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:150). |
+| 1. TimingWindowState ownership | Non-Compliant | `GameState` owns `interaction_flow`, not `TimingWindowState`: [game_state.gd:34](../../../src/core/state/game_state.gd#L34), [game_state.gd:150](../../../src/core/state/game_state.gd#L150). |
 | 2. Lifecycle identity | Non-Compliant | No serialized timing-window lifecycle identity exists. |
 | 3. Static timing-window definition ownership | Non-Compliant | Tarkin timing policy is in `AdvancePhaseCommand`, `FlowSpec`, `CommandApplicability`, and rule helper. |
-| 4. RuleRegistry participant discovery | Non-Compliant | Tarkin scans runtime upgrades locally: [grand_moff_tarkin.gd:98](/Users/Katharina/godot/Armada/src/core/effects/rules/upgrades/commander/grand_moff_tarkin.gd:98). |
-| 5. Opportunity derivation | Partially Compliant | Derived from authoritative runtime upgrade state, but outside orchestrator protocol: [grand_moff_tarkin.gd:15](/Users/Katharina/godot/Armada/src/core/effects/rules/upgrades/commander/grand_moff_tarkin.gd:15). |
+| 4. RuleRegistry participant discovery | Non-Compliant | Tarkin scans runtime upgrades locally: [grand_moff_tarkin.gd:98](../../../src/core/effects/rules/upgrades/commander/grand_moff_tarkin.gd#L98). |
+| 5. Opportunity derivation | Partially Compliant | Derived from authoritative runtime upgrade state, but outside orchestrator protocol: [grand_moff_tarkin.gd:15](../../../src/core/effects/rules/upgrades/commander/grand_moff_tarkin.gd#L15). |
 | 6. Canonical opportunity identity | Partially Compliant | Uses `runtime_upgrade_id` and owner/source facts, but no CON-005 opportunity record. |
-| 7. Controller policy | Partially Compliant | Controller is stored in `InteractionFlow`, not static timing-window policy: [advance_phase_command.gd:77](/Users/Katharina/godot/Armada/src/core/commands/advance_phase_command.gd:77). |
-| 8. Explicit Use command | Fully Compliant locally | `TarkinChoiceCommand` records selected command and mutates via replayable command: [tarkin_choice_command.gd:43](/Users/Katharina/godot/Armada/src/core/commands/tarkin_choice_command.gd:43). |
-| 9. Explicit Decline command | Fully Compliant locally | Decline is explicit in the same replayable command type: [tarkin_choice_command.gd:46](/Users/Katharina/godot/Armada/src/core/commands/tarkin_choice_command.gd:46). |
-| 10. Replayability | Partially Compliant | Command replay works; lifecycle identity and continuation-failure replay do not exist. Test: [test_tarkin_choice_command.gd:261](/Users/Katharina/godot/Armada/tests/unit/test_tarkin_choice_command.gd:261). |
-| 11. Continuation derivation | Non-Compliant | `TarkinChoiceCommand` directly enters ship selection: [tarkin_choice_command.gd:53](/Users/Katharina/godot/Armada/src/core/commands/tarkin_choice_command.gd:53), [tarkin_choice_command.gd:103](/Users/Katharina/godot/Armada/src/core/commands/tarkin_choice_command.gd:103). |
+| 7. Controller policy | Partially Compliant | Controller is stored in `InteractionFlow`, not static timing-window policy: [advance_phase_command.gd:77](../../../src/core/commands/advance_phase_command.gd#L77). |
+| 8. Explicit Use command | Fully Compliant locally | `TarkinChoiceCommand` records selected command and mutates via replayable command: [tarkin_choice_command.gd:43](../../../src/core/commands/tarkin_choice_command.gd#L43). |
+| 9. Explicit Decline command | Fully Compliant locally | Decline is explicit in the same replayable command type: [tarkin_choice_command.gd:46](../../../src/core/commands/tarkin_choice_command.gd#L46). |
+| 10. Replayability | Partially Compliant | Command replay works; lifecycle identity and continuation-failure replay do not exist. Test: [test_tarkin_choice_command.gd:261](../../../tests/unit/test_tarkin_choice_command.gd#L261). |
+| 11. Continuation derivation | Non-Compliant | `TarkinChoiceCommand` directly enters ship selection: [tarkin_choice_command.gd:53](../../../src/core/commands/tarkin_choice_command.gd#L53), [tarkin_choice_command.gd:103](../../../src/core/commands/tarkin_choice_command.gd#L103). |
 | 12. Continuation failure behavior | Non-Compliant | No separate continuation command/failure behavior exists. |
 | 13. Cleanup ownership | Partially Compliant | Rule guard ownership is correct, but shared lifecycle cleanup is missing. |
 | 14. Cleanup trigger coverage | Partially Compliant | Resolution replaces projection, but CON-005 failure/stale/duplicate cleanup categories are not covered. |
-| 15. Projection | Partially Compliant | Projection is derived and routed correctly, but not from shared opportunity records: [ui_projector.gd:110](/Users/Katharina/godot/Armada/src/core/network/ui_projector.gd:110). |
-| 16. Visibility | Fully Compliant for current scope | Tarkin is public and tests cover owner/opponent projection: [test_tarkin_choice_command.gd:71](/Users/Katharina/godot/Armada/tests/unit/test_tarkin_choice_command.gd:71). |
+| 15. Projection | Partially Compliant | Projection is derived and routed correctly, but not from shared opportunity records: [ui_projector.gd:110](../../../src/core/network/ui_projector.gd#L110). |
+| 16. Visibility | Fully Compliant for current scope | Tarkin is public and tests cover owner/opponent projection: [test_tarkin_choice_command.gd:71](../../../tests/unit/test_tarkin_choice_command.gd#L71). |
 | 17. Save/load | Partially Compliant | Runtime upgrade state and prompt payload serialize, but no lifecycle identity. |
 | 18. Replay | Partially Compliant | Choice/grant replay exists; CON-005 lifecycle replay obligations do not. |
-| 19. Reconnect | Partially Compliant | Prompt projection survives serialized state, but no `TimingWindowState`: [test_tarkin_choice_command.gd:279](/Users/Katharina/godot/Armada/tests/unit/test_tarkin_choice_command.gd:279). |
-| 20. Networking invariants | Partially Compliant | Ordering and side effects are tested, but stale-window identity checks are absent: [game_manager.gd:2113](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2113). |
+| 19. Reconnect | Partially Compliant | Prompt projection survives serialized state, but no `TimingWindowState`: [test_tarkin_choice_command.gd:279](../../../tests/unit/test_tarkin_choice_command.gd#L279). |
+| 20. Networking invariants | Partially Compliant | Ordering and side effects are tested, but stale-window identity checks are absent: [game_manager.gd:2113](../../../src/autoload/game_manager.gd#L2113). |
 | 21. CAP obligations | Partially Compliant | CAP-UPG-001 is Integrated for CON-003/CON-004, but not updated for CON-005 lifecycle identity/evidence. |
 | 22. TEST-003 obligations | Partially Compliant | Broad legacy evidence exists; full CON-005 protocol evidence does not. |
 
@@ -100,7 +100,7 @@ plus `TimingWindowOrchestrator`.
 - Strong command-owned local behavior: `TarkinChoiceCommand` validates, records
   use/decline, grants tokens, and serializes through command history.
 - Runtime upgrade ownership aligns with ADR-004/CON-004: trigger guard and last
-  choice live on the source runtime upgrade: [grand_moff_tarkin.gd:65](/Users/Katharina/godot/Armada/src/core/effects/rules/upgrades/commander/grand_moff_tarkin.gd:65).
+  choice live on the source runtime upgrade: [grand_moff_tarkin.gd:65](../../../src/core/effects/rules/upgrades/commander/grand_moff_tarkin.gd#L65).
 - Good tests for prompt opening, public projection, wrong-player/wrong-phase
   rejection, duplicate-use rejection, save/load, reconnect, replay, modal
   routing, and network ordering.

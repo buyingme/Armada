@@ -22,29 +22,29 @@ No repository files were modified. This plan targets the current dirty worktree 
 
 ## Startup documents read
 
-- [AGENTS.md](/Users/Katharina/godot/Armada/AGENTS.md)
-- [ARCHITECTURE.md](/Users/Katharina/godot/Armada/ARCHITECTURE.md)
-- [AI_DEVELOPMENT_PRINCIPLES.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PRINCIPLES.md)
-- [AI_DEVELOPMENT_PROCESS.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PROCESS.md)
-- [AI_STARTUP_GUARDRAILS.md](/Users/Katharina/godot/Armada/.ai/instructions/AI_STARTUP_GUARDRAILS.md)
-- [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md)
-- [ARCHITECTURE_ROADMAP.md](/Users/Katharina/godot/Armada/docs/architecture/ARCHITECTURE_ROADMAP.md)
-- [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md)
+- [AGENTS.md](../../../../../AGENTS.md)
+- [ARCHITECTURE.md](../../../../../ARCHITECTURE.md)
+- [AI_DEVELOPMENT_PRINCIPLES.md](../../../../development/AI_DEVELOPMENT_PRINCIPLES.md)
+- [AI_DEVELOPMENT_PROCESS.md](../../../../development/AI_DEVELOPMENT_PROCESS.md)
+- [AI_STARTUP_GUARDRAILS.md](../../../../../.ai/instructions/AI_STARTUP_GUARDRAILS.md)
+- [DOCUMENT_AUTHORITY.md](../../../../architecture/DOCUMENT_AUTHORITY.md)
+- [ARCHITECTURE_ROADMAP.md](../../../../architecture/ARCHITECTURE_ROADMAP.md)
+- [CODEX_WORKFLOW.md](../../../../architecture/CODEX_WORKFLOW.md)
 
 ## Authority documents read
 
-- [ADR-001](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
-- [ADR-003](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-003-rule-and-validation-surfaces.md)
-- [ADR-004](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-004-upgrade-runtime-ownership.md)
-- [ADR-005](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-005-timing-window-ownership-and-continuation.md)
-- [CON-001](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
-- [CON-003](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-003-rule-capability-contract.md)
-- [CON-004](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-004-upgrade-runtime-contract.md)
-- [CON-005](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-005-timing-window-implementation-contract.md)
-- [CON-006](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md)
-- [DR-001](/Users/Katharina/godot/Armada/docs/architecture/decision_workbooks/DR-001-CON-006-owner-decisions.md)
-- [TEST-003](/Users/Katharina/godot/Armada/docs/architecture/tests/TEST-003-interactive-rule-timing-window-verification.md)
-- [MA-ATTACK-001](/Users/Katharina/godot/Armada/docs/architecture/migration_assessments/MA-ATTACK-001-con-006-compliance.md)
+- [ADR-001](../../../../architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
+- [ADR-003](../../../../architecture/adr/ADR-003-rule-and-validation-surfaces.md)
+- [ADR-004](../../../../architecture/adr/ADR-004-upgrade-runtime-ownership.md)
+- [ADR-005](../../../../architecture/adr/ADR-005-timing-window-ownership-and-continuation.md)
+- [CON-001](../../../../architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
+- [CON-003](../../../../architecture/contracts/CON-003-rule-capability-contract.md)
+- [CON-004](../../../../architecture/contracts/CON-004-upgrade-runtime-contract.md)
+- [CON-005](../../../../architecture/contracts/CON-005-timing-window-implementation-contract.md)
+- [CON-006](../../../../architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md)
+- [DR-001](../../../../architecture/decision_workbooks/DR-001-CON-006-owner-decisions.md)
+- [TEST-003](../../../../architecture/tests/TEST-003-interactive-rule-timing-window-verification.md)
+- [MA-ATTACK-001](../../../../architecture/migration_assessments/MA-ATTACK-001-con-006-compliance.md)
 - The completed contract-driven defect analysis in this task conversation.
 
 The superseded CAP-ATTACK-001 draft was checked only to confirm its non-authoritative status and was not used as implementation authority.
@@ -53,15 +53,15 @@ The superseded CAP-ATTACK-001 draft was checked only to confirm its non-authorit
 
 The plan is grounded in:
 
-- Immediate `target_locked` emission after preview in [target_selector.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1179).
-- Automatic Begin and active `Skip(flow_replaced) → Begin` choreography in [attack_executor.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:795).
-- Shared mutable declaration state in [attack_state.gd](/Users/Katharina/godot/Armada/src/core/combat/attack_state.gd:1).
-- The later, dice-stage Confirm already present in [attack_sim_panel.gd](/Users/Katharina/godot/Armada/src/ui/combat/attack_sim_panel.gd:55).
-- Authoritative Begin revalidation and `CurrentAttackState` construction in [begin_attack_command.gd](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:14).
-- Legacy `flow_replaced` support in [skip_attack_command.gd](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:18).
-- Client pending-command gating in [network_command_submitter.gd](/Users/Katharina/godot/Armada/src/core/commands/network_command_submitter.gd:41).
-- Server-side rejection without a response to the client in [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:587).
-- Legacy sequence assertions in [test_squadron_attack_target_recovery.gd](/Users/Katharina/godot/Armada/tests/integration/test_squadron_attack_target_recovery.gd:280) and [test_current_attack_shared_protocol.gd](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:345).
+- Immediate `target_locked` emission after preview in [target_selector.gd](../../../../../src/scenes/game_board/target_selector.gd#L1179).
+- Automatic Begin and active `Skip(flow_replaced) → Begin` choreography in [attack_executor.gd](../../../../../src/scenes/game_board/attack_executor.gd#L795).
+- Shared mutable declaration state in [attack_state.gd](../../../../../src/core/combat/attack_state.gd#L1).
+- The later, dice-stage Confirm already present in [attack_sim_panel.gd](../../../../../src/ui/combat/attack_sim_panel.gd#L55).
+- Authoritative Begin revalidation and `CurrentAttackState` construction in [begin_attack_command.gd](../../../../../src/core/commands/begin_attack_command.gd#L14).
+- Legacy `flow_replaced` support in [skip_attack_command.gd](../../../../../src/core/commands/skip_attack_command.gd#L18).
+- Client pending-command gating in [network_command_submitter.gd](../../../../../src/core/commands/network_command_submitter.gd#L41).
+- Server-side rejection without a response to the client in [network_manager.gd](../../../../../src/autoload/network_manager.gd#L587).
+- Legacy sequence assertions in [test_squadron_attack_target_recovery.gd](../../../../../tests/integration/test_squadron_attack_target_recovery.gd#L280) and [test_current_attack_shared_protocol.gd](../../../../../tests/integration/test_current_attack_shared_protocol.gd#L345).
 - MA-ATTACK-001’s accepted distinction between the target-reassignment defect and broader CON-006 migration gaps.
 
 # Execution plan
@@ -118,44 +118,44 @@ Declaration Skip is included as a stabilization regression path: it must remain 
 
 | File | Purpose | Size |
 |---|---|---:|
-| [target_selector.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd) | Own the current transient candidate and replace all preview-derived output coherently; stop emitting automatic attack entry; remove active-replacement requests. | Large |
-| [attack_executor.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd) | Coordinate explicit declaration Confirm/Skip, one-command pending state, accepted/rejected result handling, and removal of replacement caches and Skip→Begin sequencing. | Large |
-| [attack_state.gd](/Users/Katharina/godot/Armada/src/core/combat/attack_state.gd) | Clarify and constrain its declaration-time role so it is not documented or used as a competing mutable candidate owner; preserve its post-Begin scene projection responsibilities. | Small |
-| [attack_flow_fsm.gd](/Users/Katharina/godot/Armada/src/core/combat/attack_flow_fsm.gd) | Correct declaration comments and assumptions that currently equate declaration entry with a locked target. No post-Begin transition redesign. | Small |
-| [attack_sim_panel.gd](/Users/Katharina/godot/Armada/src/ui/combat/attack_sim_panel.gd) | Present a declaration Confirm distinct from later dice confirmation; expose pending, rejection, preview replacement, deselection, and Skip states. | Medium |
-| [attack_panel_controller.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_panel_controller.gd) | Route accepted/rejected declaration outcomes without treating a pending or inactive declaration as loss of presentation ownership. | Medium |
-| [game_board.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/game_board.gd) | Wire authoritative rejection/result notification into the existing attack presentation composition. | Small |
-| [skip_attack_command.gd](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd) | Remove the obsolete `flow_replaced` replacement reason after all callers are removed, while leaving ordinary active cancellation and no-active declaration Skip semantics otherwise unchanged. | Small |
-| [network_command_submitter.gd](/Users/Katharina/godot/Armada/src/core/commands/network_command_submitter.gd) | Release the one-command awaiting gate on authoritative rejection as well as acceptance. | Medium |
-| [network_manager.gd](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd) | Return a rejected submission outcome to the submitting client without recording or broadcasting it as an accepted semantic command. | Medium |
-| [game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd) | Deliver accepted/rejected network outcomes to the declaration coordinator while preserving accepted-command ordering. | Medium |
+| [target_selector.gd](../../../../../src/scenes/game_board/target_selector.gd) | Own the current transient candidate and replace all preview-derived output coherently; stop emitting automatic attack entry; remove active-replacement requests. | Large |
+| [attack_executor.gd](../../../../../src/scenes/game_board/attack_executor.gd) | Coordinate explicit declaration Confirm/Skip, one-command pending state, accepted/rejected result handling, and removal of replacement caches and Skip→Begin sequencing. | Large |
+| [attack_state.gd](../../../../../src/core/combat/attack_state.gd) | Clarify and constrain its declaration-time role so it is not documented or used as a competing mutable candidate owner; preserve its post-Begin scene projection responsibilities. | Small |
+| [attack_flow_fsm.gd](../../../../../src/core/combat/attack_flow_fsm.gd) | Correct declaration comments and assumptions that currently equate declaration entry with a locked target. No post-Begin transition redesign. | Small |
+| [attack_sim_panel.gd](../../../../../src/ui/combat/attack_sim_panel.gd) | Present a declaration Confirm distinct from later dice confirmation; expose pending, rejection, preview replacement, deselection, and Skip states. | Medium |
+| [attack_panel_controller.gd](../../../../../src/scenes/game_board/attack_panel_controller.gd) | Route accepted/rejected declaration outcomes without treating a pending or inactive declaration as loss of presentation ownership. | Medium |
+| [game_board.gd](../../../../../src/scenes/game_board/game_board.gd) | Wire authoritative rejection/result notification into the existing attack presentation composition. | Small |
+| [skip_attack_command.gd](../../../../../src/core/commands/skip_attack_command.gd) | Remove the obsolete `flow_replaced` replacement reason after all callers are removed, while leaving ordinary active cancellation and no-active declaration Skip semantics otherwise unchanged. | Small |
+| [network_command_submitter.gd](../../../../../src/core/commands/network_command_submitter.gd) | Release the one-command awaiting gate on authoritative rejection as well as acceptance. | Medium |
+| [network_manager.gd](../../../../../src/autoload/network_manager.gd) | Return a rejected submission outcome to the submitting client without recording or broadcasting it as an accepted semantic command. | Medium |
+| [game_manager.gd](../../../../../src/autoload/game_manager.gd) | Deliver accepted/rejected network outcomes to the declaration coordinator while preserving accepted-command ordering. | Medium |
 
 ### Expected test changes
 
-- [test_squadron_attack_target_recovery.gd](/Users/Katharina/godot/Armada/tests/integration/test_squadron_attack_target_recovery.gd) — large replacement of legacy active-replacement expectations.
-- [test_current_attack_shared_protocol.gd](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd) — replace Begin→Skip→Begin equivalence with preview-local and one-Begin equivalence.
-- [test_current_attack_production_resume.gd](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_production_resume.gd) — declaration presentation, pending, acceptance, and rejection lifecycle.
-- [test_attack_sim_panel.gd](/Users/Katharina/godot/Armada/tests/unit/test_attack_sim_panel.gd) — distinct declaration and dice confirmation states.
-- [test_attack_state.gd](/Users/Katharina/godot/Armada/tests/unit/test_attack_state.gd) — transient reset and stale-target removal.
-- [test_attack_commands.gd](/Users/Katharina/godot/Armada/tests/unit/test_attack_commands.gd) — retirement of `flow_replaced` while preserving supported Skip behavior.
-- [test_command_submitter.gd](/Users/Katharina/godot/Armada/tests/unit/test_command_submitter.gd) — rejection clears awaiting and queued work proceeds.
-- [test_network_manager.gd](/Users/Katharina/godot/Armada/tests/unit/test_network_manager.gd) — rejected submission response semantics.
-- [test_network_command_result_ordering.gd](/Users/Katharina/godot/Armada/tests/unit/test_network_command_result_ordering.gd) — rejection does not enter accepted command order or block the next valid command.
-- [test_modal_router.gd](/Users/Katharina/godot/Armada/tests/unit/test_modal_router.gd) — declaration presentation is retained while pending and after rejection.
-- [test_attack_panel_mirror.gd](/Users/Katharina/godot/Armada/tests/unit/test_attack_panel_mirror.gd) — passive peers receive no preview authority and still project accepted Begin.
-- [test_reconnection_mid_attack.gd](/Users/Katharina/godot/Armada/tests/integration/test_reconnection_mid_attack.gd) — reconnect before Begin restores no candidate or attack.
-- [test_save_load_round_trip.gd](/Users/Katharina/godot/Armada/tests/unit/test_save_load_round_trip.gd) — local preview does not alter serialized authoritative state.
+- [test_squadron_attack_target_recovery.gd](../../../../../tests/integration/test_squadron_attack_target_recovery.gd) — large replacement of legacy active-replacement expectations.
+- [test_current_attack_shared_protocol.gd](../../../../../tests/integration/test_current_attack_shared_protocol.gd) — replace Begin→Skip→Begin equivalence with preview-local and one-Begin equivalence.
+- [test_current_attack_production_resume.gd](../../../../../tests/integration/test_current_attack_production_resume.gd) — declaration presentation, pending, acceptance, and rejection lifecycle.
+- [test_attack_sim_panel.gd](../../../../../tests/unit/test_attack_sim_panel.gd) — distinct declaration and dice confirmation states.
+- [test_attack_state.gd](../../../../../tests/unit/test_attack_state.gd) — transient reset and stale-target removal.
+- [test_attack_commands.gd](../../../../../tests/unit/test_attack_commands.gd) — retirement of `flow_replaced` while preserving supported Skip behavior.
+- [test_command_submitter.gd](../../../../../tests/unit/test_command_submitter.gd) — rejection clears awaiting and queued work proceeds.
+- [test_network_manager.gd](../../../../../tests/unit/test_network_manager.gd) — rejected submission response semantics.
+- [test_network_command_result_ordering.gd](../../../../../tests/unit/test_network_command_result_ordering.gd) — rejection does not enter accepted command order or block the next valid command.
+- [test_modal_router.gd](../../../../../tests/unit/test_modal_router.gd) — declaration presentation is retained while pending and after rejection.
+- [test_attack_panel_mirror.gd](../../../../../tests/unit/test_attack_panel_mirror.gd) — passive peers receive no preview authority and still project accepted Begin.
+- [test_reconnection_mid_attack.gd](../../../../../tests/integration/test_reconnection_mid_attack.gd) — reconnect before Begin restores no candidate or attack.
+- [test_save_load_round_trip.gd](../../../../../tests/unit/test_save_load_round_trip.gd) — local preview does not alter serialized authoritative state.
 
 No new test file is required; the existing focused integration suites are the natural home for the new evidence.
 
 ### Considered but expected to remain unchanged
 
-- [begin_attack_command.gd](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd): continues to revalidate authoritative target facts and create canonical attack state.
-- [current_attack_state.gd](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd): remains the accepted post-Begin state representation.
-- [targeting_list_builder.gd](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd) and [attack_target_resolver.gd](/Users/Katharina/godot/Armada/src/core/combat/attack_target_resolver.gd): broader Preview/Begin parity work is outside this stabilization.
-- [command_applicability.gd](/Users/Katharina/godot/Armada/src/core/commands/command_applicability.gd), [flow_spec.gd](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd), and [game_state.gd](/Users/Katharina/godot/Armada/src/core/state/game_state.gd): their accepted MA gaps require the broader declaration/enclosing-progress migration.
-- [save_game_manager.gd](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd): save-point policy remains unchanged.
-- [ui_projector.gd](/Users/Katharina/godot/Armada/src/core/network/ui_projector.gd), [state_filter.gd](/Users/Katharina/godot/Armada/src/core/network/state_filter.gd), and [modal_router.gd](/Users/Katharina/godot/Armada/src/scenes/game_board/modal_router.gd): existing projection remains authoritative-result-driven.
+- [begin_attack_command.gd](../../../../../src/core/commands/begin_attack_command.gd): continues to revalidate authoritative target facts and create canonical attack state.
+- [current_attack_state.gd](../../../../../src/core/state/current_attack_state.gd): remains the accepted post-Begin state representation.
+- [targeting_list_builder.gd](../../../../../src/core/combat/targeting_list_builder.gd) and [attack_target_resolver.gd](../../../../../src/core/combat/attack_target_resolver.gd): broader Preview/Begin parity work is outside this stabilization.
+- [command_applicability.gd](../../../../../src/core/commands/command_applicability.gd), [flow_spec.gd](../../../../../src/core/state/flow_spec.gd), and [game_state.gd](../../../../../src/core/state/game_state.gd): their accepted MA gaps require the broader declaration/enclosing-progress migration.
+- [save_game_manager.gd](../../../../../src/autoload/save_game_manager.gd): save-point policy remains unchanged.
+- [ui_projector.gd](../../../../../src/core/network/ui_projector.gd), [state_filter.gd](../../../../../src/core/network/state_filter.gd), and [modal_router.gd](../../../../../src/scenes/game_board/modal_router.gd): existing projection remains authoritative-result-driven.
 - Ship/squadron activation state, controllers, and modal-local progress: broader enclosing-progress migration remains out of scope.
 - Roll, dice confirmation, defense, damage, completion, active cancellation, Counter, upgrade, rule, and timing-window implementation.
 - Architecture, Contract, ADR, TEST, CAP, Migration Assessment, and implementation-workbook documents.

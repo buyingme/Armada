@@ -48,48 +48,48 @@ CON-006 scope ends at an accepted `BeginAttackCommand` or an accepted no-active 
 
 The following mandatory startup documents were read:
 
-- [AGENTS.md](/Users/Katharina/godot/Armada/AGENTS.md)
-- [ARCHITECTURE.md](/Users/Katharina/godot/Armada/ARCHITECTURE.md)
-- [AI_DEVELOPMENT_PRINCIPLES.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PRINCIPLES.md)
-- [AI_DEVELOPMENT_PROCESS.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PROCESS.md)
-- [AI_STARTUP_GUARDRAILS.md](/Users/Katharina/godot/Armada/.ai/instructions/AI_STARTUP_GUARDRAILS.md)
-- [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md)
-- [ARCHITECTURE_ROADMAP.md](/Users/Katharina/godot/Armada/docs/architecture/ARCHITECTURE_ROADMAP.md)
-- [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md)
+- [AGENTS.md](../../../AGENTS.md)
+- [ARCHITECTURE.md](../../../ARCHITECTURE.md)
+- [AI_DEVELOPMENT_PRINCIPLES.md](../../development/AI_DEVELOPMENT_PRINCIPLES.md)
+- [AI_DEVELOPMENT_PROCESS.md](../../development/AI_DEVELOPMENT_PROCESS.md)
+- [AI_STARTUP_GUARDRAILS.md](../../../.ai/instructions/AI_STARTUP_GUARDRAILS.md)
+- [DOCUMENT_AUTHORITY.md](../DOCUMENT_AUTHORITY.md)
+- [ARCHITECTURE_ROADMAP.md](../ARCHITECTURE_ROADMAP.md)
+- [CODEX_WORKFLOW.md](../CODEX_WORKFLOW.md)
 
 ### Architecture And Verification Authority
 
-- [ADR-001](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
-- [ADR-003](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-003-rule-and-validation-surfaces.md)
-- [ADR-004](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-004-upgrade-runtime-ownership.md)
-- [ADR-005](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-005-timing-window-ownership-and-continuation.md)
-- [CON-001](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
-- [CON-003](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-003-rule-capability-contract.md)
-- [CON-004](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-004-upgrade-runtime-contract.md)
-- [CON-005](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-005-timing-window-implementation-contract.md)
-- [CON-006](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md)
-- [TEST-003](/Users/Katharina/godot/Armada/docs/architecture/tests/TEST-003-interactive-rule-timing-window-verification.md)
-- [MA-ATTACK-001](/Users/Katharina/godot/Armada/docs/architecture/migration_assessments/MA-ATTACK-001-con-006-compliance.md)
+- [ADR-001](../adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
+- [ADR-003](../adr/ADR-003-rule-and-validation-surfaces.md)
+- [ADR-004](../adr/ADR-004-upgrade-runtime-ownership.md)
+- [ADR-005](../adr/ADR-005-timing-window-ownership-and-continuation.md)
+- [CON-001](../contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
+- [CON-003](../contracts/CON-003-rule-capability-contract.md)
+- [CON-004](../contracts/CON-004-upgrade-runtime-contract.md)
+- [CON-005](../contracts/CON-005-timing-window-implementation-contract.md)
+- [CON-006](../contracts/CON-006-attack-declaration-lifecycle-contract.md)
+- [TEST-003](../tests/TEST-003-interactive-rule-timing-window-verification.md)
+- [MA-ATTACK-001](MA-ATTACK-001-con-006-compliance.md)
 
 The accepted Migration Assessments for Tarkin, ECM, H9, and the cross-consumer timing-window synthesis were inspected for document conventions.
 
 ### Stabilization Evidence
 
-- [Verified declaration repair plan](/Users/Katharina/godot/Armada/docs/qa/bugs/verify/BUG-000/issue-ATTACK-001-target-reassignment-con006-repair-plan.md)
-- [BUG-002 issue](/Users/Katharina/godot/Armada/docs/qa/bugs/verify/BUG-002/issue_attack-sequence-early-termination.md)
-- [Accepted BUG-002 forensic analysis](/Users/Katharina/godot/Armada/docs/qa/bugs/verify/BUG-002/forensic-analysis-report.md)
-- [BUG-002 forensic follow-up](/Users/Katharina/godot/Armada/docs/qa/bugs/verify/BUG-002/forensic-analysis-report-2.md)
+- [Verified declaration repair plan](../../qa/bugs/verify/BUG-000/issue-ATTACK-001-target-reassignment-con006-repair-plan.md)
+- [BUG-002 issue](../../qa/bugs/verify/BUG-002/issue_attack-sequence-early-termination.md)
+- [Accepted BUG-002 forensic analysis](../../qa/bugs/verify/BUG-002/forensic-analysis-report.md)
+- [BUG-002 forensic follow-up](../../qa/bugs/verify/BUG-002/forensic-analysis-report-2.md)
 - Current production implementation and focused automated evidence committed by `7bc978a` and `0a70a16`.
 
 The completed architecture-preservation verification referenced by the assessment request was treated as accepted review input. No standalone repository document containing that review was found. Current implementation ownership was therefore also checked directly against the accepted contracts.
 
 ### Open Bugs Reviewed
 
-- [BUG-001 / NOTE-001 — Network Save/Load Session Bootstrap Investigation](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-001/issue_network-save-load-session-bootstrap.md)
-- [BUG-003 — Attack Can Be Skipped After Commitment](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-003/issue-cant-skip-after-commit.md)
-- [BUG-004 — Command Token Not Refreshed After Grand Moff Tarkin Selection](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-004/issue-Command-Token-Not-Refreshed-After-Grand-Moff-Tarkin-Selection.md)
-- [BUG-005 — Squadron Attack Allowed Beyond Range 1](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-005/issue-squadron-attack-allowed-beyond-range-1.md)
-- [BUG-005 forensic analysis](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-005/forensic-analysis-report.md)
+- [BUG-001 / NOTE-001 — Network Save/Load Session Bootstrap Investigation](../../qa/bugs/open/BUG-001/issue_network-save-load-session-bootstrap.md)
+- [BUG-003 — Attack Can Be Skipped After Commitment](../../qa/bugs/open/BUG-003/issue-cant-skip-after-commit.md)
+- [BUG-004 — Command Token Not Refreshed After Grand Moff Tarkin Selection](../../qa/bugs/open/BUG-004/issue-Command-Token-Not-Refreshed-After-Grand-Moff-Tarkin-Selection.md)
+- [BUG-005 — Squadron Attack Allowed Beyond Range 1](../../qa/bugs/open/BUG-005/issue-squadron-attack-allowed-beyond-range-1.md)
+- [BUG-005 forensic analysis](../../qa/bugs/open/BUG-005/forensic-analysis-report.md)
 
 The associated BUG-003, BUG-004, and BUG-005 annotations were also reviewed.
 
@@ -121,37 +121,37 @@ This assessment did not execute tests. It relies on committed automated evidence
 
 `TargetSelector` now owns one explicit transient declaration candidate and a pending flag. Candidate selection remains outside canonical state:
 
-- [target_selector.gd:130](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:130)
-- [target_selector.gd:134](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:134)
-- [target_selector.gd:1152](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1152)
-- [target_selector.gd:1183](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1183)
+- [target_selector.gd:130](../../../src/scenes/game_board/target_selector.gd#L130)
+- [target_selector.gd:134](../../../src/scenes/game_board/target_selector.gd#L134)
+- [target_selector.gd:1152](../../../src/scenes/game_board/target_selector.gd#L1152)
+- [target_selector.gd:1183](../../../src/scenes/game_board/target_selector.gd#L1183)
 
 A legal selection creates Preview without submitting Begin. Replacement, deselection, and illegal selection remain transient. Explicit declaration Confirm reads the current candidate and submits one Begin:
 
-- [attack_executor.gd:1391](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:1391)
-- [test_squadron_attack_target_recovery.gd:345](/Users/Katharina/godot/Armada/tests/integration/test_squadron_attack_target_recovery.gd:345)
-- [test_squadron_attack_target_recovery.gd:395](/Users/Katharina/godot/Armada/tests/integration/test_squadron_attack_target_recovery.gd:395)
+- [attack_executor.gd:1391](../../../src/scenes/game_board/attack_executor.gd#L1391)
+- [test_squadron_attack_target_recovery.gd:345](../../../tests/integration/test_squadron_attack_target_recovery.gd#L345)
+- [test_squadron_attack_target_recovery.gd:395](../../../tests/integration/test_squadron_attack_target_recovery.gd#L395)
 
 The replay-visible declaration replacement sequence `Begin → Skip(flow_replaced) → Begin` has been removed. Preview A → B → C produces one accepted Begin for the final candidate:
 
-- [test_current_attack_shared_protocol.gd:533](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:533)
-- [test_attack_commands.gd:622](/Users/Katharina/godot/Armada/tests/unit/test_attack_commands.gd:622)
+- [test_current_attack_shared_protocol.gd:533](../../../tests/integration/test_current_attack_shared_protocol.gd#L533)
+- [test_attack_commands.gd:622](../../../tests/unit/test_attack_commands.gd#L622)
 
 ### Pending And Rejection Recovery
 
 The declaration interaction is disabled while Begin or Skip is pending. Accepted results clear the candidate; rejected results retain or restore the prior declaration:
 
-- [attack_executor.gd:1483](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:1483)
-- [attack_executor.gd:1507](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:1507)
-- [test_squadron_attack_target_recovery.gd:166](/Users/Katharina/godot/Armada/tests/integration/test_squadron_attack_target_recovery.gd:166)
-- [test_squadron_attack_target_recovery.gd:312](/Users/Katharina/godot/Armada/tests/integration/test_squadron_attack_target_recovery.gd:312)
+- [attack_executor.gd:1483](../../../src/scenes/game_board/attack_executor.gd#L1483)
+- [attack_executor.gd:1507](../../../src/scenes/game_board/attack_executor.gd#L1507)
+- [test_squadron_attack_target_recovery.gd:166](../../../tests/integration/test_squadron_attack_target_recovery.gd#L166)
+- [test_squadron_attack_target_recovery.gd:312](../../../tests/integration/test_squadron_attack_target_recovery.gd#L312)
 
 Network authority now returns targeted rejection acknowledgements, clears the client submission gate, and reports the rejection to declaration presentation:
 
-- [network_command_submitter.gd:69](/Users/Katharina/godot/Armada/src/core/commands/network_command_submitter.gd:69)
-- [network_manager.gd:695](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:695)
-- [game_manager.gd:2257](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2257)
-- [test_squadron_attack_target_recovery.gd:431](/Users/Katharina/godot/Armada/tests/integration/test_squadron_attack_target_recovery.gd:431)
+- [network_command_submitter.gd:69](../../../src/core/commands/network_command_submitter.gd#L69)
+- [network_manager.gd:695](../../../src/autoload/network_manager.gd#L695)
+- [game_manager.gd:2257](../../../src/autoload/game_manager.gd#L2257)
+- [test_squadron_attack_target_recovery.gd:431](../../../tests/integration/test_squadron_attack_target_recovery.gd#L431)
 
 ### Authoritative Ship Attack Progress
 
@@ -165,21 +165,21 @@ Network authority now returns targeted rejection acknowledgements, clears the cl
 
 Evidence:
 
-- [ship_instance.gd:98](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:98)
-- [ship_instance.gd:342](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:342)
-- [ship_instance.gd:362](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:362)
-- [ship_instance.gd:382](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:382)
-- [ship_instance.gd:572](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:572)
+- [ship_instance.gd:98](../../../src/core/state/ship_instance.gd#L98)
+- [ship_instance.gd:342](../../../src/core/state/ship_instance.gd#L342)
+- [ship_instance.gd:362](../../../src/core/state/ship_instance.gd#L362)
+- [ship_instance.gd:382](../../../src/core/state/ship_instance.gd#L382)
+- [ship_instance.gd:572](../../../src/core/state/ship_instance.gd#L572)
 
 `AdvanceActivationStepCommand` initializes or closes that progress together with the authoritative activation step:
 
-- [advance_activation_step_command.gd:66](/Users/Katharina/godot/Armada/src/core/commands/advance_activation_step_command.gd:66)
+- [advance_activation_step_command.gd:66](../../../src/core/commands/advance_activation_step_command.gd#L66)
 
 For a standard ship attack, Begin fails closed without an active attack opportunity. It validates the ship-owned progress and atomically commits it with `CurrentAttackState`, restoring the progress snapshot if state installation fails:
 
-- [begin_attack_command.gd:16](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:16)
-- [begin_attack_command.gd:48](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:48)
-- [begin_attack_command.gd:109](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:109)
+- [begin_attack_command.gd:16](../../../src/core/commands/begin_attack_command.gd#L16)
+- [begin_attack_command.gd:48](../../../src/core/commands/begin_attack_command.gd#L48)
+- [begin_attack_command.gd:109](../../../src/core/commands/begin_attack_command.gd#L109)
 
 ### Neighboring Post-Begin Continuation Context
 
@@ -193,13 +193,13 @@ The following behavior is outside CON-006 but is material stabilization context:
 
 Evidence:
 
-- [complete_attack_command.gd:36](/Users/Katharina/godot/Armada/src/core/commands/complete_attack_command.gd:36)
-- [test_ship_instance.gd:336](/Users/Katharina/godot/Armada/tests/unit/test_ship_instance.gd:336)
-- [test_ship_instance.gd:360](/Users/Katharina/godot/Armada/tests/unit/test_ship_instance.gd:360)
-- [test_current_attack_shared_protocol.gd:142](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:142)
-- [test_current_attack_shared_protocol.gd:282](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:282)
-- [test_current_attack_production_resume.gd:471](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_production_resume.gd:471)
-- [test_current_attack_production_resume.gd:584](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_production_resume.gd:584)
+- [complete_attack_command.gd:36](../../../src/core/commands/complete_attack_command.gd#L36)
+- [test_ship_instance.gd:336](../../../tests/unit/test_ship_instance.gd#L336)
+- [test_ship_instance.gd:360](../../../tests/unit/test_ship_instance.gd#L360)
+- [test_current_attack_shared_protocol.gd:142](../../../tests/integration/test_current_attack_shared_protocol.gd#L142)
+- [test_current_attack_shared_protocol.gd:282](../../../tests/integration/test_current_attack_shared_protocol.gd#L282)
+- [test_current_attack_production_resume.gd:471](../../../tests/integration/test_current_attack_production_resume.gd#L471)
+- [test_current_attack_production_resume.gd:584](../../../tests/integration/test_current_attack_production_resume.gd#L584)
 
 These post-Begin behaviors do not determine any CON-006 compliance classification.
 
@@ -248,10 +248,10 @@ The completed BUG-005 forensic investigation establishes an additional CON-006 d
 
 | MA-ATTACK-001 responsibility | Original conclusion | Current repository evidence | Delta classification | Remaining obligation | TWI-ATTACK-001 |
 |---|---|---|---|---|---|
-| Supported declaration contexts and all four pairings | Partially compliant | Four pairings are exercised through canonical Begin tests ([test_current_attack_shared_protocol.gd:314](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:314)), but complete Rogue, Squadron Phase, and ship-phase Squadron-command declaration transactions are not represented on authoritative enclosing owners. | Partially resolved | Prove and complete every CON-006 supported enclosing context. | Yes |
+| Supported declaration contexts and all four pairings | Partially compliant | Four pairings are exercised through canonical Begin tests ([test_current_attack_shared_protocol.gd:314](../../../tests/integration/test_current_attack_shared_protocol.gd#L314)), but complete Rogue, Squadron Phase, and ship-phase Squadron-command declaration transactions are not represented on authoritative enclosing owners. | Partially resolved | Prove and complete every CON-006 supported enclosing context. | Yes |
 | `GameState` ownership of `CurrentAttackState` | Fully compliant | Private clone-protected state, serialization, validation, and setter ownership remain unchanged. | Unchanged | None. | No |
 | Complete attack-entry facts and declaration context | Partially compliant | Begin creates complete individual-attack state and standard ship Begin now commits ship progress, but squadron action/opportunity facts remain absent. | Partially resolved | Complete applicable enclosing context for squadron declarations and declaration Skip. | Yes |
-| Adjacent authoritative owners | Non-compliant | `ShipInstance` now owns serialized ship progress ([ship_instance.gd:98](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:98)); squadron move/attack progress remains modal-local ([squadron_activation_modal.gd:98](/Users/Katharina/godot/Armada/src/ui/combat/squadron_activation_modal.gd:98)). | Partially resolved | Bind squadron opportunity, action, and attack history to existing authoritative owners. | Yes |
+| Adjacent authoritative owners | Non-compliant | `ShipInstance` now owns serialized ship progress ([ship_instance.gd:98](../../../src/core/state/ship_instance.gd#L98)); squadron move/attack progress remains modal-local ([squadron_activation_modal.gd:98](../../../src/ui/combat/squadron_activation_modal.gd#L98)). | Partially resolved | Bind squadron opportunity, action, and attack history to existing authoritative owners. | Yes |
 | `TargetSelector` sole transient candidate ownership | Partially compliant | `TargetSelector._declaration_candidate` is the sole mutable command-intent candidate; shared `AttackState` is documented as derived scene projection. | Resolved | Preserve as regression evidence. | No |
 | First legal selection produces Preview without a command | Partially compliant | Selection creates a candidate and confirm affordance without changing command cursor or `CurrentAttackState`. | Resolved | Preserve as regression evidence. | No |
 | Replace, deselect, and illegal selection remain transient | Partially compliant | A → B → C replacement, illegal-selection preservation, and reselection/deselection tests now record no semantic command before Confirm. | Resolved | Preserve as regression evidence. | No |
@@ -259,7 +259,7 @@ The completed BUG-005 forensic investigation establishes an additional CON-006 d
 | Explicit declaration Confirm | Not implemented | `_on_declaration_confirm()` submits Begin from the current complete candidate. | Resolved | Preserve distinction from dice confirmation. | No |
 | Pending gate and rejection recovery | Partially compliant | Candidate interaction is gated while pending; local and network rejection restore the prior declaration and release the network submitter. | Resolved | Preserve as regression evidence. | No |
 | Begin validation and atomic authoritative mutation | Partially compliant | Standard ship Begin validates and atomically commits `ShipInstance` progress plus `CurrentAttackState`, with rollback. Squadron adjacent-owner mutations remain absent. | Partially resolved | Complete atomicity for supported squadron contexts. | Yes |
-| Declaration Skip while no attack is active | Non-compliant | A no-active voluntary Skip still returns a result without committing context-specific enclosing progress ([skip_attack_command.gd:41](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:41), [skip_attack_command.gd:73](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:73)). | Unchanged | Implement the CON-006 Skip effect matrix for every supported context. | Yes |
+| Declaration Skip while no attack is active | Non-compliant | A no-active voluntary Skip still returns a result without committing context-specific enclosing progress ([skip_attack_command.gd:41](../../../src/core/commands/skip_attack_command.gd#L41), [skip_attack_command.gd:73](../../../src/core/commands/skip_attack_command.gd#L73)). | Unchanged | Implement the CON-006 Skip effect matrix for every supported context. | Yes |
 | `InteractionFlow` and UI derived from authoritative declaration state | Partially compliant | Pre-Begin Preview now preserves the enclosing flow. Accepted Begin publishes attack flow after canonical state exists. Accepted no-active Skip still routes through scene teardown without an authoritative enclosing mutation. | Partially resolved | Derive post-Skip routing from the resulting authoritative context. | Yes |
 | Runtime rule and timing-window ownership | Fully compliant | Begin continues to use accepted targeting and rule surfaces. Ordinary Preview and declaration Skip do not synthesize timing-window state. | Unchanged | Maintain and verify applicable TEST-003 boundaries. | No separate migration |
 | Deterministic identity and atomic multi-owner transition | Partially compliant | Attack identity remains sequence-derived; ship progress rollback is explicit. Squadron Begin and declaration Skip remain incomplete multi-owner transactions. | Partially resolved | Complete deterministic atomic transitions for remaining contexts. | Yes |
@@ -276,7 +276,7 @@ The completed BUG-005 forensic investigation establishes an additional CON-006 d
 | Historical defect finding | Current status | Evidence and disposition |
 |---|---|---|
 | Rejected network commands can leave the client awaiting authority | Resolved | Targeted rejection acknowledgement and `reject_awaiting()` now release the gate. No TWI implementation work remains beyond regression evidence. |
-| Skip call sites can advance without an accepted command result | Partially resolved | Explicit declaration and Step 6 paths now check pending, rejection, and accepted results. `_auto_skip_ship_attack()` still submits `no_targets` and immediately tears down without checking acceptance ([attack_executor.gd:942](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:942)). This remains within the declaration Skip migration boundary. |
+| Skip call sites can advance without an accepted command result | Partially resolved | Explicit declaration and Step 6 paths now check pending, rejection, and accepted results. `_auto_skip_ship_attack()` still submits `no_targets` and immediately tears down without checking acceptance ([attack_executor.gd:942](../../../src/scenes/game_board/attack_executor.gd#L942)). This remains within the declaration Skip migration boundary. |
 | Pre-entry ship `ATTACK` flow can be serialized while `CurrentAttackState` is inactive | Resolved | Pre-Begin selection now preserves the enclosing activation flow; the attack flow is published only after accepted Begin. |
 | Network save/load bootstrap report | Unchanged as an open report | It remains an independent session-restoration investigation on an overlapping verification boundary. |
 | Attack sequence early termination | Superseded by accepted stabilization | BUG-002 is in `verify`, with user verification recorded for hot-seat and network. Step 6 and second-attack behavior remain post-Begin regression context and must not be reimplemented by TWI-ATTACK-001. |
@@ -287,7 +287,7 @@ The completed BUG-005 forensic investigation establishes an additional CON-006 d
 
 | CON-006 responsibility | Classification | Repository evidence |
 |---|---|---|
-| Supported declaration contexts and four attacker/defender pairings | Partially compliant | Four pairings use canonical Begin in [test_current_attack_shared_protocol.gd:314](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:314). Complete authoritative Rogue, Squadron Phase, and Squadron-command action progress is absent from `SquadronInstance`. |
+| Supported declaration contexts and four attacker/defender pairings | Partially compliant | Four pairings use canonical Begin in [test_current_attack_shared_protocol.gd:314](../../../tests/integration/test_current_attack_shared_protocol.gd#L314). Complete authoritative Rogue, Squadron Phase, and Squadron-command action progress is absent from `SquadronInstance`. |
 | `GameState` ownership of canonical `CurrentAttackState` | Fully compliant | Canonical state remains private, clone-protected, serialized, reference-validated, and installed through a validating setter in `GameState`. |
 | Transient candidate ownership | Fully compliant | `TargetSelector` owns `_declaration_candidate`; `AttackExecutor` coordinates Confirm, Skip, pending, and accepted-result cleanup without adopting candidate authority. |
 | Preview without semantic mutation | Fully compliant | Candidate creation does not mutate `CurrentAttackState`, timing state, or command history. |
@@ -300,7 +300,7 @@ The completed BUG-005 forensic investigation establishes an additional CON-006 d
 | Declaration Skip semantics by context | Non-compliant | No-active voluntary/no-target Skip does not validate or commit the context-specific ship, Squadron Phase, Rogue, or Squadron-command effects required by CON-006 section 11. |
 | Authoritative enclosing progress | Partially compliant | Ship attack-step, hull-zone, count, and Step 6 history are serialized on `ShipInstance`. Squadron move/attack entitlement remains modal-local. |
 | `InteractionFlow` and projection | Partially compliant | Preview preserves enclosing flow and accepted Begin publishes derived attack flow. Declaration Skip still depends on scene teardown rather than resulting authoritative context. |
-| Command applicability versus flow policy | Non-compliant | `begin_attack` and `skip_attack` remain phase-scoped in [command_applicability.gd:87](/Users/Katharina/godot/Armada/src/core/commands/command_applicability.gd:87), while `FlowSpec` assigns them to specific activation and `ATTACK_DECLARE` surfaces ([flow_spec.gd:113](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd:113), [flow_spec.gd:175](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd:175)). Concrete validation does not close this complete context gap. |
+| Command applicability versus flow policy | Non-compliant | `begin_attack` and `skip_attack` remain phase-scoped in [command_applicability.gd:87](../../../src/core/commands/command_applicability.gd#L87), while `FlowSpec` assigns them to specific activation and `ATTACK_DECLARE` surfaces ([flow_spec.gd:113](../../../src/core/state/flow_spec.gd#L113), [flow_spec.gd:175](../../../src/core/state/flow_spec.gd#L175)). Concrete validation does not close this complete context gap. |
 | Runtime rule and timing-window ownership | Fully compliant | Target/rule checks remain on accepted resolver and rule surfaces; ordinary declaration behavior does not synthesize or clear timing-window authority. |
 | Determinism and atomic failure | Partially compliant | Sequence-derived identity, standard ship rollback, rejection preservation, and successful-command recording exist. Remaining squadron and Skip multi-owner mutations are absent. |
 | Serialization and compatibility | Partially compliant | `CurrentAttackState` and ship progress serialize deterministically; Preview does not. Complete squadron and post-Skip representations and post-cutover rollback evidence are missing. |
@@ -324,13 +324,13 @@ The completed BUG-005 forensic investigation establishes an additional CON-006 d
 
 ### BUG-005 Specific Finding
 
-The completed [BUG-005 forensic analysis](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-005/forensic-analysis-report.md) establishes that distance 1 and close range are distinct production thresholds: distance 1 ends at 181 px while close range ends at 292 px.
+The completed [BUG-005 forensic analysis](../../qa/bugs/open/BUG-005/forensic-analysis-report.md) establishes that distance 1 and close range are distinct production thresholds: distance 1 ends at 181 px while close range ends at 292 px.
 
 Squadron-to-squadron distance is measured correctly from base edge to base edge. `TargetingListBuilder` then classifies that result with the close/medium/long range surface and accepts the complete close-range band. The same range/distance conflation is present in squadron-to-ship outgoing target eligibility:
 
-- [targeting_list_builder.gd:938](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:938)
-- [targeting_list_builder.gd:997](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:997)
-- [scale_config.json:18](/Users/Katharina/godot/Armada/Resources/Game_Components/scale/scale_config.json:18)
+- [targeting_list_builder.gd:938](../../../src/core/combat/targeting_list_builder.gd#L938)
+- [targeting_list_builder.gd:997](../../../src/core/combat/targeting_list_builder.gd#L997)
+- [scale_config.json:18](../../../Resources/Game_Components/scale/scale_config.json#L18)
 
 Standard squadron Preview resolves its candidate through this builder, and `BeginAttackCommand` independently re-derives the authoritative entry through the same surface. Both therefore consume the same incorrect result. BUG-005 is established CON-006 non-compliance, but it is not a Preview/Begin disagreement, a presentation defect, or an unresolved rules interpretation.
 
@@ -340,8 +340,8 @@ BUG-001 overlaps the durability and network-verification surface but does not cu
 
 The load path broadcasts serialized `GameState` and installs it on both peers:
 
-- [lobby_manager.gd:167](/Users/Katharina/godot/Armada/src/autoload/lobby_manager.gd:167)
-- [lobby_manager.gd:484](/Users/Katharina/godot/Armada/src/autoload/lobby_manager.gd:484)
+- [lobby_manager.gd:167](../../../src/autoload/lobby_manager.gd#L167)
+- [lobby_manager.gd:484](../../../src/autoload/lobby_manager.gd#L484)
 
 The report instead identifies possible failure to restore network mode, role, logging, replay recording, or runtime services.
 

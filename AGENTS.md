@@ -26,6 +26,11 @@ The workbook does not override the document-authority hierarchy; add authority
 documents when the workbook, routing triggers, conflicting evidence, ambiguity,
 or an unresolved invariant requires them.
 
+## Documentation Hygiene
+
+- Internal Markdown links to repository files must use paths relative to the containing document; line references must use Markdown anchors such as `#L123`.
+- Do not add machine-specific absolute filesystem paths to repository documentation. External URLs are unaffected.
+
 ## Architecture Rules
 
 - Accepted ADRs and accepted Contracts are authoritative within the document authority model defined by `docs/architecture/DOCUMENT_AUTHORITY.md`.

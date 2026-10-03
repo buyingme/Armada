@@ -6,40 +6,40 @@ This was a read-only investigation. No repository files were modified and no tes
 
 Startup documents read:
 
-- [AGENTS.md](/Users/Katharina/godot/Armada/AGENTS.md)
-- [ARCHITECTURE.md](/Users/Katharina/godot/Armada/ARCHITECTURE.md)
-- [AI_DEVELOPMENT_PRINCIPLES.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PRINCIPLES.md)
-- [AI_DEVELOPMENT_PROCESS.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PROCESS.md)
-- [AI_STARTUP_GUARDRAILS.md](/Users/Katharina/godot/Armada/.ai/instructions/AI_STARTUP_GUARDRAILS.md)
-- [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md)
-- [ARCHITECTURE_ROADMAP.md](/Users/Katharina/godot/Armada/docs/architecture/ARCHITECTURE_ROADMAP.md)
-- [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md)
+- [AGENTS.md](../../../../../AGENTS.md)
+- [ARCHITECTURE.md](../../../../../ARCHITECTURE.md)
+- [AI_DEVELOPMENT_PRINCIPLES.md](../../../../development/AI_DEVELOPMENT_PRINCIPLES.md)
+- [AI_DEVELOPMENT_PROCESS.md](../../../../development/AI_DEVELOPMENT_PROCESS.md)
+- [AI_STARTUP_GUARDRAILS.md](../../../../../.ai/instructions/AI_STARTUP_GUARDRAILS.md)
+- [DOCUMENT_AUTHORITY.md](../../../../architecture/DOCUMENT_AUTHORITY.md)
+- [ARCHITECTURE_ROADMAP.md](../../../../architecture/ARCHITECTURE_ROADMAP.md)
+- [CODEX_WORKFLOW.md](../../../../architecture/CODEX_WORKFLOW.md)
 
 Architecture and migration authority read:
 
-- [CON-006](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md)
-- [ADR-001](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
-- [CON-001](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
-- [MA-ATTACK-002](/Users/Katharina/godot/Armada/docs/architecture/migration_assessments/MA-ATTACK-002-post-stabilization-con-006-compliance.md)
+- [CON-006](../../../../architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md)
+- [ADR-001](../../../../architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
+- [CON-001](../../../../architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
+- [MA-ATTACK-002](../../../../architecture/migration_assessments/MA-ATTACK-002-post-stabilization-con-006-compliance.md)
 
 BUG-005 evidence read:
 
-- [BUG-005 issue](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-005/issue-squadron-attack-allowed-beyond-range-1.md)
-- [BUG-005 annotation](/Users/Katharina/godot/Armada/docs/qa/bugs/open/BUG-005/annotation_20260801_173628_001.json)
+- [BUG-005 issue](../../open/BUG-005/issue-squadron-attack-allowed-beyond-range-1.md)
+- [BUG-005 annotation](../../open/BUG-005/annotation_20260801_173628_001.json)
 
 The BUG-005 folder contains one annotation.
 
 Rules and bounded implementation evidence also inspected:
 
-- [Rules Reference Guide](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:90)
-- [production scale configuration](/Users/Katharina/godot/Armada/Resources/Game_Components/scale/scale_config.json:18)
-- [GameScale](/Users/Katharina/godot/Armada/src/autoload/game_scale.gd:235)
-- [TargetingListBuilder](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:889)
-- [BeginAttackCommand](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:16)
-- [TargetSelector](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:888)
-- [RangeFinder](/Users/Katharina/godot/Armada/src/core/geometry/range_finder.gd:549)
-- [AttackSimOverlay](/Users/Katharina/godot/Armada/src/scenes/tools/attack_sim_overlay.gd:193)
-- [TargetingListBuilder tests](/Users/Katharina/godot/Armada/tests/unit/test_targeting_list_builder.gd:15)
+- [Rules Reference Guide](../../../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L90)
+- [production scale configuration](../../../../../Resources/Game_Components/scale/scale_config.json#L18)
+- [GameScale](../../../../../src/autoload/game_scale.gd#L235)
+- [TargetingListBuilder](../../../../../src/core/combat/targeting_list_builder.gd#L889)
+- [BeginAttackCommand](../../../../../src/core/commands/begin_attack_command.gd#L16)
+- [TargetSelector](../../../../../src/scenes/game_board/target_selector.gd#L888)
+- [RangeFinder](../../../../../src/core/geometry/range_finder.gd#L549)
+- [AttackSimOverlay](../../../../../src/scenes/tools/attack_sim_overlay.gd#L193)
+- [TargetingListBuilder tests](../../../../../tests/unit/test_targeting_list_builder.gd#L15)
 
 ## Finding
 
@@ -68,34 +68,34 @@ Repository scale data preserves that distinction:
 
 Evidence:
 
-- [Rules Reference attack declaration](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:94)
-- [Rules Reference attack range](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:142)
-- [Rules Reference range/distance distinction](/Users/Katharina/godot/Armada/Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md:937)
-- [production thresholds](/Users/Katharina/godot/Armada/Resources/Game_Components/scale/scale_config.json:18)
+- [Rules Reference attack declaration](../../../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L94)
+- [Rules Reference attack range](../../../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L142)
+- [Rules Reference range/distance distinction](../../../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L937)
+- [production thresholds](../../../../../Resources/Game_Components/scale/scale_config.json#L18)
 
-`GameScale` also exposes the two scales separately: `get_range_band()` uses the close/medium/long thresholds, while `get_distance_band()` uses distance bands 1–5. [GameScale](/Users/Katharina/godot/Armada/src/autoload/game_scale.gd:235)
+`GameScale` also exposes the two scales separately: `get_range_band()` uses the close/medium/long thresholds, while `get_distance_band()` uses distance bands 1–5. [GameScale](../../../../../src/autoload/game_scale.gd#L235)
 
 The rule is therefore not ambiguous. “Distance 1” and “close range” are not interchangeable.
 
 ## Production declaration path
 
-1. `TargetingListBuilder.authoritative_attack_entry()` reconstructs participants from canonical `GameState` and builds the attacker’s outgoing target entries. [TargetingListBuilder](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:157)
+1. `TargetingListBuilder.authoritative_attack_entry()` reconstructs participants from canonical `GameState` and builds the attacker’s outgoing target entries. [TargetingListBuilder](../../../../../src/core/combat/targeting_list_builder.gd#L157)
 
-2. For squadron-to-squadron attacks, `RangeFinder.measure_range_squad_to_squad()` calculates edge-to-edge distance. The measurement itself is consistent with the Rules Reference. [RangeFinder](/Users/Katharina/godot/Armada/src/core/geometry/range_finder.gd:549)
+2. For squadron-to-squadron attacks, `RangeFinder.measure_range_squad_to_squad()` calculates edge-to-edge distance. The measurement itself is consistent with the Rules Reference. [RangeFinder](../../../../../src/core/geometry/range_finder.gd#L549)
 
-3. `_collect_squad_vs_squads()` passes the resulting distance to `GameScale.get_range_band()` and accepts it whenever the result is `close`. [TargetingListBuilder](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:997)
+3. `_collect_squad_vs_squads()` passes the resulting distance to `GameScale.get_range_band()` and accepts it whenever the result is `close`. [TargetingListBuilder](../../../../../src/core/combat/targeting_list_builder.gd#L997)
 
 4. Consequently, every otherwise legal squadron target with an edge distance greater than 181 px but no greater than 292 px is beyond distance 1 yet is emitted as a legal targeting entry.
 
-5. Standard squadron target selection calls that authoritative entry before creating Preview. A non-empty entry is treated as a legal candidate. [TargetSelector](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:888)
+5. Standard squadron target selection calls that authoritative entry before creating Preview. A non-empty entry is treated as a legal candidate. [TargetSelector](../../../../../src/scenes/game_board/target_selector.gd#L888)
 
 6. Confirm submits the resulting candidate to `BeginAttackCommand`.
 
-7. `BeginAttackCommand` independently calls `TargetingListBuilder.authoritative_attack_entry()` again. It rejects an empty entry or mismatching submitted range, but the same defective predicate again returns a `close` entry. [BeginAttackCommand](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:31), [authoritative lookup](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:242)
+7. `BeginAttackCommand` independently calls `TargetingListBuilder.authoritative_attack_entry()` again. It rejects an empty entry or mismatching submitted range, but the same defective predicate again returns a `close` entry. [BeginAttackCommand](../../../../../src/core/commands/begin_attack_command.gd#L31), [authoritative lookup](../../../../../src/core/commands/begin_attack_command.gd#L242)
 
 8. Begin can therefore accept the attack and install `CurrentAttackState`. No presentation or scene-owned authority is needed for the failure.
 
-The same range/distance conflation is also present in the squadron-to-ship outgoing-target path. [TargetingListBuilder](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:938)
+The same range/distance conflation is also present in the squadron-to-ship outgoing-target path. [TargetingListBuilder](../../../../../src/core/combat/targeting_list_builder.gd#L938)
 
 ## Earliest failing authoritative boundary
 
@@ -149,7 +149,7 @@ Classification: **authoritative Begin validation defect caused by the shared tar
 
 No evidence identifies presentation or projection as the causal boundary.
 
-The squadron attack overlay uses the distance 1 threshold for its visual circle, not the close-range threshold. [AttackSimOverlay](/Users/Katharina/godot/Armada/src/scenes/tools/attack_sim_overlay.gd:193)
+The squadron attack overlay uses the distance 1 threshold for its visual circle, not the close-range threshold. [AttackSimOverlay](../../../../../src/scenes/tools/attack_sim_overlay.gd#L193)
 
 This means the visual distance-1 boundary can be correct while the targeting builder accepts a target outside it. Presentation does not authorize Begin, and the production trace reaches the failure without any presentation-owned gameplay mutation.
 
@@ -159,9 +159,9 @@ Classification: **not a presentation/projection defect**.
 
 The accepted Rules Reference is explicit that squadron attacks use distance 1 and that range and distance are separate ruler scales.
 
-Some local targeting comments and test fixtures conflate distance 1 with close range. In particular, the targeting-builder unit fixture assigns both close range and distance 1 the same 181 px threshold. [test fixture](/Users/Katharina/godot/Armada/tests/unit/test_targeting_list_builder.gd:15)
+Some local targeting comments and test fixtures conflate distance 1 with close range. In particular, the targeting-builder unit fixture assigns both close range and distance 1 the same 181 px threshold. [test fixture](../../../../../tests/unit/test_targeting_list_builder.gd#L15)
 
-That fixture prevents the tests from exercising the production-only interval between 181 px and 292 px. The existing “beyond distance 1” test places its target far beyond both thresholds rather than immediately beyond distance 1. [existing test](/Users/Katharina/godot/Armada/tests/unit/test_targeting_list_builder.gd:729)
+That fixture prevents the tests from exercising the production-only interval between 181 px and 292 px. The existing “beyond distance 1” test places its target far beyond both thresholds rather than immediately beyond distance 1. [existing test](../../../../../tests/unit/test_targeting_list_builder.gd#L729)
 
 This explains why existing test evidence does not refute the defect. No tests were executed during this investigation.
 
@@ -172,7 +172,7 @@ Classification: **not an unresolved rules-interpretation issue**. The implementa
 The defect directly conflicts with:
 
 - **Section 6.4 Resolver Surfaces:** mechanic-specific resolvers own deterministic target-eligibility and range calculations. The current derived eligibility result applies the wrong measurement scale.
-- **Adjacent Authority Matrix — Range:** Preview and Begin must validate range through the applicable mechanic-specific resolver. [CON-006 range binding](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md:625)
+- **Adjacent Authority Matrix — Range:** Preview and Begin must validate range through the applicable mechanic-specific resolver. [CON-006 range binding](../../../../architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md#L625)
 - **CON-006-PREV-002:** Preview must apply accepted resolver and rule semantics. A beyond-distance-1 target is instead presented as preview-legal.
 - **CON-006-ILLEGAL-001 and ILLEGAL-004:** an out-of-range selection must remain illegal and produce an out-of-range rejection category. The current path creates a candidate.
 - **CON-006-PARITY-003:** Preview and Begin must apply the same accepted rule semantics. They share a calculation, but that calculation does not implement the accepted distance-1 rule.
@@ -195,7 +195,7 @@ The annotation confirms the user report and records a post-resolution Squadron P
 - the Begin payload or validation result;
 - the active `CurrentAttackState`, which was already inactive.
 
-The issue’s statement that `ship_target_attack_counts` records squadron attack history is not supported by the implementation. That state records ship-against-ship attacks only. [GameState](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:149), [RollDiceCommand](/Users/Katharina/godot/Armada/src/core/commands/roll_dice_command.gd:74)
+The issue’s statement that `ship_target_attack_counts` records squadron attack history is not supported by the implementation. That state records ship-against-ship attacks only. [GameState](../../../../../src/core/state/game_state.gd#L149), [RollDiceCommand](../../../../../src/core/commands/roll_dice_command.gd#L74)
 
 These omissions prevent exact reconstruction of the one observed attacker/defender pair. They do not prevent classification of the current production defect because the builder deterministically authorizes the complete interval between distance 1 and close range.
 

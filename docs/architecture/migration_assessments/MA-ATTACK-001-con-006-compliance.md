@@ -39,38 +39,38 @@ repository HEAD and is not claimed to be a stable implementation baseline.
 
 ### Startup And Authority Guidance
 
-- [AGENTS.md](/Users/Katharina/godot/Armada/AGENTS.md)
-- [ARCHITECTURE.md](/Users/Katharina/godot/Armada/ARCHITECTURE.md)
-- [AI_DEVELOPMENT_PRINCIPLES.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PRINCIPLES.md)
-- [AI_DEVELOPMENT_PROCESS.md](/Users/Katharina/godot/Armada/docs/development/AI_DEVELOPMENT_PROCESS.md)
-- [AI_STARTUP_GUARDRAILS.md](/Users/Katharina/godot/Armada/.ai/instructions/AI_STARTUP_GUARDRAILS.md)
-- [DOCUMENT_AUTHORITY.md](/Users/Katharina/godot/Armada/docs/architecture/DOCUMENT_AUTHORITY.md)
-- [ARCHITECTURE_ROADMAP.md](/Users/Katharina/godot/Armada/docs/architecture/ARCHITECTURE_ROADMAP.md)
-- [CODEX_WORKFLOW.md](/Users/Katharina/godot/Armada/docs/architecture/CODEX_WORKFLOW.md)
+- [AGENTS.md](../../../AGENTS.md)
+- [ARCHITECTURE.md](../../../ARCHITECTURE.md)
+- [AI_DEVELOPMENT_PRINCIPLES.md](../../development/AI_DEVELOPMENT_PRINCIPLES.md)
+- [AI_DEVELOPMENT_PROCESS.md](../../development/AI_DEVELOPMENT_PROCESS.md)
+- [AI_STARTUP_GUARDRAILS.md](../../../.ai/instructions/AI_STARTUP_GUARDRAILS.md)
+- [DOCUMENT_AUTHORITY.md](../DOCUMENT_AUTHORITY.md)
+- [ARCHITECTURE_ROADMAP.md](../ARCHITECTURE_ROADMAP.md)
+- [CODEX_WORKFLOW.md](../CODEX_WORKFLOW.md)
 
 ### Accepted Architecture And Verification
 
-- [ADR-001](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
-- [ADR-003](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-003-rule-and-validation-surfaces.md)
-- [ADR-004](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-004-upgrade-runtime-ownership.md)
-- [ADR-005](/Users/Katharina/godot/Armada/docs/architecture/adr/ADR-005-timing-window-ownership-and-continuation.md)
-- [CON-001](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
-- [CON-003](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-003-rule-capability-contract.md)
-- [CON-004](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-004-upgrade-runtime-contract.md)
-- [CON-005](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-005-timing-window-implementation-contract.md)
-- [CON-006](/Users/Katharina/godot/Armada/docs/architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md)
-- [TEST-003](/Users/Katharina/godot/Armada/docs/architecture/tests/TEST-003-interactive-rule-timing-window-verification.md)
+- [ADR-001](../adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md)
+- [ADR-003](../adr/ADR-003-rule-and-validation-surfaces.md)
+- [ADR-004](../adr/ADR-004-upgrade-runtime-ownership.md)
+- [ADR-005](../adr/ADR-005-timing-window-ownership-and-continuation.md)
+- [CON-001](../contracts/CON-001-current-attack-state-and-semantic-transition-contract.md)
+- [CON-003](../contracts/CON-003-rule-capability-contract.md)
+- [CON-004](../contracts/CON-004-upgrade-runtime-contract.md)
+- [CON-005](../contracts/CON-005-timing-window-implementation-contract.md)
+- [CON-006](../contracts/CON-006-attack-declaration-lifecycle-contract.md)
+- [TEST-003](../tests/TEST-003-interactive-rule-timing-window-verification.md)
 
-[DR-001](/Users/Katharina/godot/Armada/docs/architecture/decision_workbooks/DR-001-CON-006-owner-decisions.md)
+[DR-001](../decision_workbooks/DR-001-CON-006-owner-decisions.md)
 was reviewed as supporting decision evidence. It is not substituted for the
 accepted architecture listed above.
 
 ### Migration-Assessment Conventions
 
-- [MA-TARKIN-001](/Users/Katharina/godot/Armada/docs/architecture/migration_assessments/MA-TARKIN-001-con-005-compliance.md)
-- [MA-ECM-001](/Users/Katharina/godot/Armada/docs/architecture/migration_assessments/MA-ECM-001-con-005-compliance.md)
-- [MA-H9-001](/Users/Katharina/godot/Armada/docs/architecture/migration_assessments/MA-H9-001-con-005-compliance.md)
-- [MA-TW-001](/Users/Katharina/godot/Armada/docs/architecture/migration_assessments/MA-TW-001-cross-consumer-synthesis.md)
+- [MA-TARKIN-001](MA-TARKIN-001-con-005-compliance.md)
+- [MA-ECM-001](MA-ECM-001-con-005-compliance.md)
+- [MA-H9-001](MA-H9-001-con-005-compliance.md)
+- [MA-TW-001](MA-TW-001-cross-consumer-synthesis.md)
 
 ### Repository Evidence
 
@@ -122,21 +122,21 @@ outcomes.
 `GameState` owns a private `CurrentAttackState`, returns it by clone, serializes
 it, deserializes it, and installs it only through a validating setter:
 
-- [game_state.gd:55](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:55)
-- [game_state.gd:181](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:181)
-- [game_state.gd:205](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:205)
-- [game_state.gd:266](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:266)
+- [game_state.gd:55](../../../src/core/state/game_state.gd#L55)
+- [game_state.gd:181](../../../src/core/state/game_state.gd#L181)
+- [game_state.gd:205](../../../src/core/state/game_state.gd#L205)
+- [game_state.gd:266](../../../src/core/state/game_state.gd#L266)
 
 `CurrentAttackState` is a value-like authoritative record with active attack
 identity, attacker and target identity, attack kind, zones, range, obstruction,
 dice pools, attack stage, and resolution fields. Its deserializer enforces exact
 keys and semantic validation:
 
-- [current_attack_state.gd:1](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd:1)
-- [current_attack_state.gd:59](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd:59)
-- [current_attack_state.gd:178](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd:178)
-- [current_attack_state.gd:259](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd:259)
-- [current_attack_state.gd:307](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd:307)
+- [current_attack_state.gd:1](../../../src/core/state/current_attack_state.gd#L1)
+- [current_attack_state.gd:59](../../../src/core/state/current_attack_state.gd#L59)
+- [current_attack_state.gd:178](../../../src/core/state/current_attack_state.gd#L178)
+- [current_attack_state.gd:259](../../../src/core/state/current_attack_state.gd#L259)
+- [current_attack_state.gd:307](../../../src/core/state/current_attack_state.gd#L307)
 
 Within CON-006, `BeginAttackCommand` validates and installs an active
 `CurrentAttackState`. As neighboring context outside the CON-006 lifecycle,
@@ -144,21 +144,21 @@ Within CON-006, `BeginAttackCommand` validates and installs an active
 active `SkipAttackCommand` clears the active attack and associated timing/ECM
 state:
 
-- [begin_attack_command.gd:14](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:14)
-- [begin_attack_command.gd:43](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:43)
-- [complete_attack_command.gd:16](/Users/Katharina/godot/Armada/src/core/commands/complete_attack_command.gd:16)
-- [skip_attack_command.gd:68](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:68)
+- [begin_attack_command.gd:14](../../../src/core/commands/begin_attack_command.gd#L14)
+- [begin_attack_command.gd:43](../../../src/core/commands/begin_attack_command.gd#L43)
+- [complete_attack_command.gd:16](../../../src/core/commands/complete_attack_command.gd#L16)
+- [skip_attack_command.gd:68](../../../src/core/commands/skip_attack_command.gd#L68)
 
 Declaration-entry and enclosing activation progress are not owned entirely by
 that canonical state. `AttackExecutor`, `TargetSelector`, `ActivationContext`,
 `ShipActivationState`, and `SquadronActivationModal` retain procedural and
 modal-local progress:
 
-- [attack_executor.gd:120](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:120)
-- [target_selector.gd:145](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:145)
-- [activation_context.gd:1](/Users/Katharina/godot/Armada/src/core/state/activation_context.gd:1)
-- [ship_activation_state.gd:1](/Users/Katharina/godot/Armada/src/core/state/ship_activation_state.gd:1)
-- [squadron_activation_modal.gd:98](/Users/Katharina/godot/Armada/src/ui/combat/squadron_activation_modal.gd:98)
+- [attack_executor.gd:120](../../../src/scenes/game_board/attack_executor.gd#L120)
+- [target_selector.gd:145](../../../src/scenes/game_board/target_selector.gd#L145)
+- [activation_context.gd:1](../../../src/core/state/activation_context.gd#L1)
+- [ship_activation_state.gd:1](../../../src/core/state/ship_activation_state.gd#L1)
+- [squadron_activation_modal.gd:98](../../../src/ui/combat/squadron_activation_modal.gd#L98)
 
 The resulting ownership model is split between command-owned canonical
 `CurrentAttackState` and scene/modal-owned declaration and enclosing progress.
@@ -169,35 +169,35 @@ Ship and squadron target selection writes transient target data into a shared
 scene `AttackState`. Standard squadron targeting additionally retains one
 transient candidate entry in `TargetSelector`:
 
-- [target_selector.gd:130](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:130)
-- [target_selector.gd:667](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:667)
-- [target_selector.gd:847](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:847)
+- [target_selector.gd:130](../../../src/scenes/game_board/target_selector.gd#L130)
+- [target_selector.gd:667](../../../src/scenes/game_board/target_selector.gd#L667)
+- [target_selector.gd:847](../../../src/scenes/game_board/target_selector.gd#L847)
 
 Preview is produced by scene target resolution. The standard squadron path
 overrides range and obstruction from the canonical candidate entry. A legal
 target in execution mode emits `target_locked` immediately after preview, and
 `AttackExecutor` submits `BeginAttackCommand` from that signal:
 
-- [target_selector.gd:1138](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1138)
-- [target_selector.gd:1179](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1179)
-- [attack_executor.gd:265](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:265)
-- [attack_executor.gd:793](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:793)
-- [attack_executor.gd:1305](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:1305)
+- [target_selector.gd:1138](../../../src/scenes/game_board/target_selector.gd#L1138)
+- [target_selector.gd:1179](../../../src/scenes/game_board/target_selector.gd#L1179)
+- [attack_executor.gd:265](../../../src/scenes/game_board/attack_executor.gd#L265)
+- [attack_executor.gd:793](../../../src/scenes/game_board/attack_executor.gd#L793)
+- [attack_executor.gd:1305](../../../src/scenes/game_board/attack_executor.gd#L1305)
 
 There is no separate declaration Confirm. The visible attack-panel Confirm
 occurs later, after attack dice are finalized, and submits
 `ConfirmAttackDiceCommand`:
 
-- [attack_executor.gd:1921](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:1921)
+- [attack_executor.gd:1921](../../../src/scenes/game_board/attack_executor.gd#L1921)
 
 After the current path has already accepted Begin, a later target change makes
 `AttackExecutor` submit `SkipAttackCommand` with reason `flow_replaced` and then
 submit another `BeginAttackCommand`. That active-attack replacement is outside
 CON-006 and is retained only as neighboring implementation context:
 
-- [attack_executor.gd:804](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:804)
-- [test_squadron_attack_target_recovery.gd:280](/Users/Katharina/godot/Armada/tests/integration/test_squadron_attack_target_recovery.gd:280)
-- [test_current_attack_shared_protocol.gd:348](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:348)
+- [attack_executor.gd:804](../../../src/scenes/game_board/attack_executor.gd#L804)
+- [test_squadron_attack_target_recovery.gd:280](../../../tests/integration/test_squadron_attack_target_recovery.gd#L280)
+- [test_current_attack_shared_protocol.gd:348](../../../tests/integration/test_current_attack_shared_protocol.gd#L348)
 
 The neighboring replay-visible lifecycle is therefore
 `Begin → Skip(flow_replaced) → Begin`. It does not define CON-006 replacement
@@ -207,17 +207,17 @@ before explicit Confirm and accepted Begin.
 When no attack is active, `SkipAttackCommand` accepts a phase-scoped skip and
 returns a result without mutating authoritative state:
 
-- [skip_attack_command.gd:41](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:41)
-- [skip_attack_command.gd:68](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:68)
+- [skip_attack_command.gd:41](../../../src/core/commands/skip_attack_command.gd#L41)
+- [skip_attack_command.gd:68](../../../src/core/commands/skip_attack_command.gd#L68)
 
 Outside the CON-006 lifecycle, attack completion clears canonical attack state
 through `CompleteAttackCommand`, after which scene code updates local fired-zone,
 attacked-squadron, and attack-count progress. This evidence is retained only as
 neighboring implementation context:
 
-- [attack_executor.gd:3780](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:3780)
-- [attack_executor.gd:3846](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:3846)
-- [attack_executor.gd:3873](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:3873)
+- [attack_executor.gd:3780](../../../src/scenes/game_board/attack_executor.gd#L3780)
+- [attack_executor.gd:3846](../../../src/scenes/game_board/attack_executor.gd#L3846)
+- [attack_executor.gd:3873](../../../src/scenes/game_board/attack_executor.gd#L3873)
 
 #### Commands And Validation
 
@@ -227,28 +227,28 @@ rule blockers, and non-empty attack pool. Candidate facts are reconstructed
 from `GameState` through `TargetingListBuilder`, and rule modifiers are obtained
 through `RuleRegistry`:
 
-- [begin_attack_command.gd:14](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:14)
-- [begin_attack_command.gd:81](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:81)
-- [begin_attack_command.gd:125](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:125)
-- [begin_attack_command.gd:186](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:186)
-- [targeting_list_builder.gd:157](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:157)
-- [targeting_list_builder.gd:202](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:202)
+- [begin_attack_command.gd:14](../../../src/core/commands/begin_attack_command.gd#L14)
+- [begin_attack_command.gd:81](../../../src/core/commands/begin_attack_command.gd#L81)
+- [begin_attack_command.gd:125](../../../src/core/commands/begin_attack_command.gd#L125)
+- [begin_attack_command.gd:186](../../../src/core/commands/begin_attack_command.gd#L186)
+- [targeting_list_builder.gd:157](../../../src/core/combat/targeting_list_builder.gd#L157)
+- [targeting_list_builder.gd:202](../../../src/core/combat/targeting_list_builder.gd#L202)
 
 The command does not validate or mutate the complete enclosing declaration
 opportunity required by CON-006, including controller-step progression,
 hull-zone use, squadron action history, and already-targeted progress. Those
 facts remain absent from the command transaction or scene-owned:
 
-- [ship_instance.gd:430](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:430)
-- [squadron_instance.gd:207](/Users/Katharina/godot/Armada/src/core/state/squadron_instance.gd:207)
-- [squadron_activation_modal.gd:270](/Users/Katharina/godot/Armada/src/ui/combat/squadron_activation_modal.gd:270)
+- [ship_instance.gd:430](../../../src/core/state/ship_instance.gd#L430)
+- [squadron_instance.gd:207](../../../src/core/state/squadron_instance.gd#L207)
+- [squadron_activation_modal.gd:270](../../../src/ui/combat/squadron_activation_modal.gd#L270)
 
 `CommandApplicability` declares Begin and Skip as phase-scoped commands in Ship
 and Squadron phases rather than enforcing the `ATTACK_DECLARE` step recorded by
 `FlowSpec`:
 
-- [command_applicability.gd:87](/Users/Katharina/godot/Armada/src/core/commands/command_applicability.gd:87)
-- [flow_spec.gd:174](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd:174)
+- [command_applicability.gd:87](../../../src/core/commands/command_applicability.gd#L87)
+- [flow_spec.gd:174](../../../src/core/state/flow_spec.gd#L174)
 
 #### Replay, Persistence, Save, And Load
 
@@ -257,43 +257,43 @@ command validation, executes accepted commands, and records non-empty successful
 results. `GameReplay` uses a strict format and validates contiguous sequence
 numbers:
 
-- [command_processor.gd:225](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:225)
-- [command_processor.gd:450](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:450)
-- [game_replay.gd:31](/Users/Katharina/godot/Armada/src/core/commands/game_replay.gd:31)
-- [game_replay.gd:114](/Users/Katharina/godot/Armada/src/core/commands/game_replay.gd:114)
-- [game_replay.gd:153](/Users/Katharina/godot/Armada/src/core/commands/game_replay.gd:153)
+- [command_processor.gd:225](../../../src/autoload/command_processor.gd#L225)
+- [command_processor.gd:450](../../../src/autoload/command_processor.gd#L450)
+- [game_replay.gd:31](../../../src/core/commands/game_replay.gd#L31)
+- [game_replay.gd:114](../../../src/core/commands/game_replay.gd#L114)
+- [game_replay.gd:153](../../../src/core/commands/game_replay.gd#L153)
 
 `GameState` serializes `InteractionFlow`, timing-window state, and
 `CurrentAttackState`. Its deserializer rejects an `ATTACK` interaction flow when
 `CurrentAttackState` is inactive:
 
-- [game_state.gd:181](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:181)
-- [game_state.gd:228](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:228)
-- [game_state.gd:236](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:236)
+- [game_state.gd:181](../../../src/core/state/game_state.gd#L181)
+- [game_state.gd:228](../../../src/core/state/game_state.gd#L228)
+- [game_state.gd:236](../../../src/core/state/game_state.gd#L236)
 
 The ship declaration path publishes `ATTACK` flow before Begin, while the
 squadron path explicitly avoids publishing it because canonical attack state is
 not active:
 
-- [attack_executor.gd:871](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:871)
-- [attack_executor.gd:927](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:927)
+- [attack_executor.gd:871](../../../src/scenes/game_board/attack_executor.gd#L871)
+- [attack_executor.gd:927](../../../src/scenes/game_board/attack_executor.gd#L927)
 
 `SaveGameManager` serializes state and command cursor, validates active attack
 and timing cursor relationships, and deserializes state during load. Its normal
 safe-point gate does not include mid-activation or attack steps:
 
-- [save_game_manager.gd:63](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:63)
-- [save_game_manager.gd:130](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:130)
-- [save_game_manager.gd:270](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:270)
-- [save_game_manager.gd:318](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:318)
-- [save_game_manager.gd:546](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:546)
+- [save_game_manager.gd:63](../../../src/autoload/save_game_manager.gd#L63)
+- [save_game_manager.gd:130](../../../src/autoload/save_game_manager.gd#L130)
+- [save_game_manager.gd:270](../../../src/autoload/save_game_manager.gd#L270)
+- [save_game_manager.gd:318](../../../src/autoload/save_game_manager.gd#L318)
+- [save_game_manager.gd:546](../../../src/autoload/save_game_manager.gd#L546)
 
 Active-attack save/load and replay equivalence have substantial integration
 coverage:
 
-- [test_current_attack_shared_protocol.gd:296](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:296)
-- [test_current_attack_production_resume.gd:434](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_production_resume.gd:434)
-- [test_game_replay.gd:93](/Users/Katharina/godot/Armada/tests/unit/test_game_replay.gd:93)
+- [test_current_attack_shared_protocol.gd:296](../../../tests/integration/test_current_attack_shared_protocol.gd#L296)
+- [test_current_attack_production_resume.gd:434](../../../tests/integration/test_current_attack_production_resume.gd#L434)
+- [test_game_replay.gd:93](../../../tests/unit/test_game_replay.gd#L93)
 
 The persistence record does not include all enclosing activation and declaration
 progress required at the accepted-Begin end boundary or after declaration Skip.
@@ -304,33 +304,33 @@ progress required at the accepted-Begin end boundary or after declaration Skip.
 result. The server validates and broadcasts accepted commands. The client
 applies the mirrored command through the command processor:
 
-- [network_command_submitter.gd:1](/Users/Katharina/godot/Armada/src/core/commands/network_command_submitter.gd:1)
-- [network_command_submitter.gd:41](/Users/Katharina/godot/Armada/src/core/commands/network_command_submitter.gd:41)
-- [network_manager.gd:580](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:580)
-- [game_manager.gd:2285](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2285)
+- [network_command_submitter.gd:1](../../../src/core/commands/network_command_submitter.gd#L1)
+- [network_command_submitter.gd:41](../../../src/core/commands/network_command_submitter.gd#L41)
+- [network_manager.gd:580](../../../src/autoload/network_manager.gd#L580)
+- [game_manager.gd:2285](../../../src/autoload/game_manager.gd#L2285)
 
 `StateFilter` retains canonical attack state while filtering serialized state.
 `UIProjector` derives controller/modal intent from `InteractionFlow` and timing
 state. Active-attack `AttackExecutor` reconstruction derives a resume plan and
 reprojects interaction flow from `CurrentAttackState`:
 
-- [state_filter.gd:20](/Users/Katharina/godot/Armada/src/core/network/state_filter.gd:20)
-- [ui_projector.gd:122](/Users/Katharina/godot/Armada/src/core/network/ui_projector.gd:122)
-- [attack_executor.gd:297](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:297)
-- [modal_router.gd:209](/Users/Katharina/godot/Armada/src/scenes/game_board/modal_router.gd:209)
+- [state_filter.gd:20](../../../src/core/network/state_filter.gd#L20)
+- [ui_projector.gd:122](../../../src/core/network/ui_projector.gd#L122)
+- [attack_executor.gd:297](../../../src/scenes/game_board/attack_executor.gd#L297)
+- [modal_router.gd:209](../../../src/scenes/game_board/modal_router.gd#L209)
 
 Repository search found no production call site for
 `StateFilter.filter_for_player`; the current reconnect integration test states
 that it exercises a function-call boundary rather than a production RPC chain:
 
-- [test_reconnection_mid_attack.gd:1](/Users/Katharina/godot/Armada/tests/integration/test_reconnection_mid_attack.gd:1)
-- [test_reconnection_mid_attack.gd:77](/Users/Katharina/godot/Armada/tests/integration/test_reconnection_mid_attack.gd:77)
+- [test_reconnection_mid_attack.gd:1](../../../tests/integration/test_reconnection_mid_attack.gd#L1)
+- [test_reconnection_mid_attack.gd:77](../../../tests/integration/test_reconnection_mid_attack.gd#L77)
 
 Reconstruction restores an individual active attack but explicitly does not
 restore enclosing prior attack history:
 
-- [attack_executor.gd:160](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:160)
-- [attack_executor.gd:349](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:349)
+- [attack_executor.gd:160](../../../src/scenes/game_board/attack_executor.gd#L160)
+- [attack_executor.gd:349](../../../src/scenes/game_board/attack_executor.gd#L349)
 
 ---
 
@@ -362,28 +362,28 @@ No evidence reviewed requires a change to the accepted architecture.
 
 | CON-006 responsibility | Classification | Repository evidence |
 |---|---|---|
-| Supported declaration contexts and all four attacker/target pairings | Partially compliant | Begin accepts Ship or Squadron phases and validates ship/squadron identities and attack kind ([begin_attack_command.gd:14](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:14), [begin_attack_command.gd:81](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:81)); integration coverage exercises the four pairings ([test_current_attack_shared_protocol.gd:140](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:140)). The command does not represent the complete enclosing declaration context. |
-| `GameState` ownership of canonical `CurrentAttackState` | Fully compliant | Private ownership, clone access, serialization, strict deserialization, reference validation, and validating installation are present ([game_state.gd:55](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:55), [game_state.gd:181](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:181), [game_state.gd:266](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:266), [game_state.gd:282](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:282)). |
-| Complete authoritative attack-entry facts and declaration context | Partially compliant | `CurrentAttackState` carries complete individual-attack facts and Begin populates them ([current_attack_state.gd:59](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd:59), [begin_attack_command.gd:43](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:43)). Enclosing opportunity, controller-step, hull-zone-use, action-history, and already-targeted facts are not part of the Begin transaction. |
-| Adjacent authoritative owners for enclosing declaration and activation progress | Non-compliant | `ActivationContext` and `ShipActivationState` are procedural `RefCounted` scene state ([activation_context.gd:1](/Users/Katharina/godot/Armada/src/core/state/activation_context.gd:1), [ship_activation_state.gd:1](/Users/Katharina/godot/Armada/src/core/state/ship_activation_state.gd:1)); squadron move/attack history is modal-local ([squadron_activation_modal.gd:98](/Users/Katharina/godot/Armada/src/ui/combat/squadron_activation_modal.gd:98), [squadron_activation_modal.gd:270](/Users/Katharina/godot/Armada/src/ui/combat/squadron_activation_modal.gd:270)); serialized ship/squadron instances do not carry the required progress ([ship_instance.gd:430](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:430), [squadron_instance.gd:207](/Users/Katharina/godot/Armada/src/core/state/squadron_instance.gd:207)). |
-| `TargetSelector` as sole owner of transient declaration selection | Partially compliant | `TargetSelector` owns one explicitly transient squadron candidate ([target_selector.gd:130](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:130)), but it also receives and mutates a shared `AttackState` owned by `AttackExecutor` ([target_selector.gd:145](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:145), [target_selector.gd:667](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:667), [target_selector.gd:847](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:847)). |
-| First legal selection produces preview without authoritative command | Partially compliant | Preview is calculated and displayed ([target_selector.gd:1138](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1138), [target_selector.gd:1179](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1179)), but execution mode immediately emits `target_locked`, which submits Begin ([attack_executor.gd:793](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:793), [attack_executor.gd:1305](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:1305)). |
-| Replace, deselect, and illegal-selection behavior remains transient before Confirm | Partially compliant | Scene code supports deselection and rejection ([target_selector.gd:685](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:685), [target_selector.gd:863](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:863), [target_selector.gd:1073](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1073)). A legal target immediately proceeds to Begin, so the required pre-Confirm transient replacement interval is absent ([target_selector.gd:1179](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1179), [attack_executor.gd:793](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:793)). The later `Skip(flow_replaced)` and new Begin are neighboring active-attack behavior outside CON-006 and do not determine this classification ([attack_executor.gd:804](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:804)). |
-| Preview and Begin use the same authoritative candidate facts and legality | Partially compliant | Begin reconstructs authoritative candidates through `TargetingListBuilder` ([begin_attack_command.gd:186](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:186), [targeting_list_builder.gd:157](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:157)). Standard squadron preview reuses canonical range/obstruction, while ship preview remains scene-resolved ([target_selector.gd:1138](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1138), [target_selector.gd:1153](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1153)). |
-| Explicit declaration Confirm | Not implemented | A legal target automatically starts Begin ([target_selector.gd:1179](/Users/Katharina/godot/Armada/src/scenes/game_board/target_selector.gd:1179), [attack_executor.gd:793](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:793)). The implemented Confirm is a later dice-stage command, not declaration Confirm ([attack_executor.gd:1921](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:1921)). |
-| Pending-command gate and rejection recovery | Partially compliant | Remote Begin uses pending fields and the network submitter queues while awaiting authority ([attack_executor.gd:120](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:120), [network_command_submitter.gd:41](/Users/Katharina/godot/Armada/src/core/commands/network_command_submitter.gd:41)). The gate clears on an accepted result ([network_command_submitter.gd:69](/Users/Katharina/godot/Armada/src/core/commands/network_command_submitter.gd:69)); the server does not return a rejection result on invalid commands ([network_manager.gd:590](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:590)). |
-| Begin validation and atomic authoritative mutation | Partially compliant | Begin validates identity, pairing, candidates, submitted facts, rules, and pool before one `CurrentAttackState` installation ([begin_attack_command.gd:14](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:14), [begin_attack_command.gd:43](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:43), [begin_attack_command.gd:125](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:125)). Required adjacent-owner mutations are absent from the transaction. |
-| Declaration Skip when no attack is active | Non-compliant | No-active Skip accepts by phase and returns a command result without validating an enclosing opportunity or mutating authoritative progress ([skip_attack_command.gd:41](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:41), [skip_attack_command.gd:68](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:68)). |
-| `InteractionFlow` and UI state derived from authoritative declaration state | Partially compliant | Active reconstruction projects flow from `CurrentAttackState` ([attack_executor.gd:297](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:297)), and `UIProjector` is flow-derived ([ui_projector.gd:122](/Users/Katharina/godot/Armada/src/core/network/ui_projector.gd:122)). Pre-Begin ship flow is published while attack state is inactive, whereas squadron flow is kept local to avoid that mismatch ([attack_executor.gd:871](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:871), [attack_executor.gd:927](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:927)). |
-| Runtime rule and timing-window ownership remains on accepted shared surfaces | Fully compliant | Begin obtains authoritative candidate facts and rule modifiers through shared targeting/rule surfaces ([begin_attack_command.gd:125](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:125), [targeting_list_builder.gd:157](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:157)). In declaration scope, the no-active Skip branch returns without authoritative mutation and does not synthesize timing-window state or cleanup ([skip_attack_command.gd:41](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:41), [skip_attack_command.gd:68](/Users/Katharina/godot/Armada/src/core/commands/skip_attack_command.gd:68)). No active-Skip or post-Begin behavior is used as evidence for this classification. |
-| Deterministic identity and atomic multi-owner transition | Partially compliant | Attack identity is derived from the command sequence, and command execution records only successful non-empty results ([begin_attack_command.gd:43](/Users/Katharina/godot/Armada/src/core/commands/begin_attack_command.gd:43), [command_processor.gd:450](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:450)). The transaction does not include the adjacent authoritative owners required by CON-006, and the processor has no generalized multi-owner snapshot rollback for this path. |
-| Serialization and compatibility of declaration state | Partially compliant | `CurrentAttackState` has strict exact-key serialization/deserialization ([current_attack_state.gd:203](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd:203), [current_attack_state.gd:259](/Users/Katharina/godot/Armada/src/core/state/current_attack_state.gd:259)). Enclosing declaration progress is missing, and `GameState.deserialize` rejects the pre-entry `ATTACK`-flow/inactive-attack combination the ship path can publish ([game_state.gd:236](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:236), [attack_executor.gd:871](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:871)). |
-| Save, load, and reconstruction | Partially compliant | State and cursor persistence, accepted-Begin state validation, and accepted-Begin state resume tests exist ([save_game_manager.gd:130](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:130), [save_game_manager.gd:270](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:270), [test_current_attack_production_resume.gd:434](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_production_resume.gd:434)). Normal save points exclude mid-attack states, and post-Skip enclosing progress is not fully authoritative ([save_game_manager.gd:63](/Users/Katharina/godot/Armada/src/autoload/save_game_manager.gd:63), [attack_executor.gd:160](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:160)). |
-| Replay semantics and equivalence | Partially compliant | Replay format and sequence validation are strict, with accepted-Begin state equivalence coverage ([game_replay.gd:114](/Users/Katharina/godot/Armada/src/core/commands/game_replay.gd:114), [test_game_replay.gd:233](/Users/Katharina/godot/Armada/tests/unit/test_game_replay.gd:233), [test_current_attack_shared_protocol.gd:296](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:296)). In declaration scope, no-active Skip records an authoritative no-op rather than the required enclosing transition. The neighboring `Begin → Skip(flow_replaced) → Begin` active-replacement sequence is outside CON-006 and does not determine this classification. |
-| Network authority and host/client equivalence | Partially compliant | Server validation, accepted-command broadcast, and mirrored client execution exist ([network_manager.gd:580](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:580), [game_manager.gd:2285](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2285)); equivalence is tested ([test_current_attack_shared_protocol.gd:296](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:296)). Rejection does not return a result to release the client awaiting gate, and declaration-entry/enclosing progress is incomplete. |
-| Reconnect reconstruction from filtered canonical state | Partially compliant | Filter/project/reconstruct behavior is covered at a direct function boundary ([state_filter.gd:20](/Users/Katharina/godot/Armada/src/core/network/state_filter.gd:20), [test_reconnection_mid_attack.gd:77](/Users/Katharina/godot/Armada/tests/integration/test_reconnection_mid_attack.gd:77), [test_current_attack_production_resume.gd:471](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_production_resume.gd:471)). No production `StateFilter.filter_for_player` call site was found, and enclosing prior-attack history is not reconstructed ([attack_executor.gd:160](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:160)). |
-| Migration cutover and rollback compatibility | Not implemented | No repository artifact or verification was found that identifies CON-006 semantic-slice cutovers or post-cutover rollback compatibility. Current tests still assert replay-visible replacement Skip behavior ([test_squadron_attack_target_recovery.gd:280](/Users/Katharina/godot/Armada/tests/integration/test_squadron_attack_target_recovery.gd:280)). |
-| Required verification matrix | Partially compliant | Tests cover four pairings, active-state protocol, replay, save/load, mirrored networking, and direct-boundary reconnect ([test_current_attack_shared_protocol.gd:140](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_shared_protocol.gd:140), [test_current_attack_production_resume.gd:434](/Users/Katharina/godot/Armada/tests/integration/test_current_attack_production_resume.gd:434), [test_reconnection_mid_attack.gd:77](/Users/Katharina/godot/Armada/tests/integration/test_reconnection_mid_attack.gd:77)). The required explicit-Confirm, transient replacement, authoritative declaration Skip, enclosing-progress, rejection, production reconnect, and timing-window declaration cases are absent or exercise current non-conforming behavior. |
+| Supported declaration contexts and all four attacker/target pairings | Partially compliant | Begin accepts Ship or Squadron phases and validates ship/squadron identities and attack kind ([begin_attack_command.gd:14](../../../src/core/commands/begin_attack_command.gd#L14), [begin_attack_command.gd:81](../../../src/core/commands/begin_attack_command.gd#L81)); integration coverage exercises the four pairings ([test_current_attack_shared_protocol.gd:140](../../../tests/integration/test_current_attack_shared_protocol.gd#L140)). The command does not represent the complete enclosing declaration context. |
+| `GameState` ownership of canonical `CurrentAttackState` | Fully compliant | Private ownership, clone access, serialization, strict deserialization, reference validation, and validating installation are present ([game_state.gd:55](../../../src/core/state/game_state.gd#L55), [game_state.gd:181](../../../src/core/state/game_state.gd#L181), [game_state.gd:266](../../../src/core/state/game_state.gd#L266), [game_state.gd:282](../../../src/core/state/game_state.gd#L282)). |
+| Complete authoritative attack-entry facts and declaration context | Partially compliant | `CurrentAttackState` carries complete individual-attack facts and Begin populates them ([current_attack_state.gd:59](../../../src/core/state/current_attack_state.gd#L59), [begin_attack_command.gd:43](../../../src/core/commands/begin_attack_command.gd#L43)). Enclosing opportunity, controller-step, hull-zone-use, action-history, and already-targeted facts are not part of the Begin transaction. |
+| Adjacent authoritative owners for enclosing declaration and activation progress | Non-compliant | `ActivationContext` and `ShipActivationState` are procedural `RefCounted` scene state ([activation_context.gd:1](../../../src/core/state/activation_context.gd#L1), [ship_activation_state.gd:1](../../../src/core/state/ship_activation_state.gd#L1)); squadron move/attack history is modal-local ([squadron_activation_modal.gd:98](../../../src/ui/combat/squadron_activation_modal.gd#L98), [squadron_activation_modal.gd:270](../../../src/ui/combat/squadron_activation_modal.gd#L270)); serialized ship/squadron instances do not carry the required progress ([ship_instance.gd:430](../../../src/core/state/ship_instance.gd#L430), [squadron_instance.gd:207](../../../src/core/state/squadron_instance.gd#L207)). |
+| `TargetSelector` as sole owner of transient declaration selection | Partially compliant | `TargetSelector` owns one explicitly transient squadron candidate ([target_selector.gd:130](../../../src/scenes/game_board/target_selector.gd#L130)), but it also receives and mutates a shared `AttackState` owned by `AttackExecutor` ([target_selector.gd:145](../../../src/scenes/game_board/target_selector.gd#L145), [target_selector.gd:667](../../../src/scenes/game_board/target_selector.gd#L667), [target_selector.gd:847](../../../src/scenes/game_board/target_selector.gd#L847)). |
+| First legal selection produces preview without authoritative command | Partially compliant | Preview is calculated and displayed ([target_selector.gd:1138](../../../src/scenes/game_board/target_selector.gd#L1138), [target_selector.gd:1179](../../../src/scenes/game_board/target_selector.gd#L1179)), but execution mode immediately emits `target_locked`, which submits Begin ([attack_executor.gd:793](../../../src/scenes/game_board/attack_executor.gd#L793), [attack_executor.gd:1305](../../../src/scenes/game_board/attack_executor.gd#L1305)). |
+| Replace, deselect, and illegal-selection behavior remains transient before Confirm | Partially compliant | Scene code supports deselection and rejection ([target_selector.gd:685](../../../src/scenes/game_board/target_selector.gd#L685), [target_selector.gd:863](../../../src/scenes/game_board/target_selector.gd#L863), [target_selector.gd:1073](../../../src/scenes/game_board/target_selector.gd#L1073)). A legal target immediately proceeds to Begin, so the required pre-Confirm transient replacement interval is absent ([target_selector.gd:1179](../../../src/scenes/game_board/target_selector.gd#L1179), [attack_executor.gd:793](../../../src/scenes/game_board/attack_executor.gd#L793)). The later `Skip(flow_replaced)` and new Begin are neighboring active-attack behavior outside CON-006 and do not determine this classification ([attack_executor.gd:804](../../../src/scenes/game_board/attack_executor.gd#L804)). |
+| Preview and Begin use the same authoritative candidate facts and legality | Partially compliant | Begin reconstructs authoritative candidates through `TargetingListBuilder` ([begin_attack_command.gd:186](../../../src/core/commands/begin_attack_command.gd#L186), [targeting_list_builder.gd:157](../../../src/core/combat/targeting_list_builder.gd#L157)). Standard squadron preview reuses canonical range/obstruction, while ship preview remains scene-resolved ([target_selector.gd:1138](../../../src/scenes/game_board/target_selector.gd#L1138), [target_selector.gd:1153](../../../src/scenes/game_board/target_selector.gd#L1153)). |
+| Explicit declaration Confirm | Not implemented | A legal target automatically starts Begin ([target_selector.gd:1179](../../../src/scenes/game_board/target_selector.gd#L1179), [attack_executor.gd:793](../../../src/scenes/game_board/attack_executor.gd#L793)). The implemented Confirm is a later dice-stage command, not declaration Confirm ([attack_executor.gd:1921](../../../src/scenes/game_board/attack_executor.gd#L1921)). |
+| Pending-command gate and rejection recovery | Partially compliant | Remote Begin uses pending fields and the network submitter queues while awaiting authority ([attack_executor.gd:120](../../../src/scenes/game_board/attack_executor.gd#L120), [network_command_submitter.gd:41](../../../src/core/commands/network_command_submitter.gd#L41)). The gate clears on an accepted result ([network_command_submitter.gd:69](../../../src/core/commands/network_command_submitter.gd#L69)); the server does not return a rejection result on invalid commands ([network_manager.gd:590](../../../src/autoload/network_manager.gd#L590)). |
+| Begin validation and atomic authoritative mutation | Partially compliant | Begin validates identity, pairing, candidates, submitted facts, rules, and pool before one `CurrentAttackState` installation ([begin_attack_command.gd:14](../../../src/core/commands/begin_attack_command.gd#L14), [begin_attack_command.gd:43](../../../src/core/commands/begin_attack_command.gd#L43), [begin_attack_command.gd:125](../../../src/core/commands/begin_attack_command.gd#L125)). Required adjacent-owner mutations are absent from the transaction. |
+| Declaration Skip when no attack is active | Non-compliant | No-active Skip accepts by phase and returns a command result without validating an enclosing opportunity or mutating authoritative progress ([skip_attack_command.gd:41](../../../src/core/commands/skip_attack_command.gd#L41), [skip_attack_command.gd:68](../../../src/core/commands/skip_attack_command.gd#L68)). |
+| `InteractionFlow` and UI state derived from authoritative declaration state | Partially compliant | Active reconstruction projects flow from `CurrentAttackState` ([attack_executor.gd:297](../../../src/scenes/game_board/attack_executor.gd#L297)), and `UIProjector` is flow-derived ([ui_projector.gd:122](../../../src/core/network/ui_projector.gd#L122)). Pre-Begin ship flow is published while attack state is inactive, whereas squadron flow is kept local to avoid that mismatch ([attack_executor.gd:871](../../../src/scenes/game_board/attack_executor.gd#L871), [attack_executor.gd:927](../../../src/scenes/game_board/attack_executor.gd#L927)). |
+| Runtime rule and timing-window ownership remains on accepted shared surfaces | Fully compliant | Begin obtains authoritative candidate facts and rule modifiers through shared targeting/rule surfaces ([begin_attack_command.gd:125](../../../src/core/commands/begin_attack_command.gd#L125), [targeting_list_builder.gd:157](../../../src/core/combat/targeting_list_builder.gd#L157)). In declaration scope, the no-active Skip branch returns without authoritative mutation and does not synthesize timing-window state or cleanup ([skip_attack_command.gd:41](../../../src/core/commands/skip_attack_command.gd#L41), [skip_attack_command.gd:68](../../../src/core/commands/skip_attack_command.gd#L68)). No active-Skip or post-Begin behavior is used as evidence for this classification. |
+| Deterministic identity and atomic multi-owner transition | Partially compliant | Attack identity is derived from the command sequence, and command execution records only successful non-empty results ([begin_attack_command.gd:43](../../../src/core/commands/begin_attack_command.gd#L43), [command_processor.gd:450](../../../src/autoload/command_processor.gd#L450)). The transaction does not include the adjacent authoritative owners required by CON-006, and the processor has no generalized multi-owner snapshot rollback for this path. |
+| Serialization and compatibility of declaration state | Partially compliant | `CurrentAttackState` has strict exact-key serialization/deserialization ([current_attack_state.gd:203](../../../src/core/state/current_attack_state.gd#L203), [current_attack_state.gd:259](../../../src/core/state/current_attack_state.gd#L259)). Enclosing declaration progress is missing, and `GameState.deserialize` rejects the pre-entry `ATTACK`-flow/inactive-attack combination the ship path can publish ([game_state.gd:236](../../../src/core/state/game_state.gd#L236), [attack_executor.gd:871](../../../src/scenes/game_board/attack_executor.gd#L871)). |
+| Save, load, and reconstruction | Partially compliant | State and cursor persistence, accepted-Begin state validation, and accepted-Begin state resume tests exist ([save_game_manager.gd:130](../../../src/autoload/save_game_manager.gd#L130), [save_game_manager.gd:270](../../../src/autoload/save_game_manager.gd#L270), [test_current_attack_production_resume.gd:434](../../../tests/integration/test_current_attack_production_resume.gd#L434)). Normal save points exclude mid-attack states, and post-Skip enclosing progress is not fully authoritative ([save_game_manager.gd:63](../../../src/autoload/save_game_manager.gd#L63), [attack_executor.gd:160](../../../src/scenes/game_board/attack_executor.gd#L160)). |
+| Replay semantics and equivalence | Partially compliant | Replay format and sequence validation are strict, with accepted-Begin state equivalence coverage ([game_replay.gd:114](../../../src/core/commands/game_replay.gd#L114), [test_game_replay.gd:233](../../../tests/unit/test_game_replay.gd#L233), [test_current_attack_shared_protocol.gd:296](../../../tests/integration/test_current_attack_shared_protocol.gd#L296)). In declaration scope, no-active Skip records an authoritative no-op rather than the required enclosing transition. The neighboring `Begin → Skip(flow_replaced) → Begin` active-replacement sequence is outside CON-006 and does not determine this classification. |
+| Network authority and host/client equivalence | Partially compliant | Server validation, accepted-command broadcast, and mirrored client execution exist ([network_manager.gd:580](../../../src/autoload/network_manager.gd#L580), [game_manager.gd:2285](../../../src/autoload/game_manager.gd#L2285)); equivalence is tested ([test_current_attack_shared_protocol.gd:296](../../../tests/integration/test_current_attack_shared_protocol.gd#L296)). Rejection does not return a result to release the client awaiting gate, and declaration-entry/enclosing progress is incomplete. |
+| Reconnect reconstruction from filtered canonical state | Partially compliant | Filter/project/reconstruct behavior is covered at a direct function boundary ([state_filter.gd:20](../../../src/core/network/state_filter.gd#L20), [test_reconnection_mid_attack.gd:77](../../../tests/integration/test_reconnection_mid_attack.gd#L77), [test_current_attack_production_resume.gd:471](../../../tests/integration/test_current_attack_production_resume.gd#L471)). No production `StateFilter.filter_for_player` call site was found, and enclosing prior-attack history is not reconstructed ([attack_executor.gd:160](../../../src/scenes/game_board/attack_executor.gd#L160)). |
+| Migration cutover and rollback compatibility | Not implemented | No repository artifact or verification was found that identifies CON-006 semantic-slice cutovers or post-cutover rollback compatibility. Current tests still assert replay-visible replacement Skip behavior ([test_squadron_attack_target_recovery.gd:280](../../../tests/integration/test_squadron_attack_target_recovery.gd#L280)). |
+| Required verification matrix | Partially compliant | Tests cover four pairings, active-state protocol, replay, save/load, mirrored networking, and direct-boundary reconnect ([test_current_attack_shared_protocol.gd:140](../../../tests/integration/test_current_attack_shared_protocol.gd#L140), [test_current_attack_production_resume.gd:434](../../../tests/integration/test_current_attack_production_resume.gd#L434), [test_reconnection_mid_attack.gd:77](../../../tests/integration/test_reconnection_mid_attack.gd#L77)). The required explicit-Confirm, transient replacement, authoritative declaration Skip, enclosing-progress, rejection, production reconnect, and timing-window declaration cases are absent or exercise current non-conforming behavior. |
 
 ---
 
@@ -421,8 +421,8 @@ conclusion.
 result is received. The server returns without a rejection response for unknown,
 misattributed, invalid, or empty-result commands:
 
-- [network_command_submitter.gd:69](/Users/Katharina/godot/Armada/src/core/commands/network_command_submitter.gd:69)
-- [network_manager.gd:590](/Users/Katharina/godot/Armada/src/autoload/network_manager.gd:590)
+- [network_command_submitter.gd:69](../../../src/core/commands/network_command_submitter.gd#L69)
+- [network_manager.gd:590](../../../src/autoload/network_manager.gd#L590)
 
 The observable implementation consequence is that a rejected client command can
 leave the submitter awaiting and later submissions queued.
@@ -433,8 +433,8 @@ The automatic ship-skip path submits Skip and immediately finishes the scene
 flow without checking acceptance. The anti-squadron loop path likewise advances
 when the Skip result is empty or rejected:
 
-- [attack_executor.gd:915](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:915)
-- [attack_executor.gd:4111](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:4111)
+- [attack_executor.gd:915](../../../src/scenes/game_board/attack_executor.gd#L915)
+- [attack_executor.gd:4111](../../../src/scenes/game_board/attack_executor.gd#L4111)
 
 This is a command-result handling defect. It is distinct from the architectural
 gap that no-active declaration Skip lacks the required authoritative enclosing
@@ -446,9 +446,9 @@ The ship path publishes `ATTACK` interaction flow before an active
 `CurrentAttackState` exists. `GameState.deserialize` rejects that combination.
 The squadron path explicitly avoids publishing it:
 
-- [attack_executor.gd:871](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:871)
-- [attack_executor.gd:927](/Users/Katharina/godot/Armada/src/scenes/game_board/attack_executor.gd:927)
-- [game_state.gd:236](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:236)
+- [attack_executor.gd:871](../../../src/scenes/game_board/attack_executor.gd#L871)
+- [attack_executor.gd:927](../../../src/scenes/game_board/attack_executor.gd#L927)
+- [game_state.gd:236](../../../src/core/state/game_state.gd#L236)
 
 This is an internal persistence consistency defect. It does not determine the
 accepted declaration architecture.
@@ -459,7 +459,7 @@ The worktree contains an open repository note reporting that a loaded network
 session can appear as Hot Seat and may lack the expected host/client logs and
 replay artifact:
 
-- [BUG-001-network-save-load-session-bootstrap.md](/Users/Katharina/godot/Armada/docs/unresolved_bugs/BUG-001-network-save-load-session-bootstrap.md)
+- [BUG-001-network-save-load-session-bootstrap.md](../../unresolved_bugs/BUG-001-network-save-load-session-bootstrap.md)
 
 The note is implementation evidence, not accepted architectural authority.
 
@@ -643,7 +643,7 @@ not create an architectural ambiguity.
   behavior.
 - **Rule/geometry coupling risk:** authoritative target reconstruction depends on
   `TargetingListBuilder`; ship geometry reconstruction includes asset texture
-  sizing ([targeting_list_builder.gd:238](/Users/Katharina/godot/Armada/src/core/combat/targeting_list_builder.gd:238)).
+  sizing ([targeting_list_builder.gd:238](../../../src/core/combat/targeting_list_builder.gd#L238)).
 - **Verification risk:** substantial tests exist, but some assert the
   neighboring out-of-scope active-replacement sequence while the complete
   declaration matrix is not present.

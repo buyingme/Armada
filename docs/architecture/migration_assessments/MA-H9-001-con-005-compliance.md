@@ -116,48 +116,48 @@ Implementation status classification:
 Evidence:
 
 - CAP-H9-001 status is Draft and implementation status is `NOT_INTEGRATED`:
-  [CAP-H9-001-h9-turbolasers.md:11](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-H9-001-h9-turbolasers.md:11).
+  [CAP-H9-001-h9-turbolasers.md:11](../rule_capability_packages/CAP-H9-001-h9-turbolasers.md#L11).
 - H9 catalog metadata exists and remains `NOT_INTEGRATED`:
-  [h9_turbolasers.json:35](/Users/Katharina/godot/Armada/Resources/Game_Components/upgrades/turbolasers/h9_turbolasers.json:35).
+  [h9_turbolasers.json:35](../../../Resources/Game_Components/upgrades/turbolasers/h9_turbolasers.json#L35).
 - `RuleBootstrap` registers existing damage, squadron keyword, and ECM rules,
   but no H9 rule script:
-  [rule_bootstrap.gd:9](/Users/Katharina/godot/Armada/src/autoload/rule_bootstrap.gd:9).
+  [rule_bootstrap.gd:9](../../../src/autoload/rule_bootstrap.gd#L9).
 - `CommandProcessor` registers generic attack-modifier commands, ECM commands,
   and Tarkin, but no H9 use/decline commands:
-  [command_processor.gd:125](/Users/Katharina/godot/Armada/src/autoload/command_processor.gd:125).
+  [command_processor.gd:125](../../../src/autoload/command_processor.gd#L125).
 - `FlowSpec` has an `ATTACK_MODIFY` step, but its allowed commands do not
   include H9 use/decline:
-  [flow_spec.gd:191](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd:191).
+  [flow_spec.gd:191](../../../src/core/state/flow_spec.gd#L191).
 - `CommandApplicability` declares `reroll_attack_die`,
   `skip_attack_modifier`, and `confirm_attack_dice`, but no H9 commands:
-  [command_applicability.gd:103](/Users/Katharina/godot/Armada/src/core/commands/command_applicability.gd:103).
+  [command_applicability.gd:103](../../../src/core/commands/command_applicability.gd#L103).
 
 ## 5. CON-005 Compliance Matrix
 
 | Area | Classification | Evidence |
 |---|---:|---|
-| 1. TimingWindowState ownership | Non-Compliant | Shared prerequisite absent. `GameState` serializes `interaction_flow`, not `TimingWindowState`: [game_state.gd:34](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:34), [game_state.gd:150](/Users/Katharina/godot/Armada/src/core/state/game_state.gd:150). |
-| 2. Lifecycle identity | Non-Compliant | No serialized timing-window lifecycle identity exists for `ATTACK_MODIFY` or H9. `InteractionFlow` serializes flow/step/controller/payload only: [interaction_flow.gd:70](/Users/Katharina/godot/Armada/src/core/state/interaction_flow.gd:70). |
-| 3. Static timing-window definition ownership | Non-Compliant | No shared timing-window module owns immutable static definitions. Current attack policy is in `FlowSpec`, command applicability, and attack flow code: [flow_spec.gd:191](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd:191). |
-| 4. RuleRegistry participant discovery | Not Implemented | `RuleRegistry` exists as static hooks, but H9 has no registered participant candidate: [rule_registry.gd:1](/Users/Katharina/godot/Armada/src/core/effects/rule_registry.gd:1), [rule_bootstrap.gd:9](/Users/Katharina/godot/Armada/src/autoload/rule_bootstrap.gd:9). |
-| 5. Opportunity derivation | Not Implemented | CAP-H9 specifies derivation from runtime upgrade and dice state, but no H9 derivation implementation exists. Existing Swarm path is local payload logic, not H9 or CON-005 opportunity derivation: [reroll_attack_die_command.gd:78](/Users/Katharina/godot/Armada/src/core/commands/reroll_attack_die_command.gd:78). |
-| 6. Canonical opportunity identity | Not Implemented | H9 has no derived canonical opportunity record. CAP-H9 identifies runtime upgrade identity as required command context: [CAP-H9-001-h9-turbolasers.md:173](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-H9-001-h9-turbolasers.md:173). |
-| 7. Controller policy | Not Implemented | Generic Attack Modify controller is attacker in `FlowSpec`, but no CON-005 window-defined controller policy or H9 command validation exists: [flow_spec.gd:191](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd:191). |
-| 8. Explicit Use command | Not Implemented | CAP-H9 requires `UseH9Command`, but no production command exists: [CAP-H9-001-h9-turbolasers.md:105](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-H9-001-h9-turbolasers.md:105). |
-| 9. Explicit Decline command | Not Implemented | CAP-H9 requires `DeclineH9Command`, but no production command exists: [CAP-H9-001-h9-turbolasers.md:106](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-H9-001-h9-turbolasers.md:106). |
-| 10. Replayability | Not Implemented | Generic command serialization/replay exists through `GameCommand`, but H9 use/decline commands are absent: [game_command.gd:66](/Users/Katharina/godot/Armada/src/core/commands/game_command.gd:66). |
-| 11. Continuation derivation | Non-Compliant | `confirm_attack_dice` exists as a marker command submitted from UI/GameManager paths, not as orchestrator-derived continuation: [confirm_attack_dice_command.gd:1](/Users/Katharina/godot/Armada/src/core/commands/confirm_attack_dice_command.gd:1), [game_manager.gd:1216](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:1216). |
-| 12. Continuation failure behavior | Non-Compliant | No timing-window lifecycle remains active on failed continuation because no `TimingWindowState`/orchestrator failure protocol exists. `ConfirmAttackDiceCommand` only validates the current attack-modify flow: [confirm_attack_dice_command.gd:27](/Users/Katharina/godot/Armada/src/core/commands/confirm_attack_dice_command.gd:27). |
-| 13. Cleanup ownership | Not Implemented | CAP-H9 defines cleanup triggers, but no H9 runtime guard or cleanup command path exists: [CAP-H9-001-h9-turbolasers.md:149](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-H9-001-h9-turbolasers.md:149). |
-| 14. Cleanup trigger coverage | Not Implemented | H9 cleanup at `confirm_attack_dice`, attack end, cancellation, and replacement is specified but unimplemented: [CAP-H9-001-h9-turbolasers.md:239](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-H9-001-h9-turbolasers.md:239). |
-| 15. Projection | Not Implemented | `UIProjector` can derive RuleRegistry enabler affordances, but H9 projection from shared opportunities is absent: [ui_projector.gd:355](/Users/Katharina/godot/Armada/src/core/network/ui_projector.gd:355). |
-| 16. Visibility | Not Implemented | CAP-H9 classifies H9 availability/use/changed die as public, but no H9 visibility/projection evidence exists: [CAP-H9-001-h9-turbolasers.md:400](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-H9-001-h9-turbolasers.md:400). |
-| 17. Save/load | Not Implemented | Runtime upgrade serialization exists, but H9 guard state and TimingWindowState do not: [ship_instance.gd:525](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:525). |
-| 18. Replay | Not Implemented | Replay infrastructure exists, but no H9 command history or lifecycle reconstruction evidence exists: [replay_driver.gd:1](/Users/Katharina/godot/Armada/src/autoload/replay_driver.gd:1). |
-| 19. Reconnect | Not Implemented | H9 reconnect cases are specified in CAP-H9, but no active H9 state/projection path exists: [CAP-H9-001-h9-turbolasers.md:387](/Users/Katharina/godot/Armada/docs/architecture/rule_capability_packages/CAP-H9-001-h9-turbolasers.md:387). |
-| 20. Networking invariants | Not Implemented | Generic mirror classification exists for current attack marker commands, but no H9 mirrored use/decline command classification exists: [game_manager.gd:2232](/Users/Katharina/godot/Armada/src/autoload/game_manager.gd:2232). |
+| 1. TimingWindowState ownership | Non-Compliant | Shared prerequisite absent. `GameState` serializes `interaction_flow`, not `TimingWindowState`: [game_state.gd:34](../../../src/core/state/game_state.gd#L34), [game_state.gd:150](../../../src/core/state/game_state.gd#L150). |
+| 2. Lifecycle identity | Non-Compliant | No serialized timing-window lifecycle identity exists for `ATTACK_MODIFY` or H9. `InteractionFlow` serializes flow/step/controller/payload only: [interaction_flow.gd:70](../../../src/core/state/interaction_flow.gd#L70). |
+| 3. Static timing-window definition ownership | Non-Compliant | No shared timing-window module owns immutable static definitions. Current attack policy is in `FlowSpec`, command applicability, and attack flow code: [flow_spec.gd:191](../../../src/core/state/flow_spec.gd#L191). |
+| 4. RuleRegistry participant discovery | Not Implemented | `RuleRegistry` exists as static hooks, but H9 has no registered participant candidate: [rule_registry.gd:1](../../../src/core/effects/rule_registry.gd#L1), [rule_bootstrap.gd:9](../../../src/autoload/rule_bootstrap.gd#L9). |
+| 5. Opportunity derivation | Not Implemented | CAP-H9 specifies derivation from runtime upgrade and dice state, but no H9 derivation implementation exists. Existing Swarm path is local payload logic, not H9 or CON-005 opportunity derivation: [reroll_attack_die_command.gd:78](../../../src/core/commands/reroll_attack_die_command.gd#L78). |
+| 6. Canonical opportunity identity | Not Implemented | H9 has no derived canonical opportunity record. CAP-H9 identifies runtime upgrade identity as required command context: [CAP-H9-001-h9-turbolasers.md:173](../rule_capability_packages/CAP-H9-001-h9-turbolasers.md#L173). |
+| 7. Controller policy | Not Implemented | Generic Attack Modify controller is attacker in `FlowSpec`, but no CON-005 window-defined controller policy or H9 command validation exists: [flow_spec.gd:191](../../../src/core/state/flow_spec.gd#L191). |
+| 8. Explicit Use command | Not Implemented | CAP-H9 requires `UseH9Command`, but no production command exists: [CAP-H9-001-h9-turbolasers.md:105](../rule_capability_packages/CAP-H9-001-h9-turbolasers.md#L105). |
+| 9. Explicit Decline command | Not Implemented | CAP-H9 requires `DeclineH9Command`, but no production command exists: [CAP-H9-001-h9-turbolasers.md:106](../rule_capability_packages/CAP-H9-001-h9-turbolasers.md#L106). |
+| 10. Replayability | Not Implemented | Generic command serialization/replay exists through `GameCommand`, but H9 use/decline commands are absent: [game_command.gd:66](../../../src/core/commands/game_command.gd#L66). |
+| 11. Continuation derivation | Non-Compliant | `confirm_attack_dice` exists as a marker command submitted from UI/GameManager paths, not as orchestrator-derived continuation: [confirm_attack_dice_command.gd:1](../../../src/core/commands/confirm_attack_dice_command.gd#L1), [game_manager.gd:1216](../../../src/autoload/game_manager.gd#L1216). |
+| 12. Continuation failure behavior | Non-Compliant | No timing-window lifecycle remains active on failed continuation because no `TimingWindowState`/orchestrator failure protocol exists. `ConfirmAttackDiceCommand` only validates the current attack-modify flow: [confirm_attack_dice_command.gd:27](../../../src/core/commands/confirm_attack_dice_command.gd#L27). |
+| 13. Cleanup ownership | Not Implemented | CAP-H9 defines cleanup triggers, but no H9 runtime guard or cleanup command path exists: [CAP-H9-001-h9-turbolasers.md:149](../rule_capability_packages/CAP-H9-001-h9-turbolasers.md#L149). |
+| 14. Cleanup trigger coverage | Not Implemented | H9 cleanup at `confirm_attack_dice`, attack end, cancellation, and replacement is specified but unimplemented: [CAP-H9-001-h9-turbolasers.md:239](../rule_capability_packages/CAP-H9-001-h9-turbolasers.md#L239). |
+| 15. Projection | Not Implemented | `UIProjector` can derive RuleRegistry enabler affordances, but H9 projection from shared opportunities is absent: [ui_projector.gd:355](../../../src/core/network/ui_projector.gd#L355). |
+| 16. Visibility | Not Implemented | CAP-H9 classifies H9 availability/use/changed die as public, but no H9 visibility/projection evidence exists: [CAP-H9-001-h9-turbolasers.md:400](../rule_capability_packages/CAP-H9-001-h9-turbolasers.md#L400). |
+| 17. Save/load | Not Implemented | Runtime upgrade serialization exists, but H9 guard state and TimingWindowState do not: [ship_instance.gd:525](../../../src/core/state/ship_instance.gd#L525). |
+| 18. Replay | Not Implemented | Replay infrastructure exists, but no H9 command history or lifecycle reconstruction evidence exists: [replay_driver.gd:1](../../../src/autoload/replay_driver.gd#L1). |
+| 19. Reconnect | Not Implemented | H9 reconnect cases are specified in CAP-H9, but no active H9 state/projection path exists: [CAP-H9-001-h9-turbolasers.md:387](../rule_capability_packages/CAP-H9-001-h9-turbolasers.md#L387). |
+| 20. Networking invariants | Not Implemented | Generic mirror classification exists for current attack marker commands, but no H9 mirrored use/decline command classification exists: [game_manager.gd:2232](../../../src/autoload/game_manager.gd#L2232). |
 | 21. CAP obligations | Partially Compliant | CAP-H9 identifies timing, source, runtime state, commands, visibility, cleanup, and tests, but predates CON-005 evidence mapping and remains Draft/NOT_INTEGRATED. |
-| 22. TEST-003 obligations | Not Implemented | TEST-003 explicitly requires H9-plus-another-attack-modifier protocol evidence, but no H9 implementation or tests exist: [TEST-003-interactive-rule-timing-window-verification.md:268](/Users/Katharina/godot/Armada/docs/architecture/tests/TEST-003-interactive-rule-timing-window-verification.md:268). |
+| 22. TEST-003 obligations | Not Implemented | TEST-003 explicitly requires H9-plus-another-attack-modifier protocol evidence, but no H9 implementation or tests exist: [TEST-003-interactive-rule-timing-window-verification.md:268](../tests/TEST-003-interactive-rule-timing-window-verification.md#L268). |
 
 ## 6. Strengths
 
@@ -166,13 +166,13 @@ Evidence:
   visibility, explicit use/decline commands, re-derivation, cleanup triggers,
   and `confirm_attack_dice` as the normal continuation.
 - Existing attack infrastructure already has an `ATTACK_MODIFY` flow:
-  [flow_spec.gd:191](/Users/Katharina/godot/Armada/src/core/state/flow_spec.gd:191).
+  [flow_spec.gd:191](../../../src/core/state/flow_spec.gd#L191).
 - Existing dice data supports the rule-specific legality distinction: red and
   blue dice have Accuracy faces, black dice do not:
-  [dice.gd:11](/Users/Katharina/godot/Armada/src/core/combat/dice.gd:11).
+  [dice.gd:11](../../../src/core/combat/dice.gd#L11).
 - Runtime upgrade instances already serialize `rule_state`, which is the
   correct owner for H9 current-attack guard state under ADR-004/CON-004:
-  [ship_instance.gd:561](/Users/Katharina/godot/Armada/src/core/state/ship_instance.gd:561).
+  [ship_instance.gd:561](../../../src/core/state/ship_instance.gd#L561).
 - Existing attack marker commands and network handling provide useful
   implementation evidence for command-stream integration, even though they are
   not CON-005 timing-window lifecycle ownership.

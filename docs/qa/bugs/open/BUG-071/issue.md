@@ -175,3 +175,127 @@ BUG-071 is resolved when:
 - required focused and production-path regressions pass;
 - architecture/static verification and the full suite converge;
 - no accepted architecture or unrelated attack semantics are changed.
+
+
+## Owner Smoke-Test Findings — 2026-10-03
+
+During Owner Hot-Seat smoke testing of the BUG-070 / BUG-071 implementation at the manual replay-capture gate, the corrected Concentrate Fire timing became reachable through the normal production UI, but two BUG-071 implementation defects were observed.
+
+Supporting evidence is preserved in this BUG-071 folder:
+- `game_20261003_184827.log`
+- `replay_20261003_185037.json`
+
+### Finding 1 — Concentrate Fire `Use` action is inert
+
+The UI correctly presents an available Concentrate Fire opportunity after the initial attack roll.
+
+Observed behavior:
+- `Decline` works and gameplay continues normally.
+- Selecting `Use` produces no observable gameplay action or progression.
+
+This means the BUG-071 implementation has not yet demonstrated a functioning production path from the projected Concentrate Fire opportunity through player selection, authoritative command submission/application, result handling, and timing-window rederivation.
+
+**Required behavior:** Selecting a legal Concentrate Fire use option must execute the corresponding authoritative Concentrate Fire choice and continue through the accepted BUG-071 lifecycle.
+
+**Disposition:** Implementation-convergence blocker. BUG-071 cannot be accepted and the required replacement replay should not be promoted from this smoke-test run.
+
+### Finding 2 — Concentrate Fire source is not identifiable/selectable
+
+The current UI presents a generic Concentrate Fire use opportunity without identifying whether the available resource is a Concentrate Fire dial or Concentrate Fire token.
+
+This is insufficient because the accepted BUG-071 semantics distinguish the authoritative choices.
+
+**Required behavior:**
+- If a Concentrate Fire dial is legally available, the UI must visibly offer the dial choice.
+- If a Concentrate Fire token is legally available, the UI must visibly offer the token choice.
+- If both are legally available, both resources must be identifiable and the legal combined choice must be representable consistently with the accepted dial/token/both/neither semantics.
+- The presentation must reflect authoritative availability; it must not introduce independent UI authority.
+
+The exact presentation wording/layout is not prescribed by this issue. The requirement is that the player can understand and select the authoritative legal Concentrate Fire resource choice.
+
+**Disposition:** Implementation-convergence blocker within BUG-071 scope.
+
+### Acceptance impact
+
+The automated implementation verification completed before this smoke test is retained as valid evidence, but it is not sufficient for BUG-071 acceptance because the real player-facing production path exposed the defects above.
+
+Before returning to the Owner replay-capture gate:
+
+1. Both smoke-test findings must be repaired.
+2. Regression coverage must exercise the affected real production/UI path sufficiently to prevent an inert `Use` action or ambiguous resource selection from passing unnoticed.
+3. Relevant workbook-required automated verification must reconverge.
+4. Owner must repeat the Concentrate Fire smoke path successfully.
+
+Only after successful smoke verification should genuine replacement replay-11 artifacts be recorded/promoted for final replay and baseline verification.
+
+## Owner UX Resolution — 2026-10-03
+
+### Owner UI Clarification — Concentrate Fire
+
+#### 1. Timing-effect presentation
+
+Available game effects should use a consistent row-based interaction:
+
+`<Effect Name>    [Use] [Decline]`
+
+Examples:
+
+`Concentrate Fire             [Use] [Decline]`
+`Electronic Countermeasures   [Use] [Decline]`
+`H9 Turbolasers               [Use] [Decline]`
+
+Each independently available game effect occupies one horizontal row.
+
+The presentation layer does not determine legality. Rows and available actions are
+derived from authoritative gameplay state.
+
+Selecting `Use` may open a purpose-specific follow-up when the effect requires further
+player choices.
+
+#### 2. Concentrate Fire resource selection
+
+Concentrate Fire remains one command resolution in accordance with the Rules Reference
+and FAQ.
+
+When the player selects:
+
+`Concentrate Fire    [Use]`
+
+the UI presents the authoritative legal resource choices:
+
+`[Dial] [Token] [Dial + Token]`
+
+Only choices currently legal and available are presented.
+
+Selecting one of these choices commits the corresponding resource or resources.
+`Dial + Token` is one combined Concentrate Fire command resolution; the dial and token
+are spent together as required by the Rules Reference/FAQ.
+
+The resource-selection UI therefore does not represent the dial and token as separate
+Concentrate Fire command resolutions.
+
+#### 3. Resolving Dial + Token
+
+When `Dial + Token` is selected, both resources are committed together before their
+effects are resolved.
+
+Resolution then proceeds sequentially within that already-committed Concentrate Fire
+command:
+
+1. Resolve the dial effect:
+   - choose the legal die color;
+   - authoritatively roll the added die;
+   - add its result to the existing attack results.
+
+2. Resolve the token effect:
+   - allow selection of one eligible attack die for reroll;
+   - authoritatively reroll that die.
+
+3. Return to the enclosing Attack Modify interaction and rederive remaining legal
+   effects.
+
+The token is already spent when `Dial + Token` is committed. Declining or otherwise
+not exercising the optional reroll afterward does not refund the token.
+
+This sequential effect resolution must not be interpreted as two separate Concentrate
+Fire command resolutions.

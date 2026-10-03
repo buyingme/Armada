@@ -1,13 +1,23 @@
 # BUG-070 / BUG-071: Gather Completion and Concentrate Fire Implementation Workbook
 
 Status: Accepted
-Accepted by: Project Owner
-Accepted date: 2026-10-03
+Prior acceptance: Project Owner, 2026-10-03 (superseded for the BUG-071 UX interaction by this revision)
+Owner re-acceptance: Project Owner, 2026-10-03
 Date: 2026-10-03
 Purpose: One coordinated implementation plan with separate issue acceptance.
-Implementation authorization: Authorized within this workbook's scope. BUG-070,
+Implementation authorization: Authorized within this workbook's revised scope. BUG-070,
 BUG-071, and affected Rule Capability Packages remain open; no integration or
 completion status is asserted.
+
+Revision provenance: Owner Hot-Seat smoke testing exposed an inert CF `Use`
+action and an ambiguous resource choice. The repository Rules Reference and
+incorporated FAQ then clarified that combined dial/token spending is one
+command resolution with simultaneous commitment. The subsequent
+[Owner UX Resolution](../../qa/bugs/open/BUG-071/issue.md#owner-ux-resolution--2026-10-03)
+selects a top-level CF Use/Decline row followed by a legal resource choice.
+The former accepted top-level dial/token/both/neither presentation assumption
+is superseded; the rules-correct combined commitment remains required. This
+revision is documentation only and does not certify the interrupted code.
 
 ## 1. Scope and authority
 
@@ -27,8 +37,9 @@ settles the otherwise unspecified final-die and anti-squadron outcomes. The
 [joint diagnosis](../evidence/BUG-070-BUG-071-joint-production-diagnosis.md),
 and [normative traceability map](../evidence/BUG-070-BUG-071-normative-refinement-traceability.md)
 are evidence and rule-package obligations. The repository [Rules Reference](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md)
-and [Learn to Play](../../../Resources/SWM01-ARMADA-LEARN-TO-PLAY/SWM01-ARMADA-LEARN-TO-PLAY.md)
-verify stated gameplay timing; they do not resolve the two Owner-ruled edge
+and its [Commands FAQ](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L2253)
+verify gameplay timing and combined command commitment. [Learn to Play](../../../Resources/SWM01-ARMADA-LEARN-TO-PLAY/SWM01-ARMADA-LEARN-TO-PLAY.md)
+provides additional timing context; these rules do not resolve the two Owner-ruled edge
 cases. The [TWI-002 reconciliation](TWI-002-timing-window-core-and-h9-pilot-implementation-workbook.md#bug-071-timing-reconciliation-2026-10-03)
 supersedes its pre-roll dial instructions. [CON-003](../contracts/CON-003-rule-capability-contract.md)
 and [TEST-003](../tests/TEST-003-interactive-rule-timing-window-verification.md)
@@ -61,7 +72,7 @@ contract 2`). Recheck these constants at the later implementation entry gate.
 | `RuleBootstrap`/`RuleRegistry`, Point-Defense Failure, Damaged Munitions, obstruction | The registered card hooks expose one mandatory selected die removal before roll; obstruction is a separate choice. Card predicates are ship-to-squadron versus ship-to-ship. `resolved_pool_choices` and `obstruction_resolved` are canonical, while the hook's single pending-rule metadata is not a completion proof. | Derive every applicable unfinished gather obligation from canonical attack plus current rule sources, in fixed card-then-obstruction order. Account for a later obligation when the pool has temporarily become empty. |
 | `ResolveAttackPoolChoiceCommand`, `CurrentAttackState`, `RollDiceCommand` | Rule removal rejects `after_count <= 0`; state validation rejects every active empty pool. Roll checks obstruction/dial/positive count but not unresolved registered card choices. | Admit intermediate empty `pre_roll`; validate the final boundary once; reject direct Roll past any unfinished gather effect; use an explicit cancellation command for final zero. |
 | `SkipAttackCommand`, `GameState.deserialize`, `StateFilter`, `CurrentAttackContinuation` | Active Skip retires CurrentAttack but leaves `ATTACK` flow. Deserialization rejects that inactive/no-inspection combination; StateFilter first deserializes the full authority snapshot. The continuation helper has no cancellation-specific inactive route. No-inspection `squadron_done` does not check exhaustion or iteration identity. | Cancellation must atomically publish a valid enclosing command-produced flow and retain the narrow cancellation-return identity needed by anti-squadron termination. Existing enclosing owners, not presentation or an inspection, select follow-ups. |
-| CF dial and token | Begin marks both pending. Dial use/decline currently require `pre_roll`; use spends the revealed dial and increments the unrolled pool. Token use/decline already belongs to post-roll Attack Modify, but token derivation requires possession, use spends it, and decline leaves it unspent. There is no confirmed ship-round CF resolution marker or advance dial/token/both choice. | Spend selected resources together at the advance command commitment. Later effect commands consume retained authorization and never spend them again. Preserve the token's reroll operation, not its old possession/spend predicates. |
+| CF dial and token | At workbook acceptance, Begin marked both pending. Dial use/decline required `pre_roll`; use spent the revealed dial and incremented the unrolled pool. Token use/decline belonged to post-roll Attack Modify, but token derivation required possession, use spent it, and decline left it unspent. There was no confirmed ship-round CF resolution marker or advance dial/token/both choice. The later Owner smoke test found the projected `Use` inert and the resource source unclear. | Present one CF Use/Decline row and, after Use, only legal Dial/Token/Dial + Token choices. Spend selected resources at one command commitment; both are spent together when combined. Later effect commands consume retained authorization and never spend again. Preserve the token's reroll operation, not its old possession/spend predicates. |
 | `TimingWindowOrchestrator`, `FlowSpec`, `CommandApplicability`, `ConfirmAttackDiceCommand` | Accepted Roll opens ship Attack Modify; opportunities are rederived after commands. Flow still lists dial in ATTACK_ROLL. Confirm only checks pending token, so a moved pending dial could be bypassed or automatically closed. | Gate timing continuation and Confirm on unresolved CF choice/effects; rederive token/H9 after the dial result. Move command applicability and projection to ATTACK_MODIFY. |
 | `AttackExecutor`, `AttackPanelController`, `UIProjector`, `GameManager` | Scene sequences card → empty check → obstruction → dial → Roll. Automatic card submission failure is treated as handled, and rejection routing covers Begin/Skip but not pool choices. Resume repeats the old sequence. | Show canonical next action and recover from rejection without advancing scene state. Present post-roll CF and reconstruct from accepted state. |
 | Save, Network, replay | `GameState` loads CurrentAttack before recovery. Exact save/replay versions reject mismatches. Network envelopes and ordered `CommandProcessor` application use command-specific result contracts; Roll and token already apply authority-resolved random results on passive peers. | Extend the existing command-owned result path for the dial; preserve passive RNG filtering and deterministic seed-plus-command replay. |
@@ -97,14 +108,15 @@ from Begin's committed attack history and must retain its intended condition.
    anti-squadron iteration independently derives the next eligible target or
    executes the existing child termination. No completed-damage inspection is
    created; CON-007 applies only to its defined completed-result boundary.
-5. CF dial and token are post-roll ship Attack Modify decisions. The accepted
+5. CF dial and token effects belong to post-roll ship Attack Modify. The
    [Rules Reference command and FAQ](../../../Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md#L2259)
    require choosing dial, token, or both *before* effects and spending both
    simultaneously when combined. One authoritative, replayable advance-choice
    command atomically validates and spends the selected dial/token, records
    the ship-round CF resolution marker, and retains the attack's chosen effect
-   authorization. For `neither`, it records only a per-attack decline: no
-   resource is spent and no round marker is set. A selected effect can be
+   authorization. The top-level CF `Decline` maps to the internal `neither`
+   outcome and records only a per-attack decline: no resource is spent and no
+   round marker is set. A selected effect can be
    resolved/declined once after commitment; later effect commands spend
    nothing. A ship cannot resolve CF again that round, including a later
    anti-squadron target. A post-commit decline of the optional token reroll,
@@ -126,12 +138,12 @@ from Begin's committed attack history and must retain its intended condition.
    must bind the same attack, ship, round and timing lifecycle and cannot be
    reused by a later attack.
 
-| Advance CF choice | Atomic commitment and retained attack authorization | Later effect transition | Later attacks in same round |
+| CF resource choice after top-level `Use` (or internal `neither` after top-level `Decline`) | Atomic commitment and retained attack authorization | Later effect transition | Later attacks in same round |
 | --- | --- | --- | --- |
 | `dial` | Spend one revealed CF dial; mark ship's CF resolution for this round; retain dial effect pending, token unselected. | Add/roll a current-colour die or explicitly decline its effect; no later spend/refund. | No CF resolution, even if a token remains or is gained. |
 | `token` | Spend one held CF token; mark the round; retain token reroll pending, dial unselected. | Reroll one legal existing result or explicitly decline the optional reroll; no later spend/refund. | No CF resolution, even if a dial remains. |
 | `both` | Validate simultaneous possession, spend one revealed CF dial **and** one held CF token in one command transaction; mark the round once; retain both effects pending. | Resolve/decline dial addition, then use/decline the optional reroll; the added die may be selected for reroll. Neither later effect command spends a resource. | No CF resolution; declining the reroll does not restore the token. |
-| `neither` | Retain this attack's pre-commit decline only; spend nothing and leave round marker unset. | No CF effect command is legal in this attack. | A later eligible attack may make a fresh advance choice. |
+| `neither` (top-level `Decline`) | Retain this attack's pre-commit decline only; spend nothing and leave round marker unset. | No CF effect command is legal in this attack. | A later eligible attack may make a fresh advance choice. |
 | New round | Existing round transition clears the ship-round CF marker; no active attack/old authorization may be carried across as a new resolution. | Re-derive future availability from current canonical resources and round. | One new CF resolution may be committed in the new round. |
 
 The advance choice is the resource and once-per-round boundary, not the die
@@ -140,6 +152,42 @@ RNG, timing state, history and cursor unchanged. Dial-result RNG is consumed
 only by a later accepted dial-effect command. A decline after commitment
 records an effect result, not a new CF resolution. Later attack retirement
 cannot refund a committed CF resolution or clear its ship-round marker.
+
+### BUG-071 player interaction (Owner smoke-test refinement)
+
+The Owner-selected reusable convention presents each independently available
+effect on its own horizontal `<Effect Name>    [Use] [Decline]` row. For
+BUG-071, after a successful roll, project
+`Concentrate Fire    [Use] [Decline]` as the single CF command opportunity,
+rather than separate dial and token rows. Show it only when CF is legally
+available. Keep it distinct from simultaneously available effects; this
+workbook does not authorize refactoring ECM, H9, or other effects.
+Presentation never decides legality or installs a gameplay owner, FSM, or
+continuation authority.
+
+CF `Use` opens a CF-specific choice showing only currently legal and available
+`Dial`, `Token`, and `Dial + Token` options. A visible `Use` must lead to an
+actionable choice and accepted authoritative command or an actionable
+reprojection after rejection; it must not be inert. Opening this submenu is
+transient presentation only: the `Use` click does not submit a command,
+establish authoritative gameplay state, or persist a menu-open flag. If
+save/load or reconnect occurs before a resource choice is submitted, discard
+the submenu and rederive the authoritative CF opportunity. Project the
+top-level `Concentrate Fire    [Use] [Decline]` row again; another `Use` click
+derives the currently legal resource choices afresh. The authoritative
+recovery boundary begins with the submitted resource choice. CF `Decline`
+records the internal `neither` outcome without spending or setting the round
+marker. A resource option commits one CF command resolution. `Dial + Token` validates
+and spends both simultaneously, then resolves the dial effect first (legal
+current-pool colour, authority roll, added result) and the optional token
+effect second (eligible die selection, authority reroll or explicit decline).
+The added die may be rerolled. Declining that reroll never refunds the spent
+token. After each accepted effect result or decline, rederive the enclosing
+Attack Modify interaction and remaining legal effects from canonical state.
+After authoritative resource commitment, recovery and passive projection
+reconstruct the committed choice or pending effect from accepted state,
+including a partially resolved Dial + Token, without creating a second CF
+resolution.
 
 STOP for Owner direction if implementation reveals an accepted-authority
 conflict, another unaccounted mandatory gather effect or post-roll blocker
@@ -216,16 +264,22 @@ speculative compatibility question.
 6. At the successful Roll → Attack Modify boundary, derive CF availability
    from the attacking ship's canonical resources and round-use state. Begin
    must no longer install an unresolved CF choice in `pre_roll`, and Roll must
-   not wait for or spend a CF dial. Add one
-   purpose-specific, replayable advance CF choice command. On `dial`, `token`
-   or `both`, it atomically validates the selected resources, spends them
-   together, sets the ship-round marker, and installs bound per-attack effect
-   authorization; on `neither`, it records only the attack-local decline.
+   not wait for or spend a CF dial. Project one authoritative CF Use/Decline
+   row. `Use` opens a purpose-specific resource selection containing only
+   legal `Dial`, `Token`, and `Dial + Token` options; `Decline` maps to the
+   attack-local `neither` outcome. Add one purpose-specific, replayable CF
+   choice command. On `dial`, `token` or `both`, it atomically validates and
+   spends the selected resource(s), sets the ship-round marker, and installs
+   bound per-attack effect authorization; on `neither`, it records only the
+   attack-local decline. Combined resources are spent together in one
+   command resolution, never through separate dial and token resolutions.
    Snapshot and restore all affected owners on failure. A pending advance
    choice is a blocking shared-window opportunity even without token or H9.
    Reset only the ship-round marker at the existing round boundary. Validate
    attack, ship activation, round, timing lifecycle, controller and resource
-   identity; no generic command framework or second registry.
+   identity; no generic command framework or second registry. A projected
+   `Use` must reach its resource choice and submit the chosen legal command;
+   rejection must reproject an actionable current choice.
 7. Move dial effect use/decline to the matching open Attack Modify lifecycle.
    Validate selected colour against the post-roll canonical pool and retained
    *spent-dial authorization*, not current dial possession. On use, atomically
@@ -241,8 +295,9 @@ speculative compatibility question.
    authorization* for this attack instead of token possession. Remove the
    token spend from reroll execution; post-commit decline still leaves it
    spent. For `both`, complete/decline dial effect before the optional token
-   reroll, which may target the newly added die. Rederive token and H9 after
-   dial and token results. Keep timing status open while selected CF effects
+   reroll, which may target the newly added die. Rederive the enclosing Attack
+   Modify rows, including token follow-up and H9, after dial and token results
+   or declines. Keep timing status open while selected CF effects
    remain unresolved; prevent `ConfirmAttackDiceCommand` and automatic
    continuation until all selected CF and other blocking opportunities are
    settled. Preserve H9/Swarm ordering and ordinary confirmation.
@@ -253,14 +308,21 @@ speculative compatibility question.
    payload declarations, `GameManager` submitters, `UIProjector`, and
    `AttackPanelController` only as required by the new/relocated commands.
    Remove the pre-roll dial offer and scene-owned empty decision from
-   `AttackExecutor`; render the derived gather next action and post-roll CF
-   choice. On local or Network rejection, restore an actionable projection
+   `AttackExecutor`; render the derived gather next action, the single post-roll
+   CF Use/Decline row, and the legal CF resource choice after `Use`. Keep
+   the CF row distinct from simultaneous opportunities without using row
+   presentation as legality or changing unrelated effects. On local or
+   Network rejection, restore an actionable projection
    from canonical state without auto-claiming success or retrying stale input.
 10. Reconstruct `pre_roll` (including temporary/final zero), the *raw* valid
-    post-cancellation enclosing flow before any scene callback, open/closing
-    Attack Modify, committed CF choice before effects, partial `both` after
-    dial but before reroll, and post-dial result from canonical `GameState`,
-    ShipInstance and timing lifecycle. The unmodified command-produced
+    post-cancellation enclosing flow before any scene callback, and
+    open/closing Attack Modify from canonical `GameState`, ShipInstance and
+    timing lifecycle. Before a CF resource choice is submitted, recovery
+    projects the authoritative top-level CF row and discards any transient
+    submenu opened by `Use`; reopening it derives current legal options.
+    After accepted submission, reconstruct committed CF choice before effects,
+    partial `both` after dial but before reroll, and post-dial result from
+    authoritative state. The unmodified command-produced
     snapshot must deserialize, pass `StateFilter`/passive installation and
     project through real board recovery without a test clearing or replacing
     `interaction_flow`. No replay or passive peer may synthesize cancellation,
@@ -288,12 +350,12 @@ remain useful for their original scope, but do **not** satisfy these gates.
 
 | Level / suites to extend | Separate BUG-070 evidence | Separate BUG-071 evidence |
 | --- | --- | --- |
-| Unit: `test_current_attack_state.gd`, `test_attack_commands.gd`, `test_concentrate_fire_timing_window.gd`, `test_rule_point_defense_failure.gd`, `test_rule_damaged_munitions.gd` | Gather derivation/order/no-die outcome; valid temporary zero and invalid later zero; direct Roll or early cancellation rejected; exact choice identity and atomic failure. | Table in §3 for dial/token/both/neither, post-commit reroll decline, later attack and round reset; current-colour and spent-authorization guards; result schema and rollback. |
-| Production integration: extend `test_current_attack_production_resume.gd` and `test_current_attack_shared_protocol.gd` with real `GameBoard`/`AttackExecutor`/`GameManager` submission and callbacks | Actual Begin → Point-Defense Failure, Damaged Munitions, obstruction, and applicable card+obstruction sequencing; temporary/final zero; first/later anti-squadron target with remaining/exhausted targets; count/zone/history/no retry; usable Ship, Squadron Phase and commanded-squadron return. Include automatic one-colour submission rejection and actionable reprojection. Do not invent simultaneous applicability of the two card predicates. | Actual Begin → complete Gather → Roll → shared Attack Modify with visible dial use/decline, token-only and combined choice; authority-rolled added result; optional post-spend reroll use/decline including added die; H9 rederivation, blocked Confirm, spending and round reset. Do not replace this with the shared-protocol test's manually opened window. |
-| Recovery integration: extend `test_current_attack_production_resume.gd` and `test_current_attack_shared_protocol.gd` | Capture the raw accepted cancellation state immediately after real command submission with follow-up drain deferred, before scene callbacks/follow-ups. Serialize/deserialize it unchanged, pass `StateFilter.filter_for_player_checked`, install the authority/passive state through `GameManager.start_new_game_from_state` and the existing passive installer, reconcile timing, recreate `GameBoard` through `_ready`, and project the next action. Cover temporary/final zero and Ship/Phase/commanded return, then execute the next legal command. | Repeat for accepted Roll, pending advance choice, committed choice before effects, partial `both` after dial/before reroll, and settled result. Preserve exact resource/marker/result and next legal decision across authority reconstruction and reconnect. |
-| Distributed integration: extend `test_current_attack_shared_protocol.gd`, `test_concentrate_fire_shared_protocol.gd`, and the two-process Network acceptance driver with a real Begin-based scenario | Both attacker roles and relevant side assignments; actual submit/result routing, filtered cancellation, Step 6 child finish, disconnect/reconnect and peer convergence. | Both attacker roles; actual choice/dial command routing and viewer result, RNG-free passive application, token decline after combined spend, disconnect/reconnect and peer convergence. One representative colour per distributed path suffices; unit/integration covers permutations. |
+| Unit: `test_current_attack_state.gd`, `test_attack_commands.gd`, `test_concentrate_fire_timing_window.gd`, `test_rule_point_defense_failure.gd`, `test_rule_damaged_munitions.gd` | Gather derivation/order/no-die outcome; valid temporary zero and invalid later zero; direct Roll or early cancellation rejected; exact choice identity and atomic failure. | Table in §3 for internal dial/token/both/neither outcomes, with `neither` mapped from top-level Decline; legal resource filtering, combined simultaneous spend, post-commit reroll decline/no refund, later attack and round reset; current-colour and spent-authorization guards; result schema and rollback. |
+| Production integration: extend `test_current_attack_production_resume.gd` and `test_current_attack_shared_protocol.gd` with real `GameBoard`/`AttackExecutor`/`GameManager` submission and callbacks | Actual Begin → Point-Defense Failure, Damaged Munitions, obstruction, and applicable card+obstruction sequencing; temporary/final zero; first/later anti-squadron target with remaining/exhausted targets; count/zone/history/no retry; usable Ship, Squadron Phase and commanded-squadron return. Include automatic one-colour submission rejection and actionable reprojection. Do not invent simultaneous applicability of the two card predicates. | Actual Begin → complete Gather → Roll → one visible `Concentrate Fire [Use] [Decline]` row when CF is legal; `Use` opens only legal Dial/Token/Dial + Token options and submits the chosen authoritative command, while `Decline` spends nothing and opens no resource choice. Cover dial-only, token-only, combined and no-resource states (no CF row when unavailable); combined simultaneous spend, authority-rolled added result, then optional post-spend reroll use/decline including added die and no refund. Keep CF distinct from simultaneous other effects, rederive H9/remaining opportunities, block Confirm until settled, and cover spending and round reset. Detect inert `Use` and recover actionable UI after rejection. Do not replace this with the shared-protocol test's manually opened window. |
+| Recovery integration: extend `test_current_attack_production_resume.gd` and `test_current_attack_shared_protocol.gd` | Capture the raw accepted cancellation state immediately after real command submission with follow-up drain deferred, before scene callbacks/follow-ups. Serialize/deserialize it unchanged, pass `StateFilter.filter_for_player_checked`, install the authority/passive state through `GameManager.start_new_game_from_state` and the existing passive installer, reconcile timing, recreate `GameBoard` through `_ready`, and project the next action. Cover temporary/final zero and Ship/Phase/commanded return, then execute the next legal command. | After real accepted Roll, click top-level CF `Use` but submit no resource choice; serialize/deserialize the unchanged canonical attack state at that boundary and exercise authority load/passive installation and Network reconnect. Assert the opened submenu is neither persisted nor reconstructed, no choice command/history/resource/round-marker change occurred, and recovery projects the top-level `Concentrate Fire [Use] [Decline]` row. Click `Use` again and assert legal Dial/Token/Dial + Token options are freshly derived. Use canonical active-state reconstruction for this save/load case; do not widen the named-save UI safe-point gate. Separately repeat recovery for a submitted/committed choice before effects, partial `both` after dial/before reroll, and settled result. Preserve exact resource/marker/result and next legal interaction across authority reconstruction and reconnect; do not reoffer a spent resource or create a second CF resolution. |
+| Distributed integration: extend `test_current_attack_shared_protocol.gd`, `test_concentrate_fire_shared_protocol.gd`, and the two-process Network acceptance driver with a real Begin-based scenario | Both attacker roles and relevant side assignments; actual submit/result routing, filtered cancellation, Step 6 child finish, disconnect/reconnect and peer convergence. | Both attacker roles; actual CF row → Use → legal resource selection → choice/dial command routing and viewer result, RNG-free passive application, token decline after combined spend, disconnect/reconnect and peer convergence. Include Decline and rejected/stale selection reprojection. One representative colour per distributed path suffices; unit/integration covers permutations. |
 | Replay: extend `test_current_attack_shared_protocol.gd`'s driver-compatible test and `test_replay_driver.gd` | Record actual accepted Begin/gather/choice/cancellation/child-termination history; `GameReplay` creation → JSON encode/decode → `GameReplay.deserialize` → `GameCommand.deserialize` factory → `ReplayDriver`; assert each intermediate owner/flow state and exact order, with no synthesized follow-up. | Same production chain through choice, dial RNG, optional token action/decline, H9/Confirm; assert intermediate RNG state/next draw and command order as well as final dice; no transported live result in replay. |
-| Manual Hot-Seat/Network smoke and Owner fixture capture | Real control visibility, auto-choice rejection recovery, cancellation and subsequent target/enclosing decision. | Real post-roll choice, use/decline, combined spending, handoff, reroll, H9/Confirm and reconnect. Owner records §7 fixtures only after candidate code passes non-fixture gates. |
+| Manual Hot-Seat/Network smoke and Owner fixture capture | Real control visibility, auto-choice rejection recovery, cancellation and subsequent target/enclosing decision. | Confirm one CF row with working Use/Decline; Use reveals only legal Dial/Token/Dial + Token choices and each visible choice submits successfully. Check combined spend before effects, dial colour/authority result, eligible token reroll or decline without refund, rederived Attack Modify/H9/Confirm, handoff and reconnect. Confirm CF remains distinct from simultaneously available effects without refactoring them in BUG-071. Owner records §7 fixtures only after candidate code passes non-fixture gates. |
 
 For the real CF dial application command, extend
 `test_result_application_contract.gd` and
@@ -387,12 +449,15 @@ validate and run the authoritative verifier against only genuine recorded
 replacements.
 
 Completion requires: (1) all §3 invariants and §5 separate issue rows pass;
-(2) save 9 / replay 11 / protocol 10 with contract 2 is one complete,
-fail-closed cutover; (3) passive result, recovery and non-fixture replay tests
-pass before Owner capture; (4) genuine Owner-recorded affected replay and
-baseline evidence passes the authoritative verifier afterward; (5) full
+(2) the real production CF row, resource choice, authoritative Use path and
+Decline path satisfy the Owner smoke-test resolution, including combined
+simultaneous spend, dial-before-token effects, no refund and rederivation;
+(3) save 9 / replay 11 / protocol 10 with contract 2 is one complete,
+fail-closed cutover; (4) passive result, recovery and non-fixture replay tests
+pass before Owner capture; (5) genuine Owner-recorded affected replay and
+baseline evidence passes the authoritative verifier afterward; (6) full
 suite, architecture lint, documentation links and diff check converge with
-no unrelated regressions; and (6) affected CON-003 packages contain the
+no unrelated regressions; and (7) affected CON-003 packages contain the
 traceability-map evidence and are presented separately for Owner integration
-review. Workbook acceptance authorizes the scoped implementation work; it does
+review. The Owner re-accepted this revised workbook on 2026-10-03. This does
 not assert BUG-070 or BUG-071 completion or Rule Capability Package integration.

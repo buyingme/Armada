@@ -9,15 +9,20 @@ refinement. The [joint production diagnosis](BUG-070-BUG-071-joint-production-di
 is the implementation evidence. BUG-070 and BUG-071 remain separate acceptance
 obligations. No Rule Capability Package is marked `Integrated` by this map.
 
-The coordinated [Accepted implementation workbook](../implementation_workbooks/BUG-070-BUG-071-gather-and-concentrate-fire-implementation-workbook.md)
+The coordinated [implementation workbook](../implementation_workbooks/BUG-070-BUG-071-gather-and-concentrate-fire-implementation-workbook.md)
 plans the shared production repair and preserves separate issue acceptance.
+It was re-accepted by the Owner on 2026-10-03 following the
+[BUG-071 Owner smoke-test and UX resolution](../../qa/bugs/open/BUG-071/issue.md#owner-smoke-test-findings--2026-10-03)
+and targeted closure audit.
+The historical diagnosis of an advance dial/token/both choice remains valid
+for command commitment; it is superseded only as a top-level UI presentation.
 
 | Behavior slice | Rule-specific traceability required before implementation acceptance | Shared boundary evidence |
 | --- | --- | --- |
-| Point-Defense Failure mandatory pool removal | Record a CON-003 package or update an existing one for source, registration and gather call site, selection legality, command execution, projection, persistence/replay/Network impact, and last-die plus multi-die tests. | BUG-070 complete-gather, temporary/final zero, cancellation, anti-squadron continuation. |
-| Damaged Munitions mandatory pool removal | Record the corresponding damage-card package and the same applicable surface evidence for ship-target attacks. | BUG-070 gather ordering and final-pool evaluation. |
-| Obstruction pool removal | Trace the applicable core rule behavior under CON-003, including choice validation, execution, reconstruction, and final-die interaction with card removal. | BUG-070 complete-gather and cancellation. |
-| Concentrate Fire dial and token | Trace separate dial addition and token reroll behavior within a reviewable CON-003 package or packages. Cover timing and legality, command costs/results, combined use and ordering, H9 rederivation, projection, save/load, replay, Network passive application, and recovery. Preserve the token's existing post-roll timing evidence. | BUG-071 Resolve Attack Effects timing and BUG-070 no-rescue boundary. |
+| Point-Defense Failure mandatory pool removal | [CAP-DMG-010](../rule_capability_packages/CAP-DMG-010-point-defense-failure-gather.md) records source, registration, gather call site, choice legality, command execution, projection, compatibility, and production evidence. | BUG-070 complete-gather, temporary/final zero, cancellation, anti-squadron continuation. |
+| Damaged Munitions mandatory pool removal | [CAP-DMG-011](../rule_capability_packages/CAP-DMG-011-damaged-munitions-gather.md) records the ship-target damage-card path and production Begin → choice → Roll evidence. | BUG-070 gather ordering and final-pool evaluation. |
+| Obstruction pool removal | [CAP-CORE-001](../rule_capability_packages/CAP-CORE-001-obstruction-gather.md) records choice validation, execution, reconstruction, and final-die interaction with card removal. | BUG-070 complete-gather and cancellation. |
+| Concentrate Fire dial and token | [CAP-CF-001](../rule_capability_packages/CAP-CF-001-concentrate-fire-attack-effects.md) records one CF Use/Decline row, legal Dial/Token/Dial + Token follow-up choices after Use, distinct dial addition and token reroll within one command resolution, simultaneous combined commitment, H9 rederivation, result application, projection, compatibility, and recovery. | BUG-071 Resolve Attack Effects timing and BUG-070 no-rescue boundary; Owner smoke-test finding must be closed on the real production UI path. |
 
 The shared attack lifecycle, roll admission, individual cancellation, and
 enclosing continuation remain governed by CON-001 and existing Ship/Squadron

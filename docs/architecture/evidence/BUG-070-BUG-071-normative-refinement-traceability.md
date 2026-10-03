@@ -9,6 +9,9 @@ refinement. The [joint production diagnosis](BUG-070-BUG-071-joint-production-di
 is the implementation evidence. BUG-070 and BUG-071 remain separate acceptance
 obligations. No Rule Capability Package is marked `Integrated` by this map.
 
+The coordinated [Accepted implementation workbook](../implementation_workbooks/BUG-070-BUG-071-gather-and-concentrate-fire-implementation-workbook.md)
+plans the shared production repair and preserves separate issue acceptance.
+
 | Behavior slice | Rule-specific traceability required before implementation acceptance | Shared boundary evidence |
 | --- | --- | --- |
 | Point-Defense Failure mandatory pool removal | Record a CON-003 package or update an existing one for source, registration and gather call site, selection legality, command execution, projection, persistence/replay/Network impact, and last-die plus multi-die tests. | BUG-070 complete-gather, temporary/final zero, cancellation, anti-squadron continuation. |

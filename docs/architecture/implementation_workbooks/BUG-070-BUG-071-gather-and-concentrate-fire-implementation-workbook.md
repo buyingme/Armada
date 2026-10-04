@@ -2,8 +2,10 @@
 
 Status: Accepted
 Prior acceptance: Project Owner, 2026-10-03 (superseded for the BUG-071 UX interaction by this revision)
-Owner re-acceptance: Project Owner, 2026-10-03
+Prior Owner re-acceptance: Project Owner, 2026-10-03 (superseded for the new effect-resolution presentation)
+Owner re-acceptance: Project Owner, 2026-10-04
 Date: 2026-10-03
+Revision date: 2026-10-04
 Purpose: One coordinated implementation plan with separate issue acceptance.
 Implementation authorization: Authorized within this workbook's revised scope. BUG-070,
 BUG-071, and affected Rule Capability Packages remain open; no integration or
@@ -18,6 +20,12 @@ selects a top-level CF Use/Decline row followed by a legal resource choice.
 The former accepted top-level dial/token/both/neither presentation assumption
 is superseded; the rules-correct combined commitment remains required. This
 revision is documentation only and does not certify the interrupted code.
+The [final Owner UX refinement](../../qa/bugs/open/BUG-071/issue.md#owner-ux-refinement--concentrate-fire-effect-resolution)
+supersedes any post-commit CF dropdown or equivalent repeated resource/effect
+selection. It specifies direct Dial and Token die interactions after the
+authoritative resource choice. The prior accepted gameplay and compatibility
+semantics are unchanged. The Owner re-accepted this presentation revision on
+2026-10-04 following targeted closure audit.
 
 ## 1. Scope and authority
 
@@ -72,7 +80,7 @@ contract 2`). Recheck these constants at the later implementation entry gate.
 | `RuleBootstrap`/`RuleRegistry`, Point-Defense Failure, Damaged Munitions, obstruction | The registered card hooks expose one mandatory selected die removal before roll; obstruction is a separate choice. Card predicates are ship-to-squadron versus ship-to-ship. `resolved_pool_choices` and `obstruction_resolved` are canonical, while the hook's single pending-rule metadata is not a completion proof. | Derive every applicable unfinished gather obligation from canonical attack plus current rule sources, in fixed card-then-obstruction order. Account for a later obligation when the pool has temporarily become empty. |
 | `ResolveAttackPoolChoiceCommand`, `CurrentAttackState`, `RollDiceCommand` | Rule removal rejects `after_count <= 0`; state validation rejects every active empty pool. Roll checks obstruction/dial/positive count but not unresolved registered card choices. | Admit intermediate empty `pre_roll`; validate the final boundary once; reject direct Roll past any unfinished gather effect; use an explicit cancellation command for final zero. |
 | `SkipAttackCommand`, `GameState.deserialize`, `StateFilter`, `CurrentAttackContinuation` | Active Skip retires CurrentAttack but leaves `ATTACK` flow. Deserialization rejects that inactive/no-inspection combination; StateFilter first deserializes the full authority snapshot. The continuation helper has no cancellation-specific inactive route. No-inspection `squadron_done` does not check exhaustion or iteration identity. | Cancellation must atomically publish a valid enclosing command-produced flow and retain the narrow cancellation-return identity needed by anti-squadron termination. Existing enclosing owners, not presentation or an inspection, select follow-ups. |
-| CF dial and token | At workbook acceptance, Begin marked both pending. Dial use/decline required `pre_roll`; use spent the revealed dial and incremented the unrolled pool. Token use/decline belonged to post-roll Attack Modify, but token derivation required possession, use spent it, and decline left it unspent. There was no confirmed ship-round CF resolution marker or advance dial/token/both choice. The later Owner smoke test found the projected `Use` inert and the resource source unclear. | Present one CF Use/Decline row and, after Use, only legal Dial/Token/Dial + Token choices. Spend selected resources at one command commitment; both are spent together when combined. Later effect commands consume retained authorization and never spend again. Preserve the token's reroll operation, not its old possession/spend predicates. |
+| CF dial and token | At workbook acceptance, Begin marked both pending. Dial use/decline required `pre_roll`; use spent the revealed dial and incremented the unrolled pool. Token use/decline belonged to post-roll Attack Modify, but token derivation required possession, use spent it, and decline left it unspent. There was no confirmed ship-round CF resolution marker or advance dial/token/both choice. The later Owner smoke test found the projected `Use` inert and the resource source unclear. | Present one CF Use/Decline row and, after Use, only legal Dial/Token/Dial + Token choices. Spend selected resources at one command commitment; both are spent together when combined. Proceed directly to the Dial die-add modal or Token eligible-die reroll interaction without repeating the resource/effect choice. Later effect commands consume retained authorization and never spend again. Preserve the token's reroll operation, not its old possession/spend predicates. |
 | `TimingWindowOrchestrator`, `FlowSpec`, `CommandApplicability`, `ConfirmAttackDiceCommand` | Accepted Roll opens ship Attack Modify; opportunities are rederived after commands. Flow still lists dial in ATTACK_ROLL. Confirm only checks pending token, so a moved pending dial could be bypassed or automatically closed. | Gate timing continuation and Confirm on unresolved CF choice/effects; rederive token/H9 after the dial result. Move command applicability and projection to ATTACK_MODIFY. |
 | `AttackExecutor`, `AttackPanelController`, `UIProjector`, `GameManager` | Scene sequences card → empty check → obstruction → dial → Roll. Automatic card submission failure is treated as handled, and rejection routing covers Begin/Skip but not pool choices. Resume repeats the old sequence. | Show canonical next action and recover from rejection without advancing scene state. Present post-roll CF and reconstruct from accepted state. |
 | Save, Network, replay | `GameState` loads CurrentAttack before recovery. Exact save/replay versions reject mismatches. Network envelopes and ordered `CommandProcessor` application use command-specific result contracts; Roll and token already apply authority-resolved random results on passive peers. | Extend the existing command-owned result path for the dial; preserve passive RNG filtering and deterministic seed-plus-command replay. |
@@ -189,6 +197,40 @@ reconstruct the committed choice or pending effect from accepted state,
 including a partially resolved Dial + Token, without creating a second CF
 resolution.
 
+### BUG-071 effect-resolution presentation (final Owner UX refinement)
+
+The resource choice above is the only CF resource/effect selection. Once an
+authoritative choice is accepted, do not show a dropdown or equivalent
+second control asking which CF resource or effect to resolve. Derive the
+next selected effect from the committed attack state. This supersedes any
+earlier workbook presentation wording that could admit such a repeated
+selection; it does not change the accepted command or effect semantics.
+
+For a committed Dial effect, open a purpose-specific attack-effect modal
+directly. Identify it as `Concentrate Fire Command Dial` and instruct
+`Select die to add.` Display only the authoritative legal die colours/types
+as selectable dice, using the established visual die-selection interaction
+family used by Roll Dice, reroll or Depowered Armament where appropriate.
+Selection submits the existing authoritative dial-effect command. Keep the
+existing explicit post-commit dial-effect decline path available within this
+purpose-specific interaction; no resource is refunded. The modal depicts
+legality supplied by authoritative gameplay state and never decides it.
+
+For a committed Token effect, enter the established visual eligible-die
+reroll interaction directly. Select an authoritative eligible attack die
+there, or explicitly decline the optional reroll without refunding the
+spent token. Do not ask the player to select the Token resource/effect again.
+
+For `Dial + Token`, the single combined choice still spends both resources
+atomically. Show the Dial modal first. After the selected die is
+authoritatively rolled and applied, proceed directly to the Token reroll
+interaction; the newly added die may be eligible. Resolve or decline the
+reroll, then rederive the enclosing Attack Modify interaction. Reuse the
+established interaction family only within this CF scope; Roll Dice,
+reroll and Depowered Armament are references, not redesign targets. The
+pre-commit transient submenu and post-commit authoritative recovery rules
+above remain in force, including recovery of partially resolved `both`.
+
 STOP for Owner direction if implementation reveals an accepted-authority
 conflict, another unaccounted mandatory gather effect or post-roll blocker
 whose coexistence cannot be derived from the accepted contracts, or a required
@@ -281,6 +323,13 @@ speculative compatibility question.
    `Use` must reach its resource choice and submit the chosen legal command;
    rejection must reproject an actionable current choice.
 7. Move dial effect use/decline to the matching open Attack Modify lifecycle.
+   Immediately after accepted `dial` or `both` commitment, present the
+   `Concentrate Fire Command Dial` attack-effect modal with
+   `Select die to add.` and selectable depictions of only the authoritative
+   legal die colours/types. Use the established die-selection interaction
+   family where appropriate; offer the existing explicit post-commit
+   decline in that interaction. Do not insert another CF resource/effect
+   dropdown. Presentation does not decide colour legality.
    Validate selected colour against the post-roll canonical pool and retained
    *spent-dial authorization*, not current dial possession. On use, atomically
    advance RNG by one die, append its result and update canonical pool/results
@@ -294,8 +343,11 @@ speculative compatibility question.
    its opportunity and use/decline guards to require retained *spent-token
    authorization* for this attack instead of token possession. Remove the
    token spend from reroll execution; post-commit decline still leaves it
-   spent. For `both`, complete/decline dial effect before the optional token
-   reroll, which may target the newly added die. Rederive the enclosing Attack
+   spent. After accepted `token` commitment, directly show the established
+   visual eligible-die reroll interaction; ask for no second CF resource or
+   effect selection. For `both`, complete/decline the Dial modal before
+   entering that Token reroll interaction, which may target the newly added
+   die after its authority result is applied. Rederive the enclosing Attack
    Modify rows, including token follow-up and H9, after dial and token results
    or declines. Keep timing status open while selected CF effects
    remain unresolved; prevent `ConfirmAttackDiceCommand` and automatic
@@ -309,7 +361,10 @@ speculative compatibility question.
    `AttackPanelController` only as required by the new/relocated commands.
    Remove the pre-roll dial offer and scene-owned empty decision from
    `AttackExecutor`; render the derived gather next action, the single post-roll
-   CF Use/Decline row, and the legal CF resource choice after `Use`. Keep
+   CF Use/Decline row, the legal CF resource choice after `Use`, and the direct
+   post-commit Dial modal or Token reroll interaction. Remove any redundant
+   CF effect/resource dropdown after accepted commitment. Reuse the
+   established die-selection interaction family only as needed for CF. Keep
    the CF row distinct from simultaneous opportunities without using row
    presentation as legality or changing unrelated effects. On local or
    Network rejection, restore an actionable projection
@@ -320,9 +375,11 @@ speculative compatibility question.
     timing lifecycle. Before a CF resource choice is submitted, recovery
     projects the authoritative top-level CF row and discards any transient
     submenu opened by `Use`; reopening it derives current legal options.
-    After accepted submission, reconstruct committed CF choice before effects,
-    partial `both` after dial but before reroll, and post-dial result from
-    authoritative state. The unmodified command-produced
+    After accepted submission, reconstruct the committed Dial modal or Token
+    reroll interaction from authoritative pending-effect state, including
+    partial `both` after dial but before reroll and the post-dial result.
+    Recovery does not reintroduce a resource/effect dropdown. The unmodified
+    command-produced
     snapshot must deserialize, pass `StateFilter`/passive installation and
     project through real board recovery without a test clearing or replacing
     `interaction_flow`. No replay or passive peer may synthesize cancellation,
@@ -356,6 +413,18 @@ remain useful for their original scope, but do **not** satisfy these gates.
 | Distributed integration: extend `test_current_attack_shared_protocol.gd`, `test_concentrate_fire_shared_protocol.gd`, and the two-process Network acceptance driver with a real Begin-based scenario | Both attacker roles and relevant side assignments; actual submit/result routing, filtered cancellation, Step 6 child finish, disconnect/reconnect and peer convergence. | Both attacker roles; actual CF row → Use → legal resource selection → choice/dial command routing and viewer result, RNG-free passive application, token decline after combined spend, disconnect/reconnect and peer convergence. Include Decline and rejected/stale selection reprojection. One representative colour per distributed path suffices; unit/integration covers permutations. |
 | Replay: extend `test_current_attack_shared_protocol.gd`'s driver-compatible test and `test_replay_driver.gd` | Record actual accepted Begin/gather/choice/cancellation/child-termination history; `GameReplay` creation → JSON encode/decode → `GameReplay.deserialize` → `GameCommand.deserialize` factory → `ReplayDriver`; assert each intermediate owner/flow state and exact order, with no synthesized follow-up. | Same production chain through choice, dial RNG, optional token action/decline, H9/Confirm; assert intermediate RNG state/next draw and command order as well as final dice; no transported live result in replay. |
 | Manual Hot-Seat/Network smoke and Owner fixture capture | Real control visibility, auto-choice rejection recovery, cancellation and subsequent target/enclosing decision. | Confirm one CF row with working Use/Decline; Use reveals only legal Dial/Token/Dial + Token choices and each visible choice submits successfully. Check combined spend before effects, dial colour/authority result, eligible token reroll or decline without refund, rederived Attack Modify/H9/Confirm, handoff and reconnect. Confirm CF remains distinct from simultaneously available effects without refactoring them in BUG-071. Owner records §7 fixtures only after candidate code passes non-fixture gates. |
+
+The following BUG-071 presentation checks supplement the corresponding §5
+matrix rows. Existing command, RNG, Network, replay and recovery gates remain
+in force. A repeated CF effect/resource dropdown after commitment fails
+acceptance even if the underlying commands succeed.
+
+| Level | Required CF presentation evidence |
+| --- | --- |
+| Production integration | Through the real board/panel path, each legal `Dial`, `Token`, and `Dial + Token` choice proceeds directly after accepted commitment: Dial shows the `Concentrate Fire Command Dial` modal with `Select die to add.` and only authoritatively legal colours/types as selectable dice; Token shows the established visual eligible-die reroll interaction. Verify the visual choice submits the existing authoritative effect command, explicit effect decline remains available, and no second CF resource/effect dropdown appears. Include rejected or stale selection with actionable authoritative reprojection. |
+| Combined effect sequence | After one atomic `Dial + Token` commitment, verify Dial modal → authority-rolled/applied added die → Token visual reroll selection or decline → rederived Attack Modify. The added die may be selected for reroll; declining does not refund the token. No second resource/effect selector may interrupt this sequence. |
+| Recovery and Network | Retain the pre-commit `Use`-only save/load/reconnect case: discard transient submenu and show the top-level CF row. Separately reconstruct the direct Dial modal, Token reroll interaction, and partial `both` continuation from accepted authoritative state after load/reconnect, with no repeated resource selector, reroll or double spend. Passive peers apply only authority results. |
+| Manual Hot-Seat and Network smoke | Observe the exact Dial title and instruction, selectable legal dice, direct Token eligible-die visuals, and the combined Dial-then-Token flow. Confirm decline/no-refund, return to Attack Modify, controller visibility and reconnect. Reject a candidate that uses a post-commit CF dropdown or leaves either visual effect path inert. Roll Dice, reroll and Depowered Armament are reference interactions, not additional refactor scope. |
 
 For the real CF dial application command, extend
 `test_result_application_contract.gd` and
@@ -451,7 +520,9 @@ replacements.
 Completion requires: (1) all §3 invariants and §5 separate issue rows pass;
 (2) the real production CF row, resource choice, authoritative Use path and
 Decline path satisfy the Owner smoke-test resolution, including combined
-simultaneous spend, dial-before-token effects, no refund and rederivation;
+simultaneous spend, the §5 direct Dial modal and Token reroll presentation,
+the absence of a redundant post-commit CF dropdown, dial-before-token
+effects, no refund and rederivation;
 (3) save 9 / replay 11 / protocol 10 with contract 2 is one complete,
 fail-closed cutover; (4) passive result, recovery and non-fixture replay tests
 pass before Owner capture; (5) genuine Owner-recorded affected replay and
@@ -459,5 +530,6 @@ baseline evidence passes the authoritative verifier afterward; (6) full
 suite, architecture lint, documentation links and diff check converge with
 no unrelated regressions; and (7) affected CON-003 packages contain the
 traceability-map evidence and are presented separately for Owner integration
-review. The Owner re-accepted this revised workbook on 2026-10-03. This does
-not assert BUG-070 or BUG-071 completion or Rule Capability Package integration.
+review. The Owner re-accepted the final effect-presentation revision on
+2026-10-04. No BUG-070 or BUG-071 completion or Rule Capability Package
+integration is asserted.

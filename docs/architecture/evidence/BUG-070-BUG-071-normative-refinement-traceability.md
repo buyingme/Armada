@@ -13,16 +13,22 @@ The coordinated [implementation workbook](../implementation_workbooks/BUG-070-BU
 plans the shared production repair and preserves separate issue acceptance.
 It was re-accepted by the Owner on 2026-10-03 following the
 [BUG-071 Owner smoke-test and UX resolution](../../qa/bugs/open/BUG-071/issue.md#owner-smoke-test-findings--2026-10-03)
-and targeted closure audit.
+and targeted closure audit. The later
+[final Owner effect-presentation refinement](../../qa/bugs/open/BUG-071/issue.md#owner-ux-refinement--concentrate-fire-effect-resolution)
+was followed by targeted closure audit and Owner re-acceptance on 2026-10-04.
+The latest accepted workbook revision records the direct post-commit CF
+interaction requirements.
 The historical diagnosis of an advance dial/token/both choice remains valid
-for command commitment; it is superseded only as a top-level UI presentation.
+for command commitment; it is superseded as a top-level UI presentation.
+After commitment, any repeated CF resource/effect dropdown is also
+superseded by the direct Dial modal or Token visual reroll interaction.
 
 | Behavior slice | Rule-specific traceability required before implementation acceptance | Shared boundary evidence |
 | --- | --- | --- |
 | Point-Defense Failure mandatory pool removal | [CAP-DMG-010](../rule_capability_packages/CAP-DMG-010-point-defense-failure-gather.md) records source, registration, gather call site, choice legality, command execution, projection, compatibility, and production evidence. | BUG-070 complete-gather, temporary/final zero, cancellation, anti-squadron continuation. |
 | Damaged Munitions mandatory pool removal | [CAP-DMG-011](../rule_capability_packages/CAP-DMG-011-damaged-munitions-gather.md) records the ship-target damage-card path and production Begin → choice → Roll evidence. | BUG-070 gather ordering and final-pool evaluation. |
 | Obstruction pool removal | [CAP-CORE-001](../rule_capability_packages/CAP-CORE-001-obstruction-gather.md) records choice validation, execution, reconstruction, and final-die interaction with card removal. | BUG-070 complete-gather and cancellation. |
-| Concentrate Fire dial and token | [CAP-CF-001](../rule_capability_packages/CAP-CF-001-concentrate-fire-attack-effects.md) records one CF Use/Decline row, legal Dial/Token/Dial + Token follow-up choices after Use, distinct dial addition and token reroll within one command resolution, simultaneous combined commitment, H9 rederivation, result application, projection, compatibility, and recovery. | BUG-071 Resolve Attack Effects timing and BUG-070 no-rescue boundary; Owner smoke-test finding must be closed on the real production UI path. |
+| Concentrate Fire dial and token | [CAP-CF-001](../rule_capability_packages/CAP-CF-001-concentrate-fire-attack-effects.md) records one CF Use/Decline row, legal Dial/Token/Dial + Token follow-up choices after Use, direct post-commit Dial die-add modal and Token visual reroll interaction with no redundant selector, distinct effects within one command resolution, simultaneous combined commitment, H9 rederivation, result application, projection, compatibility, and recovery. | BUG-071 Resolve Attack Effects timing and BUG-070 no-rescue boundary; Owner smoke-test and final effect-presentation requirements must be closed on the real production UI path. |
 
 The shared attack lifecycle, roll admission, individual cancellation, and
 enclosing continuation remain governed by CON-001 and existing Ship/Squadron

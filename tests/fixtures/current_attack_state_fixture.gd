@@ -45,10 +45,8 @@ static func install(game_state: GameState,
 				"obstruction_resolved", true)),
 		"dice_pool": (options.get("dice_pool", {"RED": 1}) \
 				as Dictionary).duplicate(true),
-		"cf_dial_resolution": str(options.get("cf_dial_resolution",
-				CurrentAttackState.RESOLUTION_UNAVAILABLE)),
-		"cf_token_resolution": str(options.get("cf_token_resolution",
-				CurrentAttackState.RESOLUTION_UNAVAILABLE)),
+		"cf_dial_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+		"cf_token_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
 	}
 	if values["attacker_kind"] == CurrentAttackState.KIND_SQUADRON:
 		values["attacker_zone"] = -1
@@ -56,14 +54,37 @@ static func install(game_state: GameState,
 		values["defender_zone"] = -1
 	if not state.configure_active(attack_id, values):
 		return null
+	if not _prepare_declaration_adjacent_owner(game_state, state):
+		return null
 	var stage: String = str(options.get(
 			"stage", CurrentAttackState.STAGE_PRE_ROLL))
 	var patch: Dictionary = {}
 	if stage != CurrentAttackState.STAGE_PRE_ROLL:
 		patch["stage"] = stage
 		patch["dice_results"] = _dice(options)
-		if state.cf_dial_resolution == CurrentAttackState.RESOLUTION_PENDING:
-			patch["cf_dial_resolution"] = CurrentAttackState.RESOLUTION_DECLINED
+		var dial_resolution: String = str(options.get("cf_dial_resolution",
+				CurrentAttackState.RESOLUTION_UNAVAILABLE))
+		var token_resolution: String = str(options.get("cf_token_resolution",
+				CurrentAttackState.RESOLUTION_UNAVAILABLE))
+		if dial_resolution != CurrentAttackState.RESOLUTION_UNAVAILABLE \
+				or token_resolution != CurrentAttackState.RESOLUTION_UNAVAILABLE:
+			var ship: ShipInstance = game_state.get_ship(
+					attacker_player, attacker_index)
+			if attacker_kind != CurrentAttackState.KIND_SHIP or ship == null:
+				return null
+			patch["cf_choice"] = CurrentAttackState.CF_CHOICE_BOTH \
+					if dial_resolution != CurrentAttackState.RESOLUTION_UNAVAILABLE \
+						and token_resolution != CurrentAttackState.RESOLUTION_UNAVAILABLE \
+					else CurrentAttackState.CF_CHOICE_DIAL \
+						if dial_resolution != CurrentAttackState.RESOLUTION_UNAVAILABLE \
+						else CurrentAttackState.CF_CHOICE_TOKEN
+			patch["cf_choice_round"] = game_state.current_round
+			patch["cf_choice_lifecycle_id"] = str(options.get(
+					"cf_choice_lifecycle_id", "attack_modify:1"))
+			patch["cf_choice_activation_id"] = ship.ship_activation_identity
+			patch["cf_dial_resolution"] = dial_resolution
+			patch["cf_token_resolution"] = token_resolution
+			ship.concentrate_fire_resolved_round = game_state.current_round
 	if stage in [CurrentAttackState.STAGE_DEFENSE,
 			CurrentAttackState.STAGE_DAMAGE,
 			CurrentAttackState.STAGE_RESOLVED]:
@@ -84,9 +105,7 @@ static func install(game_state: GameState,
 				_resolved_outcome(values)) as Dictionary).duplicate(true)
 	if not patch.is_empty():
 		state = state.with_patch(patch)
-	if state == null \
-			or not _prepare_declaration_adjacent_owner(game_state, state) \
-			or not game_state.set_current_attack_state(state):
+	if state == null or not game_state.set_current_attack_state(state):
 		return null
 	return game_state.current_attack_state
 

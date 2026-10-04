@@ -163,9 +163,18 @@ func test_composed_live_panel_renders_selects_dispatches_and_clears_stale() -> v
 			"Submitted controls must disable while authority is pending.")
 
 	router.route_command_result(null, {})
+	var optional_row: HBoxContainer = panel.find_child(
+			"TimingWindowRow_1", true, false) as HBoxContainer
+	var row_use: Button = panel.find_child(
+			"TimingUseButton_1", true, false) as Button
 	var decline_button: Button = panel.find_child(
 			"TimingDeclineButton_1", true, false) as Button
+	assert_not_null(optional_row)
+	assert_not_null(row_use)
 	assert_not_null(decline_button)
+	assert_eq(row_use.get_parent(), optional_row)
+	assert_eq(decline_button.get_parent(), optional_row,
+			"A normal optional effect shares one horizontal Use/Decline row.")
 	decline_button.pressed.emit()
 	assert_eq(_submitter.submitted_commands.size(), 2)
 	assert_eq(_submitter.submitted_commands[1].command_type,

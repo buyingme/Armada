@@ -841,7 +841,7 @@ func test_skip_attack_clears_matching_pending_and_decline_state() -> void:
 	_use_ecm().execute(_state)
 	var pending_skip := SkipAttackCommand.new(0, {
 		"attack_id": pending_attack_id,
-		"reason": "cancelled",
+		"reason": "flow_replaced",
 	})
 	assert_eq(pending_skip.validate(_state), "")
 	var pending_result: Dictionary = pending_skip.execute(_state)

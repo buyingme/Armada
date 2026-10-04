@@ -19,6 +19,13 @@ const RESOLUTION_UNAVAILABLE: String = "unavailable"
 const RESOLUTION_PENDING: String = "pending"
 const RESOLUTION_USED: String = "used"
 const RESOLUTION_DECLINED: String = "declined"
+const CF_CHOICE_DIAL: String = "dial"
+const CF_CHOICE_TOKEN: String = "token"
+const CF_CHOICE_BOTH: String = "both"
+const CF_CHOICE_NEITHER: String = "neither"
+const _CF_CHOICES: Array[String] = [RESOLUTION_UNAVAILABLE,
+	RESOLUTION_PENDING, CF_CHOICE_DIAL, CF_CHOICE_TOKEN,
+	CF_CHOICE_BOTH, CF_CHOICE_NEITHER]
 
 const DEFENSE_PENDING: String = "pending"
 const DEFENSE_COMMITTED: String = "committed"
@@ -75,6 +82,10 @@ const _KEYS: Array[String] = [
 	"resolved_pool_choices",
 	"dice_pool",
 	"dice_results",
+	"cf_choice",
+	"cf_choice_round",
+	"cf_choice_lifecycle_id",
+	"cf_choice_activation_id",
 	"cf_dial_resolution",
 	"cf_token_resolution",
 	"accuracy_locked_tokens",
@@ -147,6 +158,18 @@ var dice_results: Array[Dictionary]:
 var cf_dial_resolution: String:
 	get:
 		return str(_data["cf_dial_resolution"])
+var cf_choice: String:
+	get:
+		return str(_data["cf_choice"])
+var cf_choice_round: int:
+	get:
+		return int(_data["cf_choice_round"])
+var cf_choice_lifecycle_id: String:
+	get:
+		return str(_data["cf_choice_lifecycle_id"])
+var cf_choice_activation_id: String:
+	get:
+		return str(_data["cf_choice_activation_id"])
 var cf_token_resolution: String:
 	get:
 		return str(_data["cf_token_resolution"])
@@ -272,7 +295,8 @@ static func _validated_data(raw: Dictionary) -> Dictionary:
 	for key: String in _KEYS:
 		normalized[key] = raw[key]
 	for key: String in ["attacker_player", "attacker_index", "attacker_zone",
-			"defender_player", "defender_index", "defender_zone"]:
+			"defender_player", "defender_index", "defender_zone",
+			"cf_choice_round"]:
 		var integral: Variant = _normalized_integral(normalized[key])
 		if integral == null:
 			return {}
@@ -281,7 +305,8 @@ static func _validated_data(raw: Dictionary) -> Dictionary:
 		return _inactive_data() if normalized == _inactive_data() else {}
 	if not _validate_active_scalars(normalized):
 		return {}
-	var pool: Variant = _validated_pool(normalized["dice_pool"])
+	var pool: Variant = _validated_pool(normalized["dice_pool"],
+			str(normalized["stage"]) == STAGE_PRE_ROLL)
 	var pool_choices: Variant = _validated_unique_strings(
 			normalized["resolved_pool_choices"])
 	var dice: Variant = _validated_dice(normalized["dice_results"])
@@ -314,12 +339,15 @@ static func _validated_data(raw: Dictionary) -> Dictionary:
 
 static func _validate_active_scalars(data: Dictionary) -> bool:
 	for key: String in ["attack_id", "stage", "attacker_kind", "defender_kind",
-			"attack_kind", "range_band", "cf_dial_resolution",
+			"attack_kind", "range_band", "cf_choice",
+			"cf_choice_lifecycle_id", "cf_choice_activation_id",
+			"cf_dial_resolution",
 			"cf_token_resolution", "defense_stage", "damage_stage"]:
 		if typeof(data[key]) != TYPE_STRING:
 			return false
 	for key: String in ["attacker_player", "attacker_index", "attacker_zone",
-			"defender_player", "defender_index", "defender_zone"]:
+			"defender_player", "defender_index", "defender_zone",
+			"cf_choice_round"]:
 		if typeof(data[key]) != TYPE_INT:
 			return false
 	for key: String in ["obstructed", "obstruction_resolved", "accuracy_complete"]:
@@ -342,6 +370,8 @@ static func _validate_active_scalars(data: Dictionary) -> bool:
 		return false
 	return not str(data["attack_kind"]).is_empty() \
 			and not str(data["range_band"]).is_empty() \
+			and _CF_CHOICES.has(str(data["cf_choice"])) \
+			and int(data["cf_choice_round"]) >= -1 \
 			and _RESOLUTIONS.has(str(data["cf_dial_resolution"])) \
 			and _RESOLUTIONS.has(str(data["cf_token_resolution"])) \
 			and _DEFENSE_STAGES.has(str(data["defense_stage"])) \
@@ -359,14 +389,48 @@ static func _validate_stage_semantics(data: Dictionary) -> bool:
 		return false
 	if stage_value == STAGE_PRE_ROLL and not dice.is_empty():
 		return false
+	if stage_value == STAGE_PRE_ROLL \
+			and (data["dice_pool"] as Dictionary).is_empty() \
+			and (data["resolved_pool_choices"] as Array).is_empty() \
+			and not (bool(data["obstructed"]) \
+				and bool(data["obstruction_resolved"])):
+		return false
 	if stage_value in [STAGE_ATTACK_MODIFY, STAGE_ACCURACY] and dice.is_empty():
 		return false
-	if stage_value != STAGE_PRE_ROLL \
+	if stage_value != STAGE_ATTACK_MODIFY \
 			and str(data["cf_dial_resolution"]) == RESOLUTION_PENDING:
 		return false
-	if stage_value not in [STAGE_PRE_ROLL, STAGE_ATTACK_MODIFY] \
+	if stage_value != STAGE_ATTACK_MODIFY \
 			and str(data["cf_token_resolution"]) == RESOLUTION_PENDING:
 		return false
+	var cf_choice: String = str(data["cf_choice"])
+	if stage_value == STAGE_PRE_ROLL and cf_choice != RESOLUTION_UNAVAILABLE:
+		return false
+	if cf_choice == RESOLUTION_PENDING and (stage_value != STAGE_ATTACK_MODIFY \
+			or str(data["cf_dial_resolution"]) != RESOLUTION_UNAVAILABLE \
+			or str(data["cf_token_resolution"]) != RESOLUTION_UNAVAILABLE):
+		return false
+	var selected: bool = cf_choice in [CF_CHOICE_DIAL, CF_CHOICE_TOKEN,
+			CF_CHOICE_BOTH]
+	if selected != (int(data["cf_choice_round"]) >= 0 \
+			and not str(data["cf_choice_lifecycle_id"]).is_empty() \
+			and not str(data["cf_choice_activation_id"]).is_empty()):
+		return false
+	if not selected and (int(data["cf_choice_round"]) != -1 \
+			or not str(data["cf_choice_lifecycle_id"]).is_empty() \
+			or not str(data["cf_choice_activation_id"]).is_empty()):
+		return false
+	if cf_choice in [RESOLUTION_UNAVAILABLE, CF_CHOICE_NEITHER] \
+			and (str(data["cf_dial_resolution"]) != RESOLUTION_UNAVAILABLE \
+				or str(data["cf_token_resolution"]) != RESOLUTION_UNAVAILABLE):
+		return false
+	if selected:
+		if (cf_choice in [CF_CHOICE_DIAL, CF_CHOICE_BOTH]) \
+				!= (str(data["cf_dial_resolution"]) != RESOLUTION_UNAVAILABLE):
+			return false
+		if (cf_choice in [CF_CHOICE_TOKEN, CF_CHOICE_BOTH]) \
+				!= (str(data["cf_token_resolution"]) != RESOLUTION_UNAVAILABLE):
+			return false
 	if stage_value in [STAGE_DEFENSE, STAGE_DAMAGE, STAGE_RESOLVED] \
 			and not bool(data["accuracy_complete"]):
 		return false
@@ -388,7 +452,7 @@ static func _validate_stage_semantics(data: Dictionary) -> bool:
 	return true
 
 
-static func _validated_pool(raw: Variant) -> Variant:
+static func _validated_pool(raw: Variant, allow_empty: bool = false) -> Variant:
 	if not raw is Dictionary:
 		return null
 	var result: Dictionary = {}
@@ -406,7 +470,7 @@ static func _validated_pool(raw: Variant) -> Variant:
 	for raw_key: Variant in (raw as Dictionary).keys():
 		if typeof(raw_key) != TYPE_STRING or not _POOL_KEYS.has(str(raw_key)):
 			return null
-	return result if total > 0 else null
+	return result if total > 0 or allow_empty else null
 
 
 static func _validated_dice(raw: Variant) -> Variant:
@@ -595,6 +659,10 @@ static func _inactive_data() -> Dictionary:
 		"resolved_pool_choices": [],
 		"dice_pool": {},
 		"dice_results": [],
+		"cf_choice": RESOLUTION_UNAVAILABLE,
+		"cf_choice_round": -1,
+		"cf_choice_lifecycle_id": "",
+		"cf_choice_activation_id": "",
 		"cf_dial_resolution": RESOLUTION_UNAVAILABLE,
 		"cf_token_resolution": RESOLUTION_UNAVAILABLE,
 		"accuracy_locked_tokens": [],

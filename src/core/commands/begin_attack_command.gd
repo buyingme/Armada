@@ -69,18 +69,6 @@ func execute(game_state: GameState) -> Dictionary:
 	var state := CurrentAttackState.new()
 	var entry: Dictionary = _authoritative_entry(game_state)
 	var pool: Dictionary = _derive_initial_pool(game_state, entry)
-	var cf_dial: String = CurrentAttackState.RESOLUTION_UNAVAILABLE
-	var cf_token: String = CurrentAttackState.RESOLUTION_UNAVAILABLE
-	if str(payload.get("attacker_kind", "")) == CurrentAttackState.KIND_SHIP:
-		var cf_ship: ShipInstance = game_state.get_ship(
-				int(payload.get("attacker_player", -1)),
-				int(payload.get("attacker_index", -1)))
-		if _has_cf_dial(cf_ship):
-			cf_dial = CurrentAttackState.RESOLUTION_PENDING
-		if cf_ship != null and cf_ship.command_tokens != null \
-				and cf_ship.command_tokens.has_token(
-						Constants.CommandType.CONCENTRATE_FIRE):
-			cf_token = CurrentAttackState.RESOLUTION_PENDING
 	var values: Dictionary = {
 		"attacker_player": int(payload.get("attacker_player", -1)),
 		"attacker_kind": str(payload.get("attacker_kind", "")),
@@ -95,8 +83,6 @@ func execute(game_state: GameState) -> Dictionary:
 		"obstructed": bool(entry.get("obstructed", false)),
 		"obstruction_resolved": not bool(entry.get("obstructed", false)),
 		"dice_pool": pool,
-		"cf_dial_resolution": cf_dial,
-		"cf_token_resolution": cf_token,
 	}
 	var attack_id: String = "attack:%d" % sequence
 	if not state.configure_active(attack_id, values):

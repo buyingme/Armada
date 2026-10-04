@@ -128,6 +128,9 @@ func _on_network_command_rejected(
 
 func _refresh_rejected_attack_modify_projection(command: GameCommand) -> void:
 	if command == null or command.command_type not in [
+			"choose_concentrate_fire",
+			"use_concentrate_fire_dial",
+			"decline_concentrate_fire_dial",
 			"use_concentrate_fire_token_reroll",
 			"decline_concentrate_fire_token_reroll",
 			"use_h9",

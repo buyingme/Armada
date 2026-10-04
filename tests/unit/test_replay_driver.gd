@@ -9,6 +9,82 @@ extends GutTest
 
 const REPLAY_DRIVER_SCRIPT: GDScript = preload(
 		"res://src/autoload/replay_driver.gd")
+const BUG071_BUILDER: GDScript = preload(
+		"res://tests/fixtures/bug071_production_attack_builder.gd")
+const CF_DIAL_USE: GDScript = preload(
+		"res://src/core/commands/use_concentrate_fire_dial_command.gd")
+const CF_TOKEN_DECLINE: GDScript = preload(
+		"res://src/core/commands/decline_concentrate_fire_token_reroll_command.gd")
+
+
+func test_real_cf_dial_history_round_trips_json_factory_and_driver() -> void:
+	var saved_state: GameState = GameManager.current_game_state
+	var saved_active: bool = GameManager.is_game_active
+	var saved_submitter: CommandSubmitter = GameManager.get_command_submitter()
+	var saved_registry: Dictionary = GameCommand._registry.duplicate()
+	var saved_mode: PlayMode.Mode = PlayMode.current_mode
+	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
+	var built: Dictionary = BUG071_BUILDER.committed_dial(
+			1, CurrentAttackState.CF_CHOICE_BOTH)
+	assert_false(built.is_empty())
+	if built.is_empty():
+		return
+	var authority: GameState = built["state"]
+	var initial: Dictionary = built["initial_state"]
+	var dial_command: GameCommand = CF_DIAL_USE.new(1, built["dial_payload"])
+	assert_false(CommandProcessor.submit_deferred_followups(
+			dial_command).is_empty())
+	var projected: Dictionary = UIProjector.project(authority, 1).timing_window
+	var decline_payload: Dictionary = {}
+	for opportunity: Dictionary in projected.get("opportunities", []):
+		if str(opportunity.get("capability_id", "")) \
+				== ConcentrateFireTokenRule.CAPABILITY_ID:
+			decline_payload = (opportunity.get("decline_intent", {}) \
+					as Dictionary).get("payload", {})
+	assert_false(decline_payload.is_empty())
+	assert_false(CommandProcessor.submit_deferred_followups(
+			CF_TOKEN_DECLINE.new(1, decline_payload)).is_empty())
+	var authoritative_final: Dictionary = authority.serialize()
+	var authoritative_history: Array[Dictionary] = \
+			CommandProcessor.serialize_history()
+	var replay: GameReplay = CommandProcessor.create_replay()
+	assert_not_null(replay)
+	var loaded: GameReplay = GameReplay.deserialize(
+			JSON.parse_string(JSON.stringify(replay.serialize())))
+	assert_not_null(loaded)
+	assert_eq(loaded.header.get("format_version"), 11)
+	assert_eq(loaded.commands.size(), authoritative_history.size())
+	for index: int in range(loaded.commands.size()):
+		assert_eq(loaded.commands[index].get("type"),
+				authoritative_history[index].get("type"))
+		assert_eq(int(loaded.commands[index].get("sequence", -1)), index)
+	var replay_state: GameState = GameState.deserialize(initial)
+	assert_not_null(replay_state)
+	GameManager.current_game_state = replay_state
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			replay_state.principal_id_for_player(1)))
+	CommandProcessor.reset()
+	var driver: Node = REPLAY_DRIVER_SCRIPT.new()
+	add_child_autofree(driver)
+	driver._replay = loaded
+	driver.pending_replay_seed = int(loaded.header["rng_seed"])
+	CommandProcessor.command_executed.connect(driver._on_command_executed)
+	for command_data: Dictionary in loaded.commands:
+		assert_not_null(GameCommand.deserialize(command_data))
+		var observed: int = driver._observed_count
+		assert_true(await driver._submit_local_step(
+				command_data, observed, true))
+		assert_eq(driver._observed_count, observed + 1)
+	assert_eq(CommandProcessor.serialize_history().size(),
+			authoritative_history.size())
+	assert_eq(replay_state.serialize(), authoritative_final)
+	assert_eq(replay_state.rng.get_state(), authority.rng.get_state())
+	GameManager.current_game_state = saved_state
+	GameManager.is_game_active = saved_active
+	GameManager.set_command_submitter(saved_submitter)
+	GameCommand._registry = saved_registry
+	PlayMode.current_mode = saved_mode
+	CommandProcessor.reset()
 
 
 func test_parse_flag_returns_value_when_present() -> void:

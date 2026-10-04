@@ -472,8 +472,20 @@ func _on_timing_window_decline(intent: Dictionary) -> void:
 
 
 func _submit_timing_window_intent(intent: Dictionary) -> void:
-	if _timing_window_submit_fn.is_valid():
-		_timing_window_submit_fn.call(intent.duplicate(true))
+	if not _timing_window_submit_fn.is_valid():
+		return
+	var result: Variant = _timing_window_submit_fn.call(intent.duplicate(true))
+	if result is Dictionary and not (result as Dictionary).is_empty():
+		return
+	var state: GameState = GameManager.current_game_state
+	if state == null or state.timing_window_state == null \
+			or not state.timing_window_state.active:
+		return
+	# Rejected input did not change authority. Recreate only its current
+	# presentation, including a fresh legal CF resource menu on the next Use.
+	sync_timing_window_projection(UIProjector.project(
+			state, state.timing_window_state.controller_player).timing_window,
+			_timing_window_submit_fn)
 
 
 # ---------------------------------------------------------------------------

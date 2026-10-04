@@ -3,6 +3,11 @@ extends SceneTree
 
 func _initialize() -> void:
 	var shared := _arg("--shared=")
+	if _arg("--bug-070-071-only=") == "true":
+		if _assert_bug070_071_network(shared):
+			print("BUG-070 / BUG-071 REAL ENET ACCEPTANCE: passed")
+			quit(0)
+		return
 	if _arg("--fresh-only=") == "true":
 		if _assert_fresh_and_reconnect(shared, false):
 			print("FRESH RESUME REAL ENET ACCEPTANCE: passed")
@@ -45,6 +50,83 @@ func _initialize() -> void:
 	quit(0)
 
 
+func _assert_bug070_071_network(shared: String) -> bool:
+	for scenario: String in ["bug070_gather", "bug071_cf"]:
+		for mapping: int in [0, 1]:
+			var cursors: Dictionary = {}
+			var ui_actions: Dictionary = {}
+			for role: String in ["host", "client", "reconnect"]:
+				var path: String = shared.path_join(
+						"%s-%s-%d.json" % [scenario, role, mapping])
+				var record: Dictionary = _load_record(path)
+				if record.is_empty() or not bool(record.get("ok", false)) \
+						or int(record.get("protocol", 0)) != 10 \
+						or int(record.get("canonical_installs", 0)) != 1 \
+						or int(record.get("board_releases", 0)) != 1 \
+						or int(record.get("board_entries", 0)) != (0 \
+							if role == "client" and scenario == "bug070_gather" \
+							else 1):
+					_fail("BUG-070/071 Network process evidence is incomplete: " + path)
+					return false
+				var evidence: Dictionary = record.get("bug070_071", {})
+				for action: String in ["cf_ui_use_and_both", "cf_ui_dial_die",
+						"cf_ui_token_decline", "cf_stale_rejected",
+						"cf_rejection_actionable"]:
+					if bool(evidence.get(action, false)):
+						ui_actions[action] = int(ui_actions.get(action, 0)) + 1
+				if role == "client":
+					if not bool(evidence.get("disconnect_boundary", false)) \
+							or int(evidence.get("begin", 0)) != 1 \
+							or (scenario == "bug070_gather" and (int(
+								evidence.get("gather", 0)) != 1 \
+								or int(evidence.get("cancel", -1)) != 0)):
+						_fail("BUG-070/071 initial client missed disconnect boundary: " + path)
+						return false
+					continue
+				if not bool(evidence.get("complete", false)):
+					_fail("BUG-070/071 command-produced state did not converge: " + path)
+					return false
+				if scenario == "bug070_gather":
+					if int(evidence.get("roll", -1)) != 0 \
+							or (role == "host" and (int(evidence.get(
+								"begin", 0)) != 1 \
+								or int(evidence.get("gather", 0)) != 1 \
+								or int(evidence.get("cancel", 0)) != 2)):
+						_fail("BUG-070 Gather/cancel/child evidence mismatch: " + path)
+						return false
+				else:
+					if (role == "host" and (int(evidence.get(
+								"begin", 0)) != 1 \
+								or int(evidence.get("roll", 0)) != 1 \
+								or int(evidence.get("choice", 0)) != 1)) \
+							or int(evidence.get("dial", 0)) != 1 \
+							or int(evidence.get("token_decline", 0)) != 1:
+						_fail("BUG-071 CF choice/result evidence mismatch: " + path)
+						return false
+				if role == "reconnect" \
+						and (not bool(evidence.get("projection_converged", false)) \
+							or not bool(evidence.get("passive_rng_absent", false)) \
+							or not bool(evidence.get("reconnected", false))):
+					_fail("BUG-070/071 passive peer failed to converge: " + path)
+					return false
+				if role == "host" and int(record.get("reconnect_offers", 0)) < 1:
+					_fail("BUG-070/071 host did not assign reconnect: " + path)
+					return false
+				cursors[role] = int(evidence.get("cursor", -1))
+			if cursors.get("host") != cursors.get("reconnect"):
+				_fail("BUG-070/071 Network cursor mismatch.")
+				return false
+			if scenario == "bug071_cf" and (int(ui_actions.get(
+					"cf_ui_use_and_both", 0)) != 1 \
+					or int(ui_actions.get("cf_ui_dial_die", 0)) != 1 \
+					or int(ui_actions.get("cf_ui_token_decline", 0)) != 1 \
+					or int(ui_actions.get("cf_stale_rejected", 0)) != 1 \
+					or int(ui_actions.get("cf_rejection_actionable", 0)) != 1):
+				_fail("BUG-071 real board UI sequence did not cross reconnect.")
+				return false
+	return true
+
+
 func _assert_fresh_and_reconnect(shared: String,
 		include_reconnect: bool = true) -> bool:
 	for mapping: int in [0, 1]:
@@ -54,7 +136,7 @@ func _assert_fresh_and_reconnect(shared: String,
 			var record := _load_record(path)
 			if record.is_empty():
 				return false
-			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 9 \
+			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 10 \
 					or not bool(record.get("admission", false)) \
 					or int(record.get("canonical_installs", 0)) != 1 \
 					or int(record.get("board_releases", 0)) != 1 \
@@ -143,7 +225,7 @@ func _assert_bug043_stabilization(shared: String) -> bool:
 			shared.path_join("bug043-reconnect.json"))
 	for record: Dictionary in [host, initial, reconnect]:
 		if record.is_empty() or not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 9:
+				or int(record.get("protocol", 0)) != 10:
 			_fail("BUG-043 process evidence is incomplete")
 			return false
 	var host_evidence: Dictionary = host.get("bug043", {}) as Dictionary
@@ -193,7 +275,7 @@ func _assert_commanded_squadron_ordering(shared: String) -> bool:
 		if record.is_empty():
 			return false
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 9 \
+				or int(record.get("protocol", 0)) != 10 \
 				or not bool(record.get("admission", false)) \
 				or int(record.get("player_index", -1)) \
 						!= (0 if role == "host" else 1) \
@@ -284,7 +366,7 @@ func _assert_bug031_commanded_decline(shared: String) -> bool:
 		if record.is_empty():
 			return false
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 9 \
+				or int(record.get("protocol", 0)) != 10 \
 				or not bool(record.get("admission", false)) \
 				or int(record.get("canonical_installs", 0)) != 1 \
 				or int(record.get("board_releases", 0)) != 1 \
@@ -338,7 +420,7 @@ func _assert_bug031_activation_gate(shared: String) -> bool:
 		var path := shared.path_join("activation-gate-" + role + ".json")
 		var record := _load_record(path)
 		if record.is_empty() or not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 9:
+				or int(record.get("protocol", 0)) != 10:
 			_fail("BUG-031 activation gate process failed: " + path)
 			return false
 		var evidence: Dictionary = record.get("activation_gate", {}) as Dictionary
@@ -393,7 +475,7 @@ func _assert_client_end_activation(shared: String) -> bool:
 		if record.is_empty():
 			return false
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 9 \
+				or int(record.get("protocol", 0)) != 10 \
 				or not bool(record.get("admission", false)) \
 				or int(record.get("player_index", -1)) \
 						!= (0 if role == "host" else 1) \
@@ -442,7 +524,7 @@ func _assert_network_same_live_compatibility(shared: String) -> bool:
 			return false
 		var compatibility: Dictionary = record.get("compatibility", {}) as Dictionary
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 9 \
+				or int(record.get("protocol", 0)) != 10 \
 				or int(record.get("canonical_installs", 0)) != 3 \
 				or int(record.get("board_releases", 0)) != 3 \
 				or bool(record.get("resume_attempt_active", true)) \
@@ -492,10 +574,10 @@ func _assert_network_replay_compatibility(
 		return false
 	var replay_data: Dictionary = parsed.data as Dictionary
 	var header: Dictionary = replay_data.get("header", {}) as Dictionary
-	if int(header.get("format_version", 0)) != 10 \
+	if int(header.get("format_version", 0)) != 11 \
 			or not (header.get("match_player_control_binding", {}) is Dictionary) \
 			or not (replay_data.get("commands", []) is Array):
-		_fail("Network replay artifact is not persisted replay format 10: " + replay_path)
+		_fail("Network replay artifact is not persisted replay format 11: " + replay_path)
 		return false
 	var host_hash_path := shared.path_join("network-replay-host.jsonl.state_hash")
 	var client_hash_path := shared.path_join("network-replay-client.jsonl.state_hash")
@@ -512,9 +594,9 @@ func _assert_network_replay_compatibility(
 		_fail("Network replay host log is missing.")
 		return false
 	var log_text := FileAccess.get_file_as_string(host_log)
-	if log_text.find("protocol v9") == -1 or log_text.find("Handshake from peer") == -1 \
+	if log_text.find("protocol v10") == -1 or log_text.find("Handshake from peer") == -1 \
 			or log_text.find(" v7,") == -1:
-		_fail("Network replay did not negotiate protocol 9 over live ENet.")
+		_fail("Network replay did not negotiate protocol 10 over live ENet.")
 		return false
 	if log_text.to_lower().find("fresh resume") != -1 \
 			or log_text.to_lower().find("explicit side assignment") != -1:

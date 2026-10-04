@@ -274,7 +274,17 @@ static func deserialize(data: Dictionary) -> CommandDialStack:
 	var stack: CommandDialStack = CommandDialStack.new()
 	stack.command_value = int(data.get("command_value", 0))
 	for d: Variant in data.get("dials", []):
-		stack._dials.append(d as Dictionary)
+		var dial: Dictionary = (d as Dictionary).duplicate()
+		if dial.has("command"):
+			dial["command"] = int(dial["command"])
+		if dial.has("round"):
+			dial["round"] = int(dial["round"])
+		stack._dials.append(dial)
 	for s: Variant in data.get("spent_history", []):
-		stack._spent_history.append(s as Dictionary)
+		var spent: Dictionary = (s as Dictionary).duplicate()
+		if spent.has("command"):
+			spent["command"] = int(spent["command"])
+		if spent.has("round"):
+			spent["round"] = int(spent["round"])
+		stack._spent_history.append(spent)
 	return stack

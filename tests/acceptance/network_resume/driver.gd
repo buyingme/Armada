@@ -6,6 +6,10 @@ const TIMEOUT_MSEC := 20000
 const INITIAL_CURSOR := 8
 const GAME_BOARD_SCENE: PackedScene = preload(
 		"res://src/scenes/game_board/game_board.tscn")
+const BUG071_CHOICE_RULE: GDScript = preload(
+		"res://src/core/effects/rules/concentrate_fire_choice.gd")
+const BUG071_CHOICE_COMMAND: GDScript = preload(
+		"res://src/core/commands/choose_concentrate_fire_command.gd")
 var _args: Dictionary = {}
 var _started := 0
 var _role := ""
@@ -71,6 +75,13 @@ var _bug043_faceup_ack_sent := ""
 var _bug043_wrong_ack_sent := false
 var _bug043_wrong_ack_rejected := false
 var _finish_started := false
+var _bug070_071_step: int = 0
+var _bug070_071_evidence: Dictionary = {}
+var _bug070_071_reconnect_ready_written: bool = false
+var _bug071_stale_sent: bool = false
+var _bug071_stale_rejected: bool = false
+var _bug071_stale_state_hash: String = ""
+var _bug071_stale_cursor: int = -1
 
 func _ready() -> void:
 	_args = _parse_args(OS.get_cmdline_user_args())
@@ -143,6 +154,8 @@ func _process(_delta: float) -> void:
 		_advance_ship_end_activation()
 	if _scenario == "bug043_stabilization" and _host_fresh_live:
 		_advance_bug043_stabilization()
+	if _scenario in ["bug070_gather", "bug071_cf"] and _host_fresh_live:
+		_advance_bug070_071()
 
 func _on_client_handshake(_player_index: int) -> void:
 	_client_handshook = true
@@ -159,7 +172,8 @@ func _on_host_peer(_peer_id: int, _player_index: int, _name: String) -> void:
 
 func _on_reconnect_assignment(endpoint_id: int, available_players: Array) -> void:
 	if _role != "host" \
-			or _scenario not in ["reconnect", "bug043_stabilization"] \
+			or _scenario not in ["reconnect", "bug043_stabilization",
+				"bug070_gather", "bug071_cf"] \
 			or available_players.is_empty():
 		return
 	_reconnect_offer_count += 1
@@ -172,7 +186,9 @@ func _begin_fresh_resume() -> void:
 	if _started_resume:
 		return
 	_started_resume = true
-	var state: GameState = _build_bug043_stabilization_state() \
+	var state: GameState = _build_bug070_071_state() \
+			if _scenario in ["bug070_gather", "bug071_cf"] else ( \
+		_build_bug043_stabilization_state() \
 			if _scenario == "bug043_stabilization" else ( \
 			_build_commanded_squadron_state() \
 			if _scenario == "commanded_decline" else (
@@ -182,7 +198,7 @@ func _begin_fresh_resume() -> void:
 							"commanded_activation_reject"] else (
 					_build_ship_end_activation_state() \
 					if _scenario == "ship_end_activation" \
-					else _build_learning_resume_state())))
+					else _build_learning_resume_state()))))
 	if state == null:
 		_finish(false, "learning_resume_state_failed")
 		return
@@ -270,6 +286,71 @@ func _build_learning_resume_state() -> GameState:
 		"cf_token_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
 	}) or not state.set_current_attack_state(attack):
 		return null
+	return state
+
+
+func _build_bug070_071_state() -> GameState:
+	var state := GameState.new()
+	state.rng = GameRng.new(70071)
+	state.initialize()
+	if not state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human()):
+		return null
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP
+	state.initiative_player = 1
+	state.get_player_state(0).faction = Constants.Faction.REBEL_ALLIANCE
+	state.get_player_state(1).faction = Constants.Faction.GALACTIC_EMPIRE
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
+	var attacker_key: String = "victory_ii_class_star_destroyer"
+	var attacker := ShipInstance.create_from_data(attacker_key,
+			AssetLoader.load_ship_data(attacker_key), 2, 1)
+	attacker.roster_entry_id = "bug070071-network-attacker"
+	attacker.pos_x = 0.5
+	attacker.pos_y = 0.42
+	attacker.rotation_deg = 180.0
+	var dials: Array[int] = []
+	for _index: int in range(attacker.command_dial_stack.get_dials_needed()):
+		dials.append(Constants.CommandType.CONCENTRATE_FIRE \
+				if _scenario == "bug071_cf" else Constants.CommandType.NAVIGATE)
+	if not attacker.command_dial_stack.assign_dials(dials, 1):
+		return null
+	if _scenario == "bug071_cf":
+		if not attacker.command_tokens.add_token(
+				Constants.CommandType.CONCENTRATE_FIRE):
+			return null
+	else:
+		var card: DamageCard = DamageCard.create(
+				"Ship", "Point-Defense Failure")
+		card.effect_id = PointDefenseFailure.EFFECT_ID
+		card.timing = "persistent"
+		card.is_faceup = true
+		card.physical_card_id = "damage:bug070:network-point-defense"
+		card.public_card_ref = "faceup:bug070:network-point-defense"
+		attacker.add_faceup_damage(card)
+	state.get_player_state(1).ships.append(attacker)
+	var defender_key: String = "cr90_corvette_a"
+	var defender := ShipInstance.create_from_data(defender_key,
+			AssetLoader.load_ship_data(defender_key), 2, 0)
+	defender.roster_entry_id = "bug070071-network-defender"
+	defender.pos_x = 0.5
+	defender.pos_y = 0.58
+	defender.rotation_deg = 0.0
+	state.get_player_state(0).ships.append(defender)
+	if _scenario == "bug070_gather":
+		var squadron_key: String = "x_wing_squadron"
+		var squadron := SquadronInstance.create_from_data(squadron_key,
+				AssetLoader.load_squadron_data(squadron_key), 0)
+		squadron.roster_entry_id = "bug070071-network-squadron"
+		squadron.pos_x = 0.49
+		squadron.pos_y = 0.55
+		state.get_player_state(0).squadrons.append(squadron)
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+			1, Constants.Visibility.ALL, {})
 	return state
 
 
@@ -469,7 +550,8 @@ func _on_canonical_install() -> void:
 	_canonical_installs += 1
 	if _scenario not in ["fresh", "commanded_squadron", "commanded_decline",
 			"commanded_activation_gate", "commanded_activation_reject",
-			"ship_end_activation", "bug043_stabilization"] \
+			"ship_end_activation", "bug043_stabilization", "bug070_gather",
+			"bug071_cf"] \
 			or GameManager.current_game_state == null:
 		return
 	_installed_evidence = _state_resume_evidence(
@@ -679,6 +761,317 @@ func _enter_game_board() -> void:
 		# board as a passive projection so its deferred UI helpers cannot race
 		# the deterministic authority sequence with synthetic button actions.
 		GameManager.set_command_submitter(CommandSubmitter.new())
+
+
+func _advance_bug070_071() -> void:
+	var state: GameState = GameManager.current_game_state
+	if state == null:
+		return
+	var ship: ShipInstance = state.get_ship(1, 0)
+	if ship == null:
+		_finish(false, "bug070071_attacker_missing")
+		return
+	var at_boundary: bool = state.current_attack_state.active \
+			and state.current_attack_state.stage \
+					== CurrentAttackState.STAGE_PRE_ROLL \
+			and state.current_attack_state.dice_pool.is_empty() \
+			and state.current_attack_state.resolved_pool_choices.has(
+				PointDefenseFailure.RULE_ID) \
+			if _scenario == "bug070_gather" else ( \
+			state.current_attack_state.active \
+			and state.current_attack_state.cf_choice \
+					== CurrentAttackState.CF_CHOICE_BOTH \
+			and state.current_attack_state.cf_dial_resolution \
+					== CurrentAttackState.RESOLUTION_PENDING)
+	if _role == "client" and at_boundary:
+		_bug070_071_evidence = _bug070_071_snapshot(state, ship)
+		_bug070_071_evidence["disconnect_boundary"] = true
+		NetworkManager.disconnect_from_server()
+		_finish(true, "bug070071_disconnected_at_command_boundary")
+		return
+	if _role == "reconnect" and not _bug070_071_reconnect_ready_written:
+		var ready := FileAccess.open(_bug070_071_reconnect_ready_path(),
+				FileAccess.WRITE)
+		if ready == null:
+			_finish(false, "bug070071_reconnect_ready_write_failed")
+			return
+		ready.store_string(CanonicalJson.hash(state.serialize()))
+		_bug070_071_reconnect_ready_written = true
+	if _role == "host" and at_boundary \
+			and not FileAccess.file_exists(_bug070_071_reconnect_ready_path()):
+		return
+	if _scenario == "bug070_gather" and _role == "host" \
+			and _game_board == null \
+			and FileAccess.file_exists(_bug070_071_reconnect_ready_path()):
+		_enter_game_board()
+		return
+	if _game_board == null and (at_boundary or (_scenario == "bug071_cf" \
+			and state.current_attack_state.active \
+			and state.current_attack_state.cf_choice \
+					== CurrentAttackState.RESOLUTION_PENDING)):
+		_enter_game_board()
+		return
+	if NetworkManager.get_local_player_index() == 1:
+		_advance_bug070_071_attacker(state, ship)
+	if _role == "host" and _bug070_071_complete(state, ship):
+		var expected_path: String = _shared.path_join(
+				"%s-projection-%d.txt" % [_scenario, _mapping])
+		if not FileAccess.file_exists(expected_path):
+			var client_player: int = 1 if _mapping == 0 else 0
+			var filtered: Dictionary = StateFilter.filter_for_player_checked(
+					state.serialize(), client_player)
+			if not bool(filtered.get(StateFilter.KEY_OK, false)):
+				_finish(false, "bug070071_filter_failed")
+				return
+			var file := FileAccess.open(expected_path, FileAccess.WRITE)
+			if file == null:
+				_finish(false, "bug070071_projection_write_failed")
+				return
+			file.store_string(CanonicalJson.hash(
+					filtered.get(StateFilter.KEY_STATE, {}) as Dictionary))
+			_bug070_071_evidence = _bug070_071_snapshot(state, ship)
+		if FileAccess.file_exists(_peer_evidence_path()):
+			_finish(true, "bug070071_authority_and_peer_converged")
+	elif _role == "reconnect" and _bug070_071_complete(state, ship):
+		var expected_path: String = _shared.path_join(
+				"%s-projection-%d.txt" % [_scenario, _mapping])
+		if not FileAccess.file_exists(expected_path):
+			return
+		var expected: String = FileAccess.get_file_as_string(
+				expected_path).strip_edges()
+		if CanonicalJson.hash(state.serialize()) != expected:
+			return
+		_bug070_071_evidence = _bug070_071_snapshot(state, ship)
+		_bug070_071_evidence["projection_converged"] = true
+		_bug070_071_evidence["reconnected"] = true
+		_finish(true, "bug070071_filtered_peer_converged")
+
+
+func _bug070_071_reconnect_ready_path() -> String:
+	return _shared.path_join("%s-reconnect-ready-%d.txt" % [
+			_scenario, _mapping])
+
+
+func _advance_bug070_071_attacker(state: GameState,
+		ship: ShipInstance) -> void:
+	var submitter: CommandSubmitter = GameManager.get_command_submitter()
+	if submitter == null:
+		return
+	var attack: CurrentAttackState = state.current_attack_state
+	match _bug070_071_step:
+		0:
+			if not ship.has_active_ship_activation():
+				if submitter.submit(ActivateShipCommand.new(1, {
+						"ship_index": 0})).is_empty():
+					_finish(false, "bug070071_activate_rejected")
+				_bug070_071_step = 1
+		1:
+			if ship.has_active_ship_activation():
+				if submitter.submit(AdvanceActivationStepCommand.new(1, {
+						"ship_index": 0,
+						"step_id": "attack_step",
+						"ship_activation_identity": ship.ship_activation_identity,
+					})).is_empty():
+					_finish(false, "bug070071_step_rejected")
+				_bug070_071_step = 2
+		2:
+			if ship.attack_step_active:
+				var wanted_kind: String = CurrentAttackState.KIND_SQUADRON \
+						if _scenario == "bug070_gather" \
+						else CurrentAttackState.KIND_SHIP
+				var candidate: Dictionary = {}
+				for entry: Dictionary in TargetingListBuilder \
+						.authoritative_ship_target_entries(state, 1, 0):
+					if str(entry.get("target_kind", "")) == wanted_kind:
+						candidate = entry
+						break
+				if candidate.is_empty():
+					_finish(false, "bug070071_target_missing")
+					return
+				if submitter.submit(BeginAttackCommand.new(1, {
+						"attacker_player": 1,
+						"attacker_kind": CurrentAttackState.KIND_SHIP,
+						"attacker_index": 0,
+						"attacker_zone": int(candidate["attacker_zone"]),
+						"defender_player": int(candidate["target_owner"]),
+						"defender_kind": wanted_kind,
+						"defender_index": int(candidate["target_index"]),
+						"defender_zone": int(candidate["target_zone"]),
+						"attack_kind": SquadronKeywordRuleHelper \
+								.ATTACK_KIND_STANDARD,
+						"range_band": str(candidate["range_band"]),
+						"obstructed": bool(candidate["obstructed"]),
+						"ship_activation_identity": ship.ship_activation_identity,
+					})).is_empty():
+					_finish(false, "bug070071_begin_rejected")
+				_bug070_071_step = 3
+		3:
+			if attack.active and attack.stage \
+					== CurrentAttackState.STAGE_PRE_ROLL:
+				var command: GameCommand = ResolveAttackPoolChoiceCommand.new(1, {
+						"attack_id": attack.attack_id,
+						"choice_kind": "rule",
+						"rule_id": PointDefenseFailure.RULE_ID,
+						"color": "BLUE",
+						"no_die": false,
+					}) if _scenario == "bug070_gather" else RollDiceCommand.new(
+						1, {"attack_id": attack.attack_id})
+				if submitter.submit(command).is_empty():
+					_finish(false, "bug070071_gather_or_roll_rejected")
+				_bug070_071_step = 4
+		4:
+			if _scenario == "bug070_gather":
+				if attack.active and attack.dice_pool.is_empty() \
+						and attack.resolved_pool_choices.has(
+								PointDefenseFailure.RULE_ID):
+					var cancellation := SkipAttackCommand.new(1, {
+						"attack_id": attack.attack_id,
+						"reason": "cancelled",
+						})
+					var cancelled: Dictionary = submitter.submit(cancellation)
+					if cancelled.is_empty():
+						_finish(false, "bug070071_cancel_rejected")
+					_bug070_071_step = 5
+			elif attack.active and attack.cf_choice \
+					== CurrentAttackState.RESOLUTION_PENDING:
+				if not _bug071_stale_sent:
+					var projected: Dictionary = UIProjector.project(
+							state, 1).timing_window
+					var stale: Dictionary = _bug071_choice_payload(
+							projected, BUG071_CHOICE_RULE.SEMANTIC_KEY,
+							CurrentAttackState.CF_CHOICE_BOTH).duplicate(true)
+					if stale.is_empty():
+						return
+					stale["lifecycle_id"] = "attack_modify:stale"
+					_bug071_stale_state_hash = CanonicalJson.hash(state.serialize())
+					_bug071_stale_cursor = CommandProcessor.get_next_sequence()
+					_bug071_stale_sent = true
+					submitter.submit(BUG071_CHOICE_COMMAND.new(1, stale))
+					return
+				if not _bug071_stale_rejected:
+					return
+				var panel: AttackSimPanel = _game_board._target_selector.get_panel()
+				var use_button: Button = panel.find_child(
+						"TimingUseButton_0", true, false) as Button
+				if use_button == null or use_button.disabled:
+					return
+				if CanonicalJson.hash(state.serialize()) != _bug071_stale_state_hash \
+						or CommandProcessor.get_next_sequence() \
+								!= _bug071_stale_cursor:
+					_finish(false, "bug071_stale_selection_mutated_state")
+					return
+				_bug070_071_evidence["cf_stale_rejected"] = true
+				_bug070_071_evidence["cf_rejection_actionable"] = true
+				use_button.pressed.emit()
+				var both_button: Button = panel.find_child(
+						"CFResourceChoice_both", true, false) as Button
+				if both_button == null or both_button.disabled:
+					_finish(false, "bug071_both_button_missing")
+					return
+				both_button.pressed.emit()
+				_bug070_071_evidence["cf_ui_use_and_both"] = true
+				_bug070_071_step = 5
+		5:
+			if _scenario == "bug070_gather":
+				if not attack.active and not ship \
+						.pending_anti_squadron_cancellation_return().is_empty():
+					var finish_payload: Dictionary = ship \
+							.pending_anti_squadron_cancellation_return()
+					finish_payload["reason"] = SkipAttackCommand.REASON_SQUADRON_DONE
+					finish_payload["ship_index"] = 0
+					if submitter.submit(SkipAttackCommand.new(
+							1, finish_payload)).is_empty():
+						_finish(false, "bug070071_child_finish_rejected")
+					_bug070_071_step = 6
+			elif attack.active and attack.cf_dial_resolution \
+					== CurrentAttackState.RESOLUTION_PENDING:
+				var projected: Dictionary = UIProjector.project(
+						state, 1).timing_window
+				var dial_payload: Dictionary = _bug071_choice_payload(
+						projected,
+						BUG071_CHOICE_RULE.DIAL_SEMANTIC_KEY)
+				var panel: AttackSimPanel = _game_board._target_selector.get_panel()
+				var die: TextureRect = panel.find_child(
+						"CFDialDie_%s" % str(dial_payload.get("color", "")),
+						true, false) as TextureRect
+				if dial_payload.is_empty() or die == null \
+						or not panel._cf_dial_container.visible:
+					return
+				var click := InputEventMouseButton.new()
+				click.button_index = MOUSE_BUTTON_LEFT
+				click.pressed = true
+				die.gui_input.emit(click)
+				_bug070_071_evidence["cf_ui_dial_die"] = true
+				_bug070_071_step = 6
+		6:
+			if _scenario == "bug071_cf" and attack.active \
+					and attack.cf_dial_resolution \
+						== CurrentAttackState.RESOLUTION_USED \
+					and attack.cf_token_resolution \
+						== CurrentAttackState.RESOLUTION_PENDING:
+				var panel: AttackSimPanel = _game_board._target_selector.get_panel()
+				if not panel._cf_token_container.visible \
+						or panel._cf_token_skip_button.disabled:
+					return
+				panel._cf_token_skip_button.pressed.emit()
+				_bug070_071_evidence["cf_ui_token_decline"] = true
+				_bug070_071_step = 7
+
+
+func _bug071_choice_payload(projection: Dictionary,
+		semantic_key: String, choice: String = "",
+		decline: bool = false) -> Dictionary:
+	for opportunity: Dictionary in projection.get("opportunities", []):
+		if str(opportunity.get("semantic_key", "")) != semantic_key:
+			continue
+		if decline:
+			return (opportunity.get("decline_intent", {}) as Dictionary) \
+					.get("payload", {})
+		for option: Dictionary in opportunity.get("use_choices", []):
+			var payload: Dictionary = ((option.get("intent", {}) as Dictionary) \
+					.get("payload", {}) as Dictionary)
+			if choice.is_empty() or str(payload.get("choice", "")) == choice:
+				return payload
+	return {}
+
+
+func _bug070_071_complete(state: GameState, ship: ShipInstance) -> bool:
+	if _scenario == "bug070_gather":
+		return not state.current_attack_state.active \
+				and ship.committed_attack_count == 1 \
+				and ship.anti_squadron_attack_zone < 0 \
+				and ship.pending_anti_squadron_cancellation_return().is_empty() \
+				and state.completed_attack_inspection == null
+	var attack: CurrentAttackState = state.current_attack_state
+	return attack.active and attack.cf_choice \
+			== CurrentAttackState.CF_CHOICE_BOTH \
+			and attack.cf_dial_resolution == CurrentAttackState.RESOLUTION_USED \
+			and attack.cf_token_resolution == CurrentAttackState.RESOLUTION_DECLINED \
+			and attack.stage == CurrentAttackState.STAGE_ACCURACY \
+			and _history_count("publish_attack_flow") >= 1 \
+			and not ship.command_tokens.has_token(
+					Constants.CommandType.CONCENTRATE_FIRE) \
+			and ship.concentrate_fire_resolved_round == state.current_round
+
+
+func _bug070_071_snapshot(state: GameState,
+		ship: ShipInstance) -> Dictionary:
+	var snapshot: Dictionary = _bug070_071_evidence.duplicate(true)
+	snapshot.merge({
+		"begin": _history_count(BeginAttackCommand.TYPE),
+		"gather": _history_count(ResolveAttackPoolChoiceCommand.TYPE),
+		"roll": _history_count("roll_dice"),
+		"cancel": _history_count("skip_attack"),
+		"choice": _history_count(BUG071_CHOICE_COMMAND.TYPE),
+		"dial": _history_count(UseConcentrateFireDialCommand.TYPE),
+		"token_decline": _history_count(
+				DeclineConcentrateFireTokenRerollCommand.TYPE),
+		"complete": _bug070_071_complete(state, ship),
+		"passive_rng_absent": state.rng == null \
+				if _role in ["client", "reconnect"] else true,
+		"cursor": CommandProcessor.get_next_sequence(),
+	}, true)
+	return snapshot
 
 
 func _advance_fresh_gameplay() -> void:
@@ -1087,6 +1480,11 @@ func _capture_commanded_command(command: GameCommand, _result: Dictionary) -> vo
 
 
 func _capture_commanded_rejection(command: GameCommand, reason: String) -> void:
+	if _scenario == "bug071_cf" and command != null \
+			and command.command_type == BUG071_CHOICE_COMMAND.TYPE \
+			and reason.contains("stale timing lifecycle"):
+		_bug071_stale_rejected = true
+		return
 	if _scenario == "bug043_stabilization" and _role == "reconnect" \
 			and command != null \
 			and command.command_type \
@@ -1808,6 +2206,13 @@ func _on_game_starting() -> void:
 		_host_fresh_live = true
 		call_deferred("_enter_game_board")
 		return
+	if _scenario in ["bug070_gather", "bug071_cf"] \
+			and _role in ["host", "client", "reconnect"]:
+		_host_fresh_live = true
+		if _role == "reconnect":
+			_bug070_071_step = 4 if _scenario == "bug070_gather" else 5
+			call_deferred("_enter_game_board")
+		return
 	_finish(true, "published")
 
 
@@ -1840,6 +2245,7 @@ func _finish(ok: bool, reason: String) -> void:
 			"activation_gate": _activation_gate_evidence,
 			"end_activation": _end_activation_evidence,
 			"bug043": _bug043_evidence,
+			"bug070_071": _bug070_071_evidence,
 			"compatibility": _compatibility}))
 	call_deferred("_shutdown_after_evidence", ok)
 
@@ -1890,6 +2296,9 @@ func _peer_evidence_path() -> String:
 		return _shared.path_join("end-activation-client.json")
 	if _scenario == "bug043_stabilization":
 		return _shared.path_join("bug043-reconnect.json")
+	if _scenario in ["bug070_gather", "bug071_cf"]:
+		return _shared.path_join("%s-reconnect-%d.json" % [
+				_scenario, _mapping])
 	if _scenario == "compatibility_network":
 		return _shared.path_join("compat-network-client.json")
 	if _scenario == "reconnect":
@@ -1898,6 +2307,8 @@ func _peer_evidence_path() -> String:
 
 
 func _evidence_file_name() -> String:
+	if _scenario in ["bug070_gather", "bug071_cf"]:
+		return "%s-%s-%d" % [_scenario, _role, _mapping]
 	if _scenario == "reconnect":
 		return "reconnect-" + _role
 	if _scenario == "compatibility_network":

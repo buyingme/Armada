@@ -33,7 +33,7 @@ The shared save 9, replay 11 and protocol 10 cutover applies. Obstruction and ch
 
 ## Integration status
 
-Draft. Final convergence, Owner replay renewal and Owner integration approval remain outstanding. This package is not Integrated.
+Draft. Final automated convergence and Owner-recorded replay renewal passed; the traceability map distinguishes the Owner's manual final-Gather cancellation evidence from canonical replay coverage. Independent implementation audit and Owner integration approval remain outstanding. This package is not Integrated.
 
 ## Review history
 

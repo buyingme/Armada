@@ -77,7 +77,15 @@ func test_non_finite_and_semantically_invalid_state_reject() -> void:
 	var empty_pool: Dictionary = _serialized_active("attack:21")
 	empty_pool["dice_pool"] = {}
 	assert_false(state.load_from_serialized(empty_pool),
-			"An active attack must retain a non-empty committed dice pool.")
+			"Zero needs a committed Gather removal.")
+	empty_pool["resolved_pool_choices"] = [
+			"damage_card.damaged_munitions"]
+	assert_true(state.load_from_serialized(empty_pool),
+			"Gather may temporarily reach zero before its final boundary.")
+	empty_pool["stage"] = CurrentAttackState.STAGE_ATTACK_MODIFY
+	empty_pool["dice_results"] = _one_red_hit()
+	assert_false(state.load_from_serialized(empty_pool),
+			"An empty pool cannot enter Attack Modify.")
 	var duplicate_effects: Dictionary = _serialized_active("attack:21")
 	duplicate_effects["stage"] = CurrentAttackState.STAGE_DEFENSE
 	duplicate_effects["dice_results"] = _one_red_hit()

@@ -43,8 +43,10 @@ func validate(game_state: GameState) -> String:
 				% attack.attacker_player
 	if attack.dice_results.is_empty():
 		return "No attack dice results to confirm."
-	if attack.cf_token_resolution == CurrentAttackState.RESOLUTION_PENDING:
-		return "Concentrate Fire token choice is unresolved."
+	if attack.cf_choice == CurrentAttackState.RESOLUTION_PENDING \
+			or attack.cf_dial_resolution == CurrentAttackState.RESOLUTION_PENDING \
+			or attack.cf_token_resolution == CurrentAttackState.RESOLUTION_PENDING:
+		return "Concentrate Fire choice or effect is unresolved."
 	if game_state.timing_window_state.active:
 		return _validate_active_continuation(game_state, attack)
 	return _validate_inactive_direct_context(attack)

@@ -34,7 +34,7 @@ The accepted save 9, replay 11 and protocol 10 cutover applies. The rule source 
 
 ## Integration status
 
-Draft. Implementation evidence is present; Owner-recorded replay renewal, final convergence review and Owner integration approval remain outstanding. This package is not Integrated.
+Draft. Implementation evidence and final automated convergence are recorded in the traceability map; the Owner separately verified final-Gather cancellation manually. Independent implementation audit and Owner integration approval remain outstanding. This package is not Integrated.
 
 ## Review history
 

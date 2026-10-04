@@ -34,7 +34,7 @@ The shared save 9, replay 11 and protocol 10 cutover applies. Card identity is p
 
 ## Integration status
 
-Draft. The production Begin → mandatory choice → Roll path is covered. The shared final-empty cancellation boundary is covered by the Point-Defense Failure and obstruction production path. Owner replay renewal and integration approval are outstanding. This package is not Integrated.
+Draft. The production Begin → mandatory choice → Roll path and shared final-empty cancellation boundary are covered; final automated convergence is recorded in the traceability map. Independent implementation audit and Owner integration approval remain outstanding. This package is not Integrated.
 
 ## Review history
 

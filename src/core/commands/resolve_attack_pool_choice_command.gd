@@ -4,6 +4,8 @@ extends GameCommand
 
 const TYPE: String = "resolve_attack_pool_choice"
 const REASON_OBSTRUCTION: String = "obstruction"
+const GATHER_READINESS: GDScript = preload(
+		"res://src/core/commands/attack_gather_readiness.gd")
 
 static func register() -> void:
 	GameCommand.register_type(TYPE, func(player: int, pl: Dictionary) -> GameCommand:
@@ -17,15 +19,27 @@ func validate(game_state: GameState) -> String:
 	var reason: String = _validate_attack(attack)
 	if reason != "":
 		return reason
+	var readiness: Dictionary = GATHER_READINESS.derive(game_state, attack)
+	if not bool(readiness.get("ok", false)):
+		return str(readiness.get("reason", "Invalid Gather state."))
+	if bool(readiness.get("complete", false)):
+		return "Gather Attack Dice is already complete."
 	var color: String = str(payload.get("color", "")).to_upper()
+	var choice_kind: String = str(payload.get("choice_kind", ""))
+	if choice_kind != str(readiness.get("choice_kind", "")) \
+			or str(payload.get("rule_id", "")) \
+				!= str(readiness.get("rule_id", "")):
+		return "Gather choice is out of order or has a stale rule identity."
+	var no_die: bool = bool(readiness.get("no_die", false))
+	if payload.get("no_die", false) != no_die:
+		return "Gather no-die outcome does not match the current pool."
+	if no_die:
+		return "" if color.is_empty() \
+				else "No-die outcome cannot select a die color."
 	if int(attack.dice_pool.get(color, 0)) <= 0:
 		return "Selected die color is not in the current attack pool."
-	var choice_kind: String = str(payload.get("choice_kind", ""))
 	if choice_kind == REASON_OBSTRUCTION:
-		if not attack.obstructed:
-			return "Attack is not obstructed."
-		return "" if not attack.obstruction_resolved \
-				else "Obstruction choice already resolved."
+		return ""
 	var rule_id: String = str(payload.get("rule_id", ""))
 	if choice_kind != "rule" or rule_id.is_empty():
 		return "Invalid attack-pool choice."
@@ -44,16 +58,18 @@ func execute(game_state: GameState) -> Dictionary:
 	var pool: Dictionary = attack.dice_pool
 	var patch: Dictionary = {}
 	if choice_kind == REASON_OBSTRUCTION:
-		pool[color] = int(pool.get(color, 0)) - 1
-		if int(pool[color]) <= 0:
-			pool.erase(color)
+		if not bool(payload.get("no_die", false)):
+			pool[color] = int(pool.get(color, 0)) - 1
+			if int(pool[color]) <= 0:
+				pool.erase(color)
 		patch["obstruction_resolved"] = true
 	else:
-		var resolved: Dictionary = _resolve_rule_choice(
-				game_state, attack, rule_id, color)
-		if not bool(resolved.get("ok", false)):
-			return {}
-		pool = (resolved.get("dice_pool", {}) as Dictionary).duplicate(true)
+		if not bool(payload.get("no_die", false)):
+			var resolved: Dictionary = _resolve_rule_choice(
+					game_state, attack, rule_id, color)
+			if not bool(resolved.get("ok", false)):
+				return {}
+			pool = (resolved.get("dice_pool", {}) as Dictionary).duplicate(true)
 		var choices: Array[String] = attack.resolved_pool_choices
 		choices.append(rule_id)
 		patch["resolved_pool_choices"] = choices
@@ -114,7 +130,7 @@ func _resolve_rule_choice(game_state: GameState,
 		return {"ok": false, "reason": "Rule did not accept the selected die."}
 	var before_count: int = DicePool.get_total_count(attack.dice_pool)
 	var after_count: int = DicePool.get_total_count(context.dice_pool)
-	if after_count != before_count - 1 or after_count <= 0:
+	if after_count != before_count - 1 or after_count < 0:
 		return {"ok": false, "reason": "Rule produced an invalid attack pool."}
 	return {"ok": true, "reason": "", "dice_pool": context.dice_pool}
 

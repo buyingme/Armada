@@ -5,6 +5,13 @@
 extends GutTest
 
 
+const CF_PRODUCTION: GDScript = preload(
+		"res://tests/fixtures/bug071_production_attack_builder.gd")
+const CF_DIAL_USE: GDScript = preload(
+		"res://src/core/commands/use_concentrate_fire_dial_command.gd")
+const CF_TOKEN_DECLINE: GDScript = preload(
+		"res://src/core/commands/decline_concentrate_fire_token_reroll_command.gd")
+
 var _saved_play_mode: PlayMode.Mode
 var _saved_role: NetworkManager.Role
 var _saved_local_player_index: int = -1
@@ -43,6 +50,144 @@ func after_each() -> void:
 	GameCommand._registry = _saved_registry
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()
+	RuleRegistry.clear()
+
+
+func test_real_cf_dial_and_token_results_apply_in_order_without_peer_rng() -> void:
+	var context: Dictionary = CF_PRODUCTION.committed_dial(
+			1, CurrentAttackState.CF_CHOICE_BOTH)
+	assert_false(context.is_empty())
+	if context.is_empty():
+		return
+	CF_DIAL_USE.register()
+	CF_TOKEN_DECLINE.register()
+	var authority: GameState = context["state"] as GameState
+	var before_dial: Dictionary = authority.serialize()
+	var sequence: int = int(context["command_sequence"])
+	var dial_command: GameCommand = CF_DIAL_USE.new(1, context["dial_payload"])
+	var dial_result: Dictionary = CommandProcessor.submit_deferred_followups(
+			dial_command)
+	assert_false(dial_result.is_empty())
+	var token_payload: Dictionary = {}
+	for opportunity: Dictionary in UIProjector.project(
+			authority, 1).timing_window.get("opportunities", []):
+		if str(opportunity.get("capability_id", "")) \
+				== "command_token.concentrate_fire":
+			token_payload = (opportunity.get("decline_intent", {}) \
+					as Dictionary).get("payload", {})
+	assert_false(token_payload.is_empty())
+	if token_payload.is_empty():
+		return
+	var token_command: GameCommand = CF_TOKEN_DECLINE.new(1, token_payload)
+	var token_result: Dictionary = CommandProcessor.submit_deferred_followups(
+			token_command)
+	assert_false(token_result.is_empty())
+	var authority_final: Dictionary = authority.serialize()
+	var client: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(before_dial, 1))
+	assert_not_null(client)
+	if client == null:
+		return
+	GameManager.current_game_state = client
+	GameManager.is_game_active = true
+	GameManager.set_command_submitter(NetworkCommandSubmitter.new())
+	CommandProcessor.reset()
+	assert_true(CommandProcessor.restore_next_sequence(sequence))
+	GameManager._reset_network_result_ordering()
+	assert_null(client.rng)
+	var dial_envelope: Dictionary = NetworkManager._build_result_envelope(
+			dial_command, dial_result, 1)
+	var token_envelope: Dictionary = NetworkManager._build_result_envelope(
+			token_command, token_result, 1)
+	GameManager._on_network_command_result(
+			token_command.serialize(), token_envelope)
+	assert_eq(client.serialize(), StateFilter.filter_for_player(before_dial, 1))
+	assert_eq(CommandProcessor.get_next_sequence(), sequence)
+	assert_eq(GameManager._pending_network_results.size(), 1)
+	GameManager._on_network_command_result(
+			dial_command.serialize(), dial_envelope)
+	assert_eq(client.serialize(), StateFilter.filter_for_player(authority_final, 1))
+	assert_eq(CommandProcessor.get_next_sequence(), sequence + 2)
+	assert_eq(GameManager._next_network_result_sequence, sequence + 2)
+	assert_eq(GameManager._pending_network_results.size(), 0)
+	assert_eq(client.current_attack_state.cf_token_resolution,
+			CurrentAttackState.RESOLUTION_DECLINED)
+	assert_false(client.get_ship(1, 0).command_tokens.has_token(
+			Constants.CommandType.CONCENTRATE_FIRE))
+
+
+func test_real_cf_bad_earlier_result_holds_later_then_reconnect_recovers() -> void:
+	var context: Dictionary = CF_PRODUCTION.committed_dial(
+			1, CurrentAttackState.CF_CHOICE_BOTH)
+	assert_false(context.is_empty())
+	if context.is_empty():
+		return
+	var authority: GameState = context["state"] as GameState
+	var before_dial: Dictionary = authority.serialize()
+	var sequence: int = int(context["command_sequence"])
+	var dial_command: GameCommand = CF_DIAL_USE.new(1, context["dial_payload"])
+	var dial_result: Dictionary = CommandProcessor.submit_deferred_followups(
+			dial_command)
+	assert_false(dial_result.is_empty())
+	var after_dial: Dictionary = authority.serialize()
+	var token_payload: Dictionary = {}
+	for opportunity: Dictionary in UIProjector.project(
+			authority, 1).timing_window.get("opportunities", []):
+		if str(opportunity.get("capability_id", "")) \
+				== "command_token.concentrate_fire":
+			token_payload = (opportunity.get("decline_intent", {}) \
+					as Dictionary).get("payload", {})
+	assert_false(token_payload.is_empty())
+	if token_payload.is_empty():
+		return
+	var token_command: GameCommand = CF_TOKEN_DECLINE.new(1, token_payload)
+	var token_result: Dictionary = CommandProcessor.submit_deferred_followups(
+			token_command)
+	assert_false(token_result.is_empty())
+	var authority_final: Dictionary = authority.serialize()
+	var client: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(before_dial, 1))
+	assert_not_null(client)
+	if client == null:
+		return
+	GameManager.current_game_state = client
+	GameManager.is_game_active = true
+	GameManager.set_command_submitter(NetworkCommandSubmitter.new())
+	CommandProcessor.reset()
+	assert_true(CommandProcessor.restore_next_sequence(sequence))
+	GameManager._reset_network_result_ordering()
+	var later: Dictionary = NetworkManager._build_result_envelope(
+			token_command, token_result, 1)
+	var bad_earlier: Dictionary = NetworkManager._build_result_envelope(
+			dial_command, dial_result, 1)
+	bad_earlier["application_result"] = {"new_face": 999}
+	GameManager._on_network_command_result(token_command.serialize(), later)
+	GameManager._on_network_command_result(
+			dial_command.serialize(), bad_earlier)
+	assert_eq(client.serialize(), StateFilter.filter_for_player(before_dial, 1))
+	assert_eq(CommandProcessor.get_next_sequence(), sequence)
+	assert_eq(GameManager._next_network_result_sequence, sequence)
+	assert_eq(GameManager._pending_network_results.size(), 2)
+	assert_eq(CommandProcessor.get_command_count(), 0)
+	assert_engine_error(2)
+	var reconnected: GameState = GameState.deserialize_passive_network(
+			StateFilter.filter_for_player(after_dial, 1))
+	assert_not_null(reconnected)
+	if reconnected == null:
+		return
+	assert_true(GameManager.start_new_game_from_state(reconnected,
+			LearningScenarioSetup.DEFAULT_SCENARIO_ID, sequence + 1))
+	GameManager.set_command_submitter(NetworkCommandSubmitter.new())
+	GameManager._on_network_command_result(token_command.serialize(), later)
+	assert_eq(reconnected.serialize(),
+			StateFilter.filter_for_player(authority_final, 1))
+	assert_eq(CommandProcessor.get_next_sequence(), sequence + 2)
+	assert_eq(GameManager._pending_network_results.size(), 0)
+	var after_success: Dictionary = reconnected.serialize()
+	GameManager._on_network_command_result(token_command.serialize(), later)
+	assert_eq(reconnected.serialize(), after_success)
+	assert_eq(CommandProcessor.get_next_sequence(), sequence + 2)
+	assert_engine_error(3)
 
 
 func test_network_result_ordering_buffers_later_sequence_until_gap_filled() -> void:

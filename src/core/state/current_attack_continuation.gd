@@ -69,6 +69,9 @@ static func _derive_followup(game_state: GameState,
 	var attack: CurrentAttackState = game_state.current_attack_state
 	if attack == null or not attack.active:
 		if command.command_type == "skip_attack" \
+				and str(command.payload.get("reason", "")) == "cancelled":
+			return _derive_cancelled_attack_return(game_state, command, result)
+		if command.command_type == "skip_attack" \
 				and str(command.payload.get("reason", "")) in [
 					SkipAttackCommand.REASON_SQUADRON_DONE,
 					SkipAttackCommand.REASON_ANTI_SQUADRON_VOLUNTARY_DONE,
@@ -97,6 +100,117 @@ static func _derive_followup(game_state: GameState,
 			and not _post_damage_decision_pending(game_state, attack):
 		return _build_complete_attack(attack)
 	return null
+
+
+## Reconstruction may rediscover the same command from the durable cancellation
+## return identity, but only live authority submits it to the history.
+static func derive_reconstructed_cancelled_attack_return(
+		game_state: GameState) -> GameCommand:
+	if game_state == null or game_state.current_attack_state.active \
+			or game_state.completed_attack_inspection != null:
+		return null
+	var active_squadron: SquadronInstance = \
+			game_state.get_active_squadron_activation()
+	if active_squadron != null:
+		var squadron_flow: InteractionFlow = game_state.interaction_flow
+		var phase_return: bool = active_squadron.activation_context \
+				== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE \
+				and game_state.current_phase == Constants.GamePhase.SQUADRON \
+				and squadron_flow != null \
+				and squadron_flow.flow_type \
+					== Constants.InteractionFlow.SQUADRON_ACTIVATION \
+				and squadron_flow.step_id \
+					== Constants.InteractionStep.ACTION_CHOICE
+		var commanded_return: bool = active_squadron.activation_context \
+				== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
+				and game_state.current_phase == Constants.GamePhase.SHIP \
+				and squadron_flow != null \
+				and squadron_flow.flow_type \
+					== Constants.InteractionFlow.SHIP_ACTIVATION \
+				and squadron_flow.step_id \
+					== Constants.InteractionStep.SQUADRON_STEP
+		if (phase_return or commanded_return) \
+				and game_state.is_squadron_activation_action_complete(
+					active_squadron):
+			return _build_complete_squadron_activation(
+					game_state, active_squadron)
+	var ship: ShipInstance = game_state.get_active_ship_activation()
+	if ship == null:
+		return null
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type \
+			!= Constants.InteractionFlow.SHIP_ACTIVATION \
+			or flow.step_id != Constants.InteractionStep.ATTACK_STEP \
+			or not ship.attack_step_active:
+		return null
+	var marker: Dictionary = ship.pending_anti_squadron_cancellation_return()
+	var ship_index: int = game_state.find_ship_index(ship)
+	if ship_index < 0:
+		return null
+	if not marker.is_empty():
+		if _has_remaining_anti_squadron_target(
+				game_state, ship, ship.owner_player, ship_index):
+			return null
+		var payload: Dictionary = marker.duplicate(true)
+		payload["reason"] = SkipAttackCommand.REASON_SQUADRON_DONE
+		payload["ship_index"] = ship_index
+		return SkipAttackCommand.new(ship.owner_player, payload)
+	if ship.committed_attack_count <= 0 \
+			or (ship.committed_attack_count < 2 \
+				and _has_remaining_normal_ship_target(game_state, ship,
+					ship.owner_player, ship_index)):
+		return null
+	return AdvanceActivationStepCommand.new(ship.owner_player, {
+		"ship_index": ship_index,
+		"step_id": "maneuver_step",
+		"ship_activation_identity": ship.ship_activation_identity,
+	})
+
+
+static func _derive_cancelled_attack_return(game_state: GameState,
+		command: GameCommand, result: Dictionary) -> GameCommand:
+	var attacker_index: int = int(result.get("attacker_index", -1))
+	if attacker_index < 0:
+		return null
+	if str(result.get("attacker_kind", "")) == CurrentAttackState.KIND_SQUADRON:
+		var squadron: SquadronInstance = game_state.get_squadron(
+				command.player_index, attacker_index)
+		if squadron == null \
+				or not game_state.is_squadron_activation_action_complete(squadron):
+			return null
+		return _build_complete_squadron_activation(game_state, squadron)
+	var ship: ShipInstance = game_state.get_ship(
+			command.player_index, attacker_index)
+	if ship == null or not ship.attack_step_active:
+		return null
+	if ship.anti_squadron_attack_zone >= 0:
+		return derive_reconstructed_cancelled_attack_return(game_state)
+	return derive_reconstructed_cancelled_attack_return(game_state)
+
+
+static func _build_complete_squadron_activation(game_state: GameState,
+		squadron: SquadronInstance) -> GameCommand:
+	var squadron_index: int = game_state.find_squadron_index(squadron)
+	if squadron_index < 0 or squadron.activation_id.is_empty():
+		return null
+	var payload: Dictionary = {
+		"squadron_index": squadron_index,
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+	}
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		var commanding_ship: ShipInstance = game_state.get_ship(
+				squadron.commanding_ship_player,
+				squadron.commanding_ship_index)
+		if commanding_ship == null \
+				or commanding_ship.ship_activation_identity.is_empty():
+			return null
+		payload["commanding_ship_player"] = squadron.commanding_ship_player
+		payload["commanding_ship_index"] = squadron.commanding_ship_index
+		payload["ship_activation_identity"] = \
+				commanding_ship.ship_activation_identity
+	return CompleteSquadronActivationCommand.new(squadron.owner_player, payload)
 
 
 static func _derive_inspection_release(game_state: GameState) -> GameCommand:

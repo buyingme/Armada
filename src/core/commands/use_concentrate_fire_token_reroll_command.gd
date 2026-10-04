@@ -37,17 +37,12 @@ func execute_with_application_result(game_state: GameState,
 			or typeof(application_result.get("new_face")) != TYPE_INT:
 		return {}
 	var attack: CurrentAttackState = game_state.current_attack_state
-	var ship: ShipInstance = game_state.get_ship(
-			attack.attacker_player, attack.attacker_index)
 	var dice_results: Array[Dictionary] = attack.dice_results
 	var die_index: int = int(payload.get("die_index", -1))
 	var old_result: Dictionary = dice_results[die_index].duplicate(true)
 	var color: int = int(old_result.get("color", -1))
 	var face: int = int(application_result["new_face"])
-	if not Dice.DICE_FACES.has(color) or face not in Dice.DICE_FACES[color] \
-			or ship == null or ship.command_tokens == null \
-			or not ship.command_tokens.has_token(
-					Constants.CommandType.CONCENTRATE_FIRE):
+	if not Dice.DICE_FACES.has(color) or face not in Dice.DICE_FACES[color]:
 		return {}
 	var new_result: Dictionary = {"color": color, "face": face}
 	dice_results[die_index] = new_result
@@ -56,9 +51,6 @@ func execute_with_application_result(game_state: GameState,
 		"cf_token_resolution": CurrentAttackState.RESOLUTION_USED,
 	})
 	if replacement == null or not game_state.set_current_attack_state(replacement):
-		return {}
-	if not ship.command_tokens.spend_token(Constants.CommandType.CONCENTRATE_FIRE):
-		game_state.set_current_attack_state(attack)
 		return {}
 	return {
 		"attack_id": attack.attack_id,
@@ -101,8 +93,6 @@ func execute(game_state: GameState) -> Dictionary:
 	if not validate(game_state).is_empty():
 		return {}
 	var attack: CurrentAttackState = game_state.current_attack_state
-	var ship: ShipInstance = game_state.get_ship(
-			attack.attacker_player, attack.attacker_index)
 	var dice_results: Array[Dictionary] = attack.dice_results
 	var die_index: int = int(payload.get("die_index", -1))
 	var old_result: Dictionary = dice_results[die_index].duplicate(true)
@@ -120,12 +110,6 @@ func execute(game_state: GameState) -> Dictionary:
 	})
 	if replacement == null \
 			or not game_state.set_current_attack_state(replacement):
-		game_state.rng.set_state(rng_state)
-		return {}
-	if ship == null or ship.command_tokens == null \
-			or not ship.command_tokens.spend_token(
-				Constants.CommandType.CONCENTRATE_FIRE):
-		game_state.set_current_attack_state(attack)
 		game_state.rng.set_state(rng_state)
 		return {}
 	return {

@@ -45,6 +45,8 @@ const ECM_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
 		"res://src/core/setup/setup_match_options.gd")
+const CHOOSE_CONCENTRATE_FIRE_COMMAND_SCRIPT: GDScript = preload(
+		"res://src/core/commands/choose_concentrate_fire_command.gd")
 
 
 ## The current game state. Null when no game is active.
@@ -1534,25 +1536,60 @@ func submit_attack_pool_choice(player: int, choice_kind: String,
 		"choice_kind": choice_kind,
 		"rule_id": rule_id,
 		"color": color,
+		"no_die": DicePool.get_total_count(attack.dice_pool) == 0,
 	}))
+
+
+func submit_choose_concentrate_fire(player: int, choice: String) -> Dictionary:
+	var payload: Dictionary = _concentrate_fire_context_payload()
+	if payload.is_empty():
+		return {}
+	payload["choice"] = choice
+	payload["semantic_key"] = "concentrate_fire_advance_choice"
+	return _submitter.submit(CHOOSE_CONCENTRATE_FIRE_COMMAND_SCRIPT.new(
+			player, payload))
 
 
 func submit_use_concentrate_fire_dial(player: int,
 		color: String) -> Dictionary:
-	if not current_game_state:
+	var payload: Dictionary = _concentrate_fire_context_payload()
+	if payload.is_empty():
 		return {}
-	return _submitter.submit(UseConcentrateFireDialCommand.new(player, {
-		"attack_id": current_game_state.current_attack_state.attack_id,
-		"color": color,
-	}))
+	payload["color"] = color
+	payload["semantic_key"] = "concentrate_fire_dial_addition"
+	return _submitter.submit(UseConcentrateFireDialCommand.new(player, payload))
 
 
 func submit_decline_concentrate_fire_dial(player: int) -> Dictionary:
-	if not current_game_state:
+	var payload: Dictionary = _concentrate_fire_context_payload()
+	if payload.is_empty():
 		return {}
-	return _submitter.submit(DeclineConcentrateFireDialCommand.new(player, {
-		"attack_id": current_game_state.current_attack_state.attack_id,
-	}))
+	payload["semantic_key"] = "concentrate_fire_dial_addition"
+	return _submitter.submit(DeclineConcentrateFireDialCommand.new(
+			player, payload))
+
+
+func _concentrate_fire_context_payload() -> Dictionary:
+	if current_game_state == null:
+		return {}
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	var timing: TimingWindowState = current_game_state.timing_window_state
+	if attack == null or not attack.active or timing == null \
+			or not timing.active \
+			or attack.attacker_kind != CurrentAttackState.KIND_SHIP:
+		return {}
+	var ship: ShipInstance = current_game_state.get_ship(
+			attack.attacker_player, attack.attacker_index)
+	if ship == null:
+		return {}
+	return {"attack_id": attack.attack_id,
+		"source_owner_kind": "ship_command",
+		"runtime_source_id": "%d:ship:%d:concentrate_fire_choice" % [
+			attack.attacker_player, attack.attacker_index],
+		"ship_activation_identity": ship.ship_activation_identity,
+		"round": current_game_state.current_round,
+		"timing_window_id": timing.timing_window_id,
+		"lifecycle_id": timing.lifecycle_id}
 
 
 ## Submits a [RerollAttackDieCommand] for optional attack die rerolls.
@@ -1822,6 +1859,12 @@ func submit_skip_attack(player: int, reason: String = "voluntary",
 		SkipAttackCommand.REASON_ANTI_SQUADRON_VOLUNTARY_DONE,
 	]:
 		payload["ship_index"] = ship_index
+		if reason == SkipAttackCommand.REASON_SQUADRON_DONE:
+			var iteration_ship: ShipInstance = current_game_state.get_ship(
+					player, ship_index)
+			if iteration_ship != null:
+				payload.merge(iteration_ship \
+						.pending_anti_squadron_cancellation_return(), true)
 	var attack: CurrentAttackState = current_game_state.current_attack_state
 	if attack.active:
 		payload["attack_id"] = attack.attack_id
@@ -1941,6 +1984,10 @@ func release_reconstructed_completed_attack_inspection() -> Dictionary:
 			.derive_reconstructed_resolved_attack(current_game_state)
 	if resolved_attack != null:
 		return _submitter.submit_authoritative(resolved_attack)
+	var cancelled_return: GameCommand = CurrentAttackContinuation \
+			.derive_reconstructed_cancelled_attack_return(current_game_state)
+	if cancelled_return != null:
+		return _submitter.submit_authoritative(cancelled_return)
 	if current_game_state.terminal_result_ready() \
 			and current_game_state.terminal_match_result.is_empty():
 		return _submitter.submit(CompleteMatchCommand.new(
@@ -2866,6 +2913,13 @@ func _derive_network_presentation_result(cmd: GameCommand,
 	match cmd.command_type:
 		"roll_dice":
 			return {"dice_results": current_game_state.current_attack_state.dice_results}
+		"use_concentrate_fire_dial":
+			var attack: CurrentAttackState = current_game_state.current_attack_state
+			var dice: Array[Dictionary] = attack.dice_results
+			return {"attack_id": attack.attack_id,
+				"color": str(cmd.payload.get("color", "")),
+				"added_result": dice[-1] if not dice.is_empty() else {},
+				"dice_pool": attack.dice_pool, "dice_results": dice}
 		"reroll_attack_die", "use_concentrate_fire_token_reroll":
 			var die_index: int = int(cmd.payload.get("die_index", -1))
 			var dice: Array[Dictionary] = current_game_state.current_attack_state.dice_results
@@ -2946,6 +3000,7 @@ func _handle_remote_command_effects(
 			if not NetworkManager.is_server():
 				EventBus.network_dice_result.emit(result)
 		"begin_attack", "resolve_attack_pool_choice", \
+				"choose_concentrate_fire", \
 				"use_concentrate_fire_dial", \
 				"decline_concentrate_fire_dial", "commit_accuracy", \
 				"complete_attack":

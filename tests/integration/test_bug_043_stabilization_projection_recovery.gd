@@ -672,7 +672,7 @@ func test_bug043_nonfixture_replay_preserves_partial_maneuver_consequence() \
 	assert_not_null(loaded)
 	if loaded == null:
 		return
-	assert_eq(loaded.header["format_version"], 10)
+	assert_eq(loaded.header["format_version"], 11)
 	assert_eq(loaded.commands.size(), 1)
 	var replay_state: GameState = GameState.deserialize(initial)
 	assert_not_null(replay_state)

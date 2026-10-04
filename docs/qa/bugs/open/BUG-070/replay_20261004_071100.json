@@ -1,0 +1,187 @@
+{
+	"commands": [
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"commands": [
+					2
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 1,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					2,
+					0,
+					0
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 2,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 1,
+			"sequence": 3,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"command": 2,
+				"runtime_upgrade_id": "1:ship:debug-imperial-vsd-2:upgrade:debug-tarkin-commander-0"
+			},
+			"player": 1,
+			"sequence": 4,
+			"type": "tarkin_choice"
+		},
+		{
+			"payload": {
+				"owner_player": 0,
+				"pos_x": 0.595684111118317,
+				"pos_y": 0.299748063087463,
+				"rotation_deg": 0.0,
+				"target_kind": "ship",
+				"unit_index": 0
+			},
+			"player": 0,
+			"sequence": 5,
+			"type": "debug_reposition"
+		},
+		{
+			"payload": {
+				"effect_id": "point_defense_failure",
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 6,
+			"type": "debug_deal_damage"
+		},
+		{
+			"payload": {
+				"inspection_id": "faceup-inspection:faceup:6:0"
+			},
+			"player": 0,
+			"sequence": 7,
+			"type": "acknowledge_faceup_damage"
+		},
+		{
+			"payload": {
+				"action": "reveal",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 8,
+			"type": "reveal_dial"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 9,
+			"type": "activate_ship"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:9",
+				"ship_index": 0,
+				"step_id": "repair_step"
+			},
+			"player": 0,
+			"sequence": 10,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:9",
+				"ship_index": 0,
+				"step_id": "attack_step"
+			},
+			"player": 0,
+			"sequence": 11,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"attack_kind": "standard",
+				"attacker_index": 0,
+				"attacker_kind": "ship",
+				"attacker_player": 0,
+				"attacker_zone": 1,
+				"defender_index": 0,
+				"defender_kind": "squadron",
+				"defender_player": 1,
+				"defender_zone": -1,
+				"obstructed": false,
+				"range_band": "close",
+				"ship_activation_identity": "ship-activation:9"
+			},
+			"player": 0,
+			"sequence": 12,
+			"type": "begin_attack"
+		},
+		{
+			"payload": {
+				"attack_id": "attack:12",
+				"choice_kind": "rule",
+				"color": "BLUE",
+				"no_die": false,
+				"rule_id": "damage_card.point_defense_failure"
+			},
+			"player": 0,
+			"sequence": 13,
+			"type": "resolve_attack_pool_choice"
+		},
+		{
+			"payload": {
+				"attack_id": "attack:12",
+				"reason": "cancelled"
+			},
+			"player": 0,
+			"sequence": 14,
+			"type": "skip_attack"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			1
+		],
+		"format_version": 11,
+		"godot_version": "4.5.1-stable (official)",
+		"initial_command_sequence": 0,
+		"initiative_player": 0,
+		"match_player_control_binding": {
+			"player_principal_ids": [
+				"mp-8d7a0b84-e9ad-46ac-9bb7-db88c148c23a",
+				"mp-8d7a0b84-e9ad-46ac-9bb7-db88c148c23a"
+			],
+			"principals": [
+				{
+					"kind": "HUMAN",
+					"principal_id": "mp-8d7a0b84-e9ad-46ac-9bb7-db88c148c23a"
+				}
+			]
+		},
+		"rng_seed": "-8702304940354292913",
+		"scenario_id": "debug_scenario",
+		"timestamp": "2026-10-04T05:11:00"
+	}
+}

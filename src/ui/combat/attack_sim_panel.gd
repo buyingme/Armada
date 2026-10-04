@@ -150,9 +150,9 @@ var _done_button: Button = null
 
 ## --- Phase 6b-2 UI elements ---
 
-## CF dial section container (label + colour buttons + skip).
+## CF dial section container (selectable die images + skip).
 var _cf_dial_container: VBoxContainer = null
-## HBox holding the colour buttons for CF dial.
+## HBox holding the die images for CF dial.
 var _cf_dial_buttons: HBoxContainer = null
 ## Skip button for the CF dial section.
 var _cf_dial_skip_button: Button = null
@@ -260,11 +260,20 @@ var _counter_skip_button: Button = null
 ## presentation data only and are rebuilt after every authoritative result.
 var _timing_window_container: VBoxContainer = null
 var _timing_window_rows: VBoxContainer = null
+var _cf_resource_container: HBoxContainer = null
 ## Complete projected command intents indexed by eligible canonical die index
 ## while the player is making one local timing-window parameter choice.
 ## This is transient presentation state only and is never serialized.
 var _timing_window_die_intents: Dictionary = {}
 var _timing_window_parameter_prompt: String = ""
+var _timing_cf_dial_intents: Dictionary = {}
+var _timing_cf_dial_decline_intent: Dictionary = {}
+var _timing_cf_token_decline_intent: Dictionary = {}
+var _timing_cf_dial_active: bool = false
+var _timing_cf_token_active: bool = false
+const _CF_DIAL_TIMING_SEMANTIC: String = "concentrate_fire_dial_addition"
+const _CF_TOKEN_TIMING_SEMANTIC: String = "concentrate_fire_token_reroll"
+const _CF_CHOICE_TIMING_SEMANTIC: String = "concentrate_fire_advance_choice"
 
 ## Array of TextureRects showing die face images.
 var _dice_textures: Array[TextureRect] = []
@@ -489,7 +498,25 @@ func show_timing_window_opportunities(
 	if _timing_window_container == null or _timing_window_rows == null:
 		return
 	_clear_timing_window_parameter_selection()
+	_clear_committed_cf_timing_presentation()
+	_clear_cf_resource_choices()
 	_clear_timing_window_rows()
+	if interactive:
+		for raw: Variant in opportunities:
+			if not raw is Dictionary:
+				continue
+			var opportunity: Dictionary = raw as Dictionary
+			if not bool(opportunity.get("is_interactive", false)):
+				continue
+			match str(opportunity.get("semantic_key", "")):
+				_CF_DIAL_TIMING_SEMANTIC:
+					_show_committed_cf_dial_timing(opportunity)
+					_request_deferred_layout()
+					return
+				_CF_TOKEN_TIMING_SEMANTIC:
+					_show_committed_cf_token_timing(opportunity)
+					_request_deferred_layout()
+					return
 	for index: int in range(opportunities.size()):
 		var raw: Variant = opportunities[index]
 		if not raw is Dictionary:
@@ -504,6 +531,8 @@ func hide_timing_window_opportunities() -> void:
 	if _timing_window_container == null:
 		return
 	_clear_timing_window_parameter_selection()
+	_clear_committed_cf_timing_presentation()
+	_clear_cf_resource_choices()
 	_clear_timing_window_rows()
 	_timing_window_container.visible = false
 
@@ -579,6 +608,7 @@ func _build_ui() -> void:
 	add_child(_content)
 	_content.add_child(_build_title_body_labels())
 	_content.add_child(_build_dice_count_section())
+	_content.add_child(_build_cf_resource_section())
 	_content.add_child(_build_cf_dial_section())
 	_content.add_child(_build_obstruction_section())
 	_content.add_child(_build_empty_pool_section())
@@ -674,6 +704,15 @@ func _build_cf_dial_section() -> VBoxContainer:
 	_cf_dial_skip_button.pressed.connect(_on_cf_dial_skip)
 	_cf_dial_container.add_child(_cf_dial_skip_button)
 	return _cf_dial_container
+
+
+func _build_cf_resource_section() -> HBoxContainer:
+	_cf_resource_container = HBoxContainer.new()
+	_cf_resource_container.name = "CFResourceChoices"
+	_cf_resource_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	_cf_resource_container.add_theme_constant_override("separation", 6)
+	_cf_resource_container.visible = false
+	return _cf_resource_container
 
 
 ## Creates the obstruction die-removal section.
@@ -953,13 +992,13 @@ func _build_timing_window_row(
 		interactive: bool) -> HBoxContainer:
 	var row: HBoxContainer = HBoxContainer.new()
 	row.name = "TimingWindowRow_%d" % index
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 6)
 	var display_key: String = str(opportunity.get("display_key", "modifier"))
 	var label: Label = Label.new()
 	label.text = display_key.replace(".", " ").capitalize()
 	label.tooltip_text = display_key
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(label)
 	var can_interact: bool = interactive \
 			and bool(opportunity.get("is_interactive", false))
@@ -969,9 +1008,25 @@ func _build_timing_window_row(
 		use_button.name = "TimingUseButton_%d" % index
 		use_button.text = "Use"
 		use_button.tooltip_text = display_key
-		use_button.pressed.connect(
-				_on_timing_window_parameter_use.bind(
-						use_choices.duplicate(true), display_key))
+		if str(opportunity.get("semantic_key", "")) \
+				== _CF_CHOICE_TIMING_SEMANTIC:
+			use_button.pressed.connect(
+					_show_cf_resource_choices.bind(use_choices.duplicate(true)))
+		elif _timing_choices_select_die(use_choices):
+			use_button.pressed.connect(
+					_on_timing_window_parameter_use.bind(
+							use_choices.duplicate(true), display_key))
+		else:
+			var menu: PopupMenu = PopupMenu.new()
+			menu.name = "TimingUseMenu_%d" % index
+			for choice_index: int in range(use_choices.size()):
+				var choice: Dictionary = use_choices[choice_index] as Dictionary
+				menu.add_item(str(choice.get("label", "")), choice_index)
+			menu.id_pressed.connect(_on_timing_window_menu_choice.bind(
+					use_choices.duplicate(true)))
+			row.add_child(menu)
+			use_button.pressed.connect(
+					_open_timing_window_menu.bind(menu, use_button))
 		row.add_child(use_button)
 	elif can_interact and opportunity.get("use_intent") is Dictionary:
 		var use_button: Button = Button.new()
@@ -991,6 +1046,136 @@ func _build_timing_window_row(
 				(opportunity.get("decline_intent") as Dictionary).duplicate(true)))
 		row.add_child(decline_button)
 	return row
+
+
+func _open_timing_window_menu(menu: PopupMenu, button: Button) -> void:
+	var rect: Rect2 = button.get_global_rect()
+	menu.popup(Rect2i(Vector2i(rect.position + Vector2(0, rect.size.y)),
+			Vector2i.ZERO))
+
+
+func _on_timing_window_menu_choice(choice_index: int,
+		use_choices: Array) -> void:
+	if choice_index < 0 or choice_index >= use_choices.size():
+		return
+	var intent: Dictionary = (use_choices[choice_index] as Dictionary).get(
+			"intent", {}) as Dictionary
+	_on_timing_window_use(intent)
+
+
+func _show_cf_resource_choices(use_choices: Array) -> void:
+	_clear_cf_resource_choices()
+	_timing_window_container.visible = false
+	for raw_choice: Variant in use_choices:
+		if not raw_choice is Dictionary:
+			continue
+		var choice: Dictionary = raw_choice as Dictionary
+		var intent: Dictionary = choice.get("intent", {}) as Dictionary
+		var payload: Dictionary = intent.get("payload", {}) as Dictionary
+		var resource: String = str(payload.get("choice", ""))
+		if resource.is_empty():
+			continue
+		var button: Button = Button.new()
+		button.name = "CFResourceChoice_%s" % resource
+		button.text = str(choice.get("label", ""))
+		button.custom_minimum_size = Vector2(100.0, 32.0)
+		button.pressed.connect(_on_cf_resource_choice.bind(
+				intent.duplicate(true)))
+		_cf_resource_container.add_child(button)
+	_cf_resource_container.visible = true
+	_set_prompt("Concentrate Fire Command", "Choose command resource.")
+	_request_deferred_layout()
+
+
+func _on_cf_resource_choice(intent: Dictionary) -> void:
+	for child: Node in _cf_resource_container.get_children():
+		(child as Button).disabled = true
+	_on_timing_window_use(intent)
+
+
+func _clear_cf_resource_choices() -> void:
+	if _cf_resource_container == null:
+		return
+	_cf_resource_container.visible = false
+	for child: Node in _cf_resource_container.get_children():
+		_cf_resource_container.remove_child(child)
+		child.queue_free()
+	if get_title_text() == "Concentrate Fire Command":
+		_set_prompt("Attack", "Resolve available modifiers.")
+
+
+func _show_committed_cf_dial_timing(opportunity: Dictionary) -> void:
+	_timing_window_container.visible = false
+	_timing_cf_dial_intents.clear()
+	var colours: Array[String] = []
+	for raw_choice: Variant in opportunity.get("use_choices", []):
+		if not raw_choice is Dictionary:
+			continue
+		var intent: Dictionary = (raw_choice as Dictionary).get(
+				"intent", {}) as Dictionary
+		var payload: Dictionary = intent.get("payload", {}) as Dictionary
+		var colour: String = str(payload.get("color", ""))
+		if colour.is_empty() or _timing_cf_dial_intents.has(colour):
+			continue
+		_timing_cf_dial_intents[colour] = intent.duplicate(true)
+		colours.append(colour)
+	_timing_cf_dial_decline_intent = (opportunity.get(
+			"decline_intent", {}) as Dictionary).duplicate(true)
+	_timing_cf_dial_active = true
+	show_cf_dial_section(colours)
+	(_cf_dial_container.get_child(0) as Label).visible = false
+	_cf_dial_skip_button.text = "Decline"
+	_cf_dial_skip_button.disabled = false
+	_set_prompt("Concentrate Fire Command Dial", "Select die to add.")
+
+
+func _show_committed_cf_token_timing(opportunity: Dictionary) -> void:
+	_timing_window_container.visible = false
+	_timing_cf_token_decline_intent = (opportunity.get(
+			"decline_intent", {}) as Dictionary).duplicate(true)
+	_timing_cf_token_active = true
+	show_cf_token_section()
+	_cf_token_reroll_button.visible = false
+	_cf_token_skip_button.text = "Decline"
+	_cf_token_skip_button.disabled = false
+	_on_timing_window_parameter_use(
+			opportunity.get("use_choices", []) as Array,
+			"Concentrate Fire Command Token")
+	_timing_window_parameter_prompt = "Select die to reroll."
+	_set_prompt("Concentrate Fire Command Token",
+			_timing_window_parameter_prompt)
+
+
+func _clear_committed_cf_timing_presentation() -> void:
+	if _timing_cf_dial_active:
+		hide_cf_dial_section()
+		(_cf_dial_container.get_child(0) as Label).visible = true
+	if _timing_cf_token_active:
+		hide_cf_token_section()
+	_timing_cf_dial_active = false
+	_timing_cf_token_active = false
+	_timing_cf_dial_intents.clear()
+	_timing_cf_dial_decline_intent.clear()
+	_timing_cf_token_decline_intent.clear()
+	if _cf_dial_skip_button != null:
+		_cf_dial_skip_button.text = "Skip"
+	if _cf_token_reroll_button != null:
+		_cf_token_reroll_button.visible = true
+	if _cf_token_skip_button != null:
+		_cf_token_skip_button.text = "Skip"
+	if get_title_text() in ["Concentrate Fire Command Dial",
+			"Concentrate Fire Command Token"]:
+		_set_prompt("Attack", "Resolve available modifiers.")
+
+
+func _timing_choices_select_die(use_choices: Array) -> bool:
+	for raw_choice: Variant in use_choices:
+		var choice: Dictionary = raw_choice as Dictionary
+		var intent: Dictionary = choice.get("intent", {}) as Dictionary
+		var payload: Dictionary = intent.get("payload", {}) as Dictionary
+		if typeof(payload.get("die_index")) != TYPE_INT:
+			return false
+	return true
 
 
 func _clear_timing_window_rows() -> void:
@@ -1116,6 +1301,7 @@ func _null_defense_step_refs() -> void:
 	_counter_skip_button = null
 	_timing_window_container = null
 	_timing_window_rows = null
+	_cf_resource_container = null
 
 
 ## Resets selection/state tracking variables.
@@ -1146,7 +1332,7 @@ const _CF_COLOUR_DISPLAY: Dictionary = {
 	"RED": "Red", "BLUE": "Blue", "BLACK": "Black",
 }
 
-## Tint colours for CF dial buttons.
+## Tint colours for generic pre-roll die-removal buttons.
 const _CF_COLOUR_TINTS: Dictionary = {
 	"RED": Color(0.9, 0.2, 0.2),
 	"BLUE": Color(0.2, 0.4, 0.9),
@@ -1154,25 +1340,38 @@ const _CF_COLOUR_TINTS: Dictionary = {
 }
 
 
-## Shows the Concentrate Fire dial section with colour buttons.
+## Shows the Concentrate Fire dial section using the rolled-die image assets.
 ## [param available_colours] — colour keys ("RED", "BLUE", "BLACK") the
 ##     player may choose from (range-filtered).
 ## Requirements: AE-CF-001, AE-CF-003.
 func show_cf_dial_section(available_colours: Array[String]) -> void:
 	if _cf_dial_container == null or _cf_dial_buttons == null:
 		return
-	# Clear previous buttons.
+	# Remove previous images before rebuilding from projected legal colours.
 	for child: Node in _cf_dial_buttons.get_children():
+		_cf_dial_buttons.remove_child(child)
 		child.queue_free()
-	# Build colour buttons.
+	# The image itself is the hit target; there is no second text control.
 	for colour_key: String in available_colours:
-		var btn: Button = Button.new()
-		btn.text = _CF_COLOUR_DISPLAY.get(colour_key, colour_key)
-		btn.custom_minimum_size = Vector2(60.0, 28.0)
-		btn.add_theme_color_override("font_color",
-				_CF_COLOUR_TINTS.get(colour_key, Color.WHITE))
-		btn.pressed.connect(_on_cf_dial_colour.bind(colour_key))
-		_cf_dial_buttons.add_child(btn)
+		var die_colour: Constants.DiceColor
+		match colour_key:
+			"RED":
+				die_colour = Constants.DiceColor.RED
+			"BLUE":
+				die_colour = Constants.DiceColor.BLUE
+			"BLACK":
+				die_colour = Constants.DiceColor.BLACK
+			_:
+				continue
+		var die_image: TextureRect = _create_die_image(
+				die_colour, Constants.DiceFace.HIT, -1)
+		die_image.name = "CFDialDie_%s" % colour_key
+		die_image.tooltip_text = _CF_COLOUR_DISPLAY.get(
+				colour_key, colour_key)
+		die_image.mouse_filter = Control.MOUSE_FILTER_STOP
+		die_image.gui_input.connect(
+				_on_cf_dial_die_input.bind(colour_key))
+		_cf_dial_buttons.add_child(die_image)
 	_cf_dial_container.visible = true
 
 
@@ -1182,13 +1381,35 @@ func hide_cf_dial_section() -> void:
 		_cf_dial_container.visible = false
 
 
+func _on_cf_dial_die_input(event: InputEvent, colour_key: String) -> void:
+	if not event is InputEventMouseButton:
+		return
+	var click: InputEventMouseButton = event as InputEventMouseButton
+	if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
+		_on_cf_dial_colour(colour_key)
+
+
 func _on_cf_dial_colour(colour_key: String) -> void:
 	SfxManager.play_sfx("droid_sound")
+	if _timing_cf_dial_active:
+		if not _timing_cf_dial_intents.has(colour_key):
+			return
+		for child: Node in _cf_dial_buttons.get_children():
+			(child as TextureRect).mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_cf_dial_skip_button.disabled = true
+		timing_window_use_requested.emit((
+				_timing_cf_dial_intents[colour_key] as Dictionary).duplicate(true))
+		return
 	cf_dial_colour_selected.emit(colour_key)
 
 
 func _on_cf_dial_skip() -> void:
 	SfxManager.play_sfx("skip_beep")
+	if _timing_cf_dial_active:
+		_cf_dial_skip_button.disabled = true
+		timing_window_decline_requested.emit(
+				_timing_cf_dial_decline_intent.duplicate(true))
+		return
 	cf_dial_skipped.emit()
 
 
@@ -1438,6 +1659,13 @@ func _on_cf_token_reroll() -> void:
 
 func _on_cf_token_skip() -> void:
 	SfxManager.play_sfx("skip_beep")
+	if _timing_cf_token_active:
+		_cf_token_skip_button.disabled = true
+		_timing_window_die_intents.clear()
+		hide_cf_token_section()
+		timing_window_decline_requested.emit(
+				_timing_cf_token_decline_intent.duplicate(true))
+		return
 	cf_token_reroll_skipped.emit()
 
 
@@ -2197,8 +2425,12 @@ func _on_die_clicked(event: InputEvent,
 		var intent: Dictionary = (_timing_window_die_intents.get(index) \
 				as Dictionary).duplicate(true)
 		_timing_window_die_intents.clear()
-		_set_dice_clickable(false)
-		_clear_die_selection_highlights()
+		if _timing_cf_token_active:
+			_cf_token_skip_button.disabled = true
+			hide_cf_token_section()
+		else:
+			_set_dice_clickable(false)
+			_clear_die_selection_highlights()
 		timing_window_use_requested.emit(intent)
 		return
 	if _evade_mode:

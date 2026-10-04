@@ -299,3 +299,54 @@ not exercising the optional reroll afterward does not refund the token.
 
 This sequential effect resolution must not be interpreted as two separate Concentrate
 Fire command resolutions.
+
+### Owner UX Refinement — Concentrate Fire Effect Resolution
+
+The Concentrate Fire resource-selection interaction is retained:
+
+`Concentrate Fire    [Use] [Decline]`
+
+Selecting `Use` presents the authoritative legal resource choices:
+
+`[Dial] [Token] [Dial + Token]`
+
+After the player selects a resource choice, that choice is committed according to the existing accepted Concentrate Fire semantics. The UI must then proceed directly to resolution of the selected effect. It must not introduce another dropdown or selection control that redundantly asks which Concentrate Fire effect/resource is being resolved.
+
+#### Concentrate Fire Dial
+
+When the dial effect is to be resolved, use the established attack-effect modal interaction style used by comparable die-selection interactions such as Roll Dice, reroll, and Depowered Armament.
+
+The modal should communicate:
+
+**Concentrate Fire Command Dial**
+
+**Select die to add.**
+
+Below that instruction, visually present the currently legal die colours/types as selectable dice using the established die-selection presentation.
+
+The player selects the die to add directly from those visual choices.
+
+Legality remains authoritative. The UI only depicts the legal choices supplied by authoritative gameplay state.
+
+#### Concentrate Fire Token
+
+When the token reroll effect is to be resolved, proceed directly to the established visual die-selection/reroll interaction.
+
+Do not introduce a redundant dropdown identifying the Concentrate Fire Token again after the resource has already been committed.
+
+The player selects the eligible attack die to reroll through the same interaction family used for other die-reroll effects.
+
+#### Dial + Token
+
+When `Dial + Token` is selected:
+
+1. both resources are committed/spent together as already specified;
+2. open the Concentrate Fire Dial modal;
+3. visually select and resolve the die to add;
+4. proceed to the Concentrate Fire Token reroll interaction;
+5. resolve or decline the optional reroll without refunding the committed token;
+6. return to/rederive the enclosing Attack Modify interaction.
+
+This refinement changes presentation and interaction sequencing only. It does not change the accepted Concentrate Fire command semantics, authority boundaries, resource commitment, RNG authority, recovery semantics, or replay semantics.
+
+The implementation should reuse the established modal/die-selection interaction patterns where appropriate rather than introducing a new CF-specific dropdown interaction.

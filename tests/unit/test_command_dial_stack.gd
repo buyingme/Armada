@@ -375,6 +375,20 @@ func test_clear_removes_all_dials() -> void:
 
 # --- serialize() / deserialize() ---
 
+func test_json_round_trip_normalizes_dial_faces_for_filtered_reconnect() -> void:
+	assert_true(_stack.assign_dials([
+			Constants.CommandType.CONCENTRATE_FIRE,
+			Constants.CommandType.NAVIGATE,
+			Constants.CommandType.REPAIR], 1))
+	_stack.reveal_top()
+	_stack.spend_revealed()
+	var json_data: Dictionary = JSON.parse_string(JSON.stringify(
+			_stack.serialize()))
+	var restored: CommandDialStack = CommandDialStack.deserialize(json_data)
+	assert_eq(restored.serialize(), _stack.serialize())
+	assert_typeof(restored.get_all_dials()[0]["command"], TYPE_INT)
+	assert_typeof(restored.get_spent_history()[0]["command"], TYPE_INT)
+
 func test_serialize_round_trip() -> void:
 	_stack.assign_dials([
 		Constants.CommandType.NAVIGATE,

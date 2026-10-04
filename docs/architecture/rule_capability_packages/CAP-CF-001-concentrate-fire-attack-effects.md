@@ -37,11 +37,11 @@ do not change command, RNG, recovery, Network or replay semantics.
 ## Evidence map and test evidence
 
 - Dial/token/both/neither transition and round-marker cases: [test_concentrate_fire_timing_window.gd](../../../tests/unit/test_concentrate_fire_timing_window.gd).
-- Pending BUG-071 evidence: real production CF Use/Decline row, actionable Use,
+- BUG-071 production evidence: real production CF Use/Decline row, actionable Use,
   authoritative legal resource filtering, CF distinct from simultaneous effects,
   combined simultaneous spend, dial-before-token result sequence, no-refund
   decline, and rederived enclosing Attack Modify interaction after each result.
-- Pending final Owner UX evidence: exact Dial modal title/instruction and
+- Final Owner UX evidence: exact Dial modal title/instruction and
   visual legal die choices; direct Token eligible-die reroll; combined
   Dial-then-Token visual sequence; explicit decline/no refund; no redundant
   post-commit selector; preserved transient pre-commit and authoritative
@@ -61,7 +61,7 @@ records replay and baseline renewal.
 
 ## Integration status
 
-Draft. Final convergence, Owner replay renewal and Owner integration approval remain outstanding. This package is not Integrated.
+Draft. Final automated convergence and Owner-recorded replay renewal passed; independent implementation audit and Owner integration approval remain outstanding. This package is not Integrated.
 
 ## Review history
 

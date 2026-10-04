@@ -10,10 +10,22 @@ const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_orchestrator.gd")
 const CF_RULE: GDScript = preload(
 		"res://src/core/effects/rules/concentrate_fire_token.gd")
+const CF_CHOICE_RULE: GDScript = preload(
+		"res://src/core/effects/rules/concentrate_fire_choice.gd")
+const CF_CHOICE_COMMAND: GDScript = preload(
+		"res://src/core/commands/choose_concentrate_fire_command.gd")
+const CF_DIAL_USE_COMMAND: GDScript = preload(
+		"res://src/core/commands/use_concentrate_fire_dial_command.gd")
 const CF_USE: GDScript = preload(
 		"res://src/core/commands/use_concentrate_fire_token_reroll_command.gd")
 const CF_DECLINE: GDScript = preload(
 		"res://src/core/commands/decline_concentrate_fire_token_reroll_command.gd")
+const CF_DIAL_DECLINE: GDScript = preload(
+		"res://src/core/commands/decline_concentrate_fire_dial_command.gd")
+const BUG071_BUILDER: GDScript = preload(
+		"res://tests/fixtures/bug071_production_attack_builder.gd")
+const REPLAY_DRIVER_SCRIPT: GDScript = preload(
+		"res://src/autoload/replay_driver.gd")
 const H9_RULE: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
 const H9_USE: GDScript = preload(
@@ -152,7 +164,10 @@ func before_each() -> void:
 	_ship_tokens.clear()
 	_squadron_tokens.clear()
 	RuleRegistry.clear()
+	PointDefenseFailure.register()
+	DamagedMunitions.register()
 	CF_RULE.register()
+	CF_CHOICE_RULE.register()
 	H9_RULE.register()
 	CF_USE.register()
 	CF_DECLINE.register()
@@ -191,6 +206,1557 @@ func after_each() -> void:
 	PlayMode.current_mode = _saved_play_mode
 	NetworkManager.role = _saved_network_role
 	NetworkManager._local_player_index = _saved_local_player
+
+
+func test_bug070_real_damaged_munitions_gather_blocks_roll_until_resolved() \
+		-> void:
+	var state: GameState = _player_one_ship_attack_state()
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	var card: DamageCard = DamageCard.create("Ship", "Damaged Munitions")
+	card.effect_id = DamagedMunitions.EFFECT_ID
+	card.timing = "persistent"
+	card.is_faceup = true
+	card.physical_card_id = "damage:bug070:damaged-munitions"
+	card.public_card_ref = "faceup:bug070:damaged-munitions"
+	attacker.add_faceup_damage(card)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	assert_false(CommandProcessor.submit_deferred_followups(
+			ActivateShipCommand.new(1, {"ship_index": 0})).is_empty())
+	assert_false(CommandProcessor.submit_deferred_followups(
+			AdvanceActivationStepCommand.new(1, {
+				"ship_index": 0,
+				"step_id": "attack_step",
+				"ship_activation_identity": attacker.ship_activation_identity,
+			})).is_empty())
+	var candidate: Dictionary = {}
+	for entry: Dictionary in TargetingListBuilder \
+			.authoritative_ship_target_entries(state, 1, 0):
+		if str(entry.get("target_kind", "")) == CurrentAttackState.KIND_SHIP:
+			candidate = entry
+			break
+	assert_false(candidate.is_empty())
+	if candidate.is_empty():
+		return
+	assert_false(CommandProcessor.submit_deferred_followups(
+			BeginAttackCommand.new(1, {
+				"attacker_player": 1,
+				"attacker_kind": CurrentAttackState.KIND_SHIP,
+				"attacker_index": 0,
+				"attacker_zone": int(candidate["attacker_zone"]),
+				"defender_player": int(candidate["target_owner"]),
+				"defender_kind": CurrentAttackState.KIND_SHIP,
+				"defender_index": int(candidate["target_index"]),
+				"defender_zone": int(candidate["target_zone"]),
+				"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+				"range_band": str(candidate["range_band"]),
+				"obstructed": bool(candidate["obstructed"]),
+				"ship_activation_identity": attacker.ship_activation_identity,
+			})).is_empty())
+	var attack_id: String = state.current_attack_state.attack_id
+	var pool_before: Dictionary = state.current_attack_state.dice_pool.duplicate()
+	assert_ne(RollDiceCommand.new(1, {"attack_id": attack_id}) \
+			.validate(state), "")
+	var colour: String = ""
+	for key: String in [DicePool.RED_KEY, DicePool.BLUE_KEY,
+			DicePool.BLACK_KEY]:
+		if int(pool_before.get(key, 0)) > 0:
+			colour = key
+			break
+	assert_ne(colour, "")
+	if colour == "":
+		return
+	assert_false(CommandProcessor.submit_deferred_followups(
+			ResolveAttackPoolChoiceCommand.new(1, {
+				"attack_id": attack_id,
+				"choice_kind": "rule",
+				"rule_id": DamagedMunitions.RULE_ID,
+				"color": colour,
+				"no_die": false,
+			})).is_empty())
+	assert_eq(int(state.current_attack_state.dice_pool.get(colour, 0)),
+			int(pool_before.get(colour, 0)) - 1)
+	assert_eq(RollDiceCommand.new(1, {"attack_id": attack_id}) \
+			.validate(state), "")
+	assert_false(CommandProcessor.submit_deferred_followups(
+			RollDiceCommand.new(1, {"attack_id": attack_id})).is_empty())
+
+
+func test_bug070_real_begin_final_empty_cancel_has_raw_usable_ship_return() -> void:
+	var state: GameState = _player_one_ship_attack_state()
+	state.get_ship(0, 0).pos_y = 0.50
+	_add_rebel_squadron(state, 0.49, 0.55, "bug070-final-empty")
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	var card: DamageCard = DamageCard.create(
+			"Ship", "Point-Defense Failure")
+	card.effect_id = PointDefenseFailure.EFFECT_ID
+	card.timing = "persistent"
+	card.is_faceup = true
+	card.physical_card_id = "damage:bug070:point-defense"
+	card.public_card_ref = "faceup:bug070:point-defense"
+	attacker.add_faceup_damage(card)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	var activation: Dictionary = CommandProcessor.submit_deferred_followups(
+			ActivateShipCommand.new(1, {"ship_index": 0}))
+	assert_false(activation.is_empty())
+	assert_false(CommandProcessor.submit_deferred_followups(
+			AdvanceActivationStepCommand.new(1, {
+				"ship_index": 0,
+				"step_id": "attack_step",
+				"ship_activation_identity": attacker.ship_activation_identity,
+			})).is_empty())
+	var candidate: Dictionary = {}
+	for entry: Dictionary in TargetingListBuilder \
+			.authoritative_ship_target_entries(state, 1, 0):
+		if str(entry.get("target_kind", "")) \
+				== CurrentAttackState.KIND_SQUADRON:
+			candidate = entry
+			break
+	assert_false(candidate.is_empty())
+	assert_true(bool(candidate.get("obstructed", false)))
+	if candidate.is_empty():
+		return
+	var begin: GameCommand = BeginAttackCommand.new(1, {
+		"attacker_player": 1,
+		"attacker_kind": CurrentAttackState.KIND_SHIP,
+		"attacker_index": 0,
+		"attacker_zone": int(candidate["attacker_zone"]),
+		"defender_player": int(candidate["target_owner"]),
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_index": int(candidate["target_index"]),
+		"defender_zone": int(candidate["target_zone"]),
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"range_band": str(candidate["range_band"]),
+		"obstructed": bool(candidate["obstructed"]),
+		"ship_activation_identity": attacker.ship_activation_identity,
+	})
+	var begun: Dictionary = CommandProcessor.submit_deferred_followups(begin)
+	assert_false(begun.is_empty())
+	if begun.is_empty():
+		return
+	assert_eq(state.current_attack_state.dice_pool, {"BLUE": 1})
+	var attack_id: String = state.current_attack_state.attack_id
+	var choice: GameCommand = ResolveAttackPoolChoiceCommand.new(1, {
+		"attack_id": attack_id,
+		"choice_kind": "rule",
+		"rule_id": PointDefenseFailure.RULE_ID,
+		"color": "BLUE",
+		"no_die": false,
+	})
+	assert_false(CommandProcessor.submit_deferred_followups(choice).is_empty())
+	assert_true(state.current_attack_state.dice_pool.is_empty())
+	assert_false(state.current_attack_state.obstruction_resolved)
+	assert_ne(RollDiceCommand.new(1, {"attack_id": attack_id}) \
+			.validate(state), "")
+	assert_false(CommandProcessor.submit_deferred_followups(
+			ResolveAttackPoolChoiceCommand.new(1, {
+				"attack_id": attack_id,
+				"choice_kind": "obstruction",
+				"rule_id": "",
+				"color": "",
+				"no_die": true,
+			})).is_empty())
+	assert_true(state.current_attack_state.obstruction_resolved)
+	var premature: GameCommand = SkipAttackCommand.new(1, {
+		"reason": SkipAttackCommand.REASON_SQUADRON_DONE,
+		"ship_index": 0,
+	})
+	var before_premature: Dictionary = state.serialize()
+	var premature_cursor: int = CommandProcessor.get_next_sequence()
+	assert_true(CommandProcessor.submit_deferred_followups(premature).is_empty())
+	assert_engine_error(1)
+	assert_eq(state.serialize(), before_premature)
+	assert_eq(CommandProcessor.get_next_sequence(), premature_cursor)
+	var cancel: GameCommand = SkipAttackCommand.new(1, {
+		"attack_id": attack_id,
+		"reason": "cancelled",
+	})
+	assert_false(CommandProcessor.submit_deferred_followups(cancel).is_empty())
+	assert_true(state.current_attack_state.is_inactive())
+	assert_null(state.completed_attack_inspection)
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_STEP)
+	assert_eq(attacker.committed_attack_count, 1)
+	assert_eq(attacker.pending_anti_squadron_cancellation_return()
+			.get("attack_id", ""), attack_id)
+	var finish_payload: Dictionary = attacker \
+			.pending_anti_squadron_cancellation_return()
+	finish_payload["reason"] = SkipAttackCommand.REASON_SQUADRON_DONE
+	finish_payload["ship_index"] = 0
+	var before_rejection: Dictionary = state.serialize()
+	var rejection_cursor: int = CommandProcessor.get_next_sequence()
+	assert_true(CommandProcessor.submit_deferred_followups(
+			SkipAttackCommand.new(0, finish_payload)).is_empty())
+	assert_engine_error(2)
+	var stale_payload: Dictionary = finish_payload.duplicate(true)
+	stale_payload["attack_ordinal"] = int(stale_payload["attack_ordinal"]) - 1
+	assert_true(CommandProcessor.submit_deferred_followups(
+			SkipAttackCommand.new(1, stale_payload)).is_empty())
+	assert_engine_error(3)
+	var reordered_finish := SkipAttackCommand.new(1, finish_payload)
+	reordered_finish.sequence = rejection_cursor + 1
+	assert_true(CommandProcessor.submit_replay(reordered_finish).is_empty())
+	assert_engine_error(4)
+	assert_eq(state.serialize(), before_rejection)
+	assert_eq(CommandProcessor.get_next_sequence(), rejection_cursor)
+	var raw: Dictionary = state.serialize()
+	assert_not_null(GameState.deserialize(raw))
+	var filtered: Dictionary = StateFilter.filter_for_player_checked(raw, 1)
+	assert_true(bool(filtered.get("ok", false)))
+	var passive: GameState = GameState.deserialize_passive_network(
+			filtered.get(StateFilter.KEY_STATE, {}))
+	assert_not_null(passive)
+	var restored: GameState = GameState.deserialize(raw)
+	assert_not_null(restored)
+	var next_sequence: int = CommandProcessor.get_next_sequence()
+	assert_true(GameManager.start_new_game_from_state(
+			restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			next_sequence))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	assert_true(restored.current_attack_state.is_inactive())
+	assert_null(restored.completed_attack_inspection)
+	assert_eq(restored.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION)
+	assert_eq(restored.interaction_flow.step_id,
+			Constants.InteractionStep.MANEUVER_STEP)
+	assert_false(restored.get_ship(1, 0).attack_step_active)
+	assert_true(restored.get_ship(1, 0)
+			.pending_anti_squadron_cancellation_return().is_empty())
+	assert_eq(_history_types(), ["skip_attack", "advance_activation_step"])
+	var after_finish: Dictionary = restored.serialize()
+	var after_finish_cursor: int = CommandProcessor.get_next_sequence()
+	assert_true(CommandProcessor.submit_deferred_followups(
+			SkipAttackCommand.new(1, finish_payload)).is_empty())
+	assert_engine_error(5)
+	assert_eq(restored.serialize(), after_finish)
+	assert_eq(CommandProcessor.get_next_sequence(), after_finish_cursor)
+
+
+func test_bug071_real_begin_roll_both_add_die_retains_spent_token_on_recovery() \
+		-> void:
+	var state: GameState = _player_one_ship_attack_state()
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	attacker.add_runtime_upgrade(H9_RULE.DATA_KEY,
+			"bug071-production-h9", "TURBOLASERS", 0)
+	assert_true(attacker.command_dial_stack.replace_top_command(
+			Constants.CommandType.CONCENTRATE_FIRE))
+	assert_true(attacker.command_tokens.add_token(
+			Constants.CommandType.CONCENTRATE_FIRE))
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	assert_false(CommandProcessor.submit_deferred_followups(
+			ActivateShipCommand.new(1, {"ship_index": 0})).is_empty())
+	assert_false(CommandProcessor.submit_deferred_followups(
+			AdvanceActivationStepCommand.new(1, {
+				"ship_index": 0,
+				"step_id": "attack_step",
+				"ship_activation_identity": attacker.ship_activation_identity,
+			})).is_empty())
+	var candidate: Dictionary = {}
+	for entry: Dictionary in TargetingListBuilder \
+			.authoritative_ship_target_entries(state, 1, 0):
+		if str(entry.get("target_kind", "")) \
+				== CurrentAttackState.KIND_SHIP:
+			candidate = entry
+			break
+	assert_false(candidate.is_empty())
+	if candidate.is_empty():
+		return
+	var begun: Dictionary = CommandProcessor.submit_deferred_followups(
+			BeginAttackCommand.new(1, {
+				"attacker_player": 1,
+				"attacker_kind": CurrentAttackState.KIND_SHIP,
+				"attacker_index": 0,
+				"attacker_zone": int(candidate["attacker_zone"]),
+				"defender_player": int(candidate["target_owner"]),
+				"defender_kind": CurrentAttackState.KIND_SHIP,
+				"defender_index": int(candidate["target_index"]),
+				"defender_zone": int(candidate["target_zone"]),
+				"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+				"range_band": str(candidate["range_band"]),
+				"obstructed": bool(candidate["obstructed"]),
+				"ship_activation_identity": attacker.ship_activation_identity,
+			}))
+	assert_false(begun.is_empty())
+	if begun.is_empty():
+		return
+	var attack_id: String = state.current_attack_state.attack_id
+	assert_false(CommandProcessor.submit_deferred_followups(
+			RollDiceCommand.new(1, {"attack_id": attack_id})).is_empty())
+	assert_eq(state.current_attack_state.cf_choice,
+			CurrentAttackState.RESOLUTION_PENDING)
+	assert_ne(ConfirmAttackDiceCommand.new(1, {
+		"attack_id": attack_id,
+	}).validate(state), "")
+	var projection: Dictionary = UIProjector.project(state, 1).timing_window
+	var both_payload: Dictionary = {}
+	for opportunity: Dictionary in projection.get("opportunities", []):
+		if str(opportunity.get("semantic_key", "")) \
+				!= CF_CHOICE_RULE.SEMANTIC_KEY:
+			continue
+		for option: Dictionary in opportunity.get("use_choices", []):
+			var intent: Dictionary = option.get("intent", {})
+			var payload: Dictionary = intent.get("payload", {})
+			if str(payload.get("choice", "")) \
+					== CurrentAttackState.CF_CHOICE_BOTH:
+				both_payload = payload
+				break
+	assert_false(both_payload.is_empty())
+	if both_payload.is_empty():
+		return
+	assert_false(CommandProcessor.submit_deferred_followups(
+			CF_CHOICE_COMMAND.new(1, both_payload)).is_empty())
+	assert_eq(attacker.concentrate_fire_resolved_round,
+			state.current_round)
+	assert_false(attacker.command_tokens.has_token(
+			Constants.CommandType.CONCENTRATE_FIRE))
+	assert_true(attacker.command_dial_stack.get_revealed_dial().is_empty())
+	assert_eq(state.current_attack_state.cf_dial_resolution,
+			CurrentAttackState.RESOLUTION_PENDING)
+	projection = UIProjector.project(state, 1).timing_window
+	var dial_payload: Dictionary = {}
+	for opportunity: Dictionary in projection.get("opportunities", []):
+		if str(opportunity.get("semantic_key", "")) \
+				!= CF_CHOICE_RULE.DIAL_SEMANTIC_KEY:
+			continue
+		var choices: Array = opportunity.get("use_choices", [])
+		if not choices.is_empty():
+			dial_payload = ((choices[0] as Dictionary).get("intent", {}) \
+					as Dictionary).get("payload", {})
+	assert_false(dial_payload.is_empty())
+	if dial_payload.is_empty():
+		return
+	var dice_before: int = state.current_attack_state.dice_results.size()
+	var rng_before: int = state.rng.get_state()
+	assert_false(CommandProcessor.submit_deferred_followups(
+			CF_DIAL_USE_COMMAND.new(1, dial_payload)).is_empty())
+	assert_eq(state.current_attack_state.dice_results.size(), dice_before + 1)
+	assert_ne(state.rng.get_state(), rng_before)
+	assert_eq(state.current_attack_state.cf_token_resolution,
+			CurrentAttackState.RESOLUTION_PENDING)
+	var raw: Dictionary = state.serialize()
+	assert_not_null(GameState.deserialize(raw))
+	var filtered: Dictionary = StateFilter.filter_for_player_checked(raw, 1)
+	assert_true(bool(filtered.get("ok", false)))
+	assert_not_null(GameState.deserialize_passive_network(
+			filtered.get(StateFilter.KEY_STATE, {})))
+	var restored: GameState = GameState.deserialize(raw)
+	assert_not_null(restored)
+	assert_true(GameManager.start_new_game_from_state(
+			restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			CommandProcessor.get_next_sequence()))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	assert_eq(restored.current_attack_state.cf_choice,
+			CurrentAttackState.CF_CHOICE_BOTH)
+	assert_eq(restored.current_attack_state.cf_token_resolution,
+			CurrentAttackState.RESOLUTION_PENDING)
+	assert_eq(restored.current_attack_state.dice_results.size(),
+			dice_before + 1)
+	assert_eq(restored.get_ship(1, 0).concentrate_fire_resolved_round,
+			restored.current_round)
+	var token_projection: Dictionary = UIProjector.project(
+			restored, 1).timing_window
+	var decline_intent: Dictionary = {}
+	var token_index: int = -1
+	var projection_index: int = 0
+	for opportunity: Dictionary in token_projection.get("opportunities", []):
+		if str(opportunity.get("capability_id", "")) \
+				== CF_RULE.CAPABILITY_ID:
+			decline_intent = opportunity.get("decline_intent", {})
+			token_index = projection_index
+		projection_index += 1
+	assert_false(decline_intent.is_empty())
+	if decline_intent.is_empty():
+		return
+	var recovered_panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_eq(recovered_panel.get_title_text(),
+			"Concentrate Fire Command Token")
+	assert_true(recovered_panel._cf_token_container.visible)
+	assert_false(recovered_panel._cf_token_reroll_button.visible)
+	assert_null(recovered_panel.find_child(
+			"TimingUseButton_%d" % token_index, true, false))
+	assert_eq(recovered_panel._cf_token_skip_button.text, "Decline")
+	recovered_panel._cf_token_skip_button.pressed.emit()
+	assert_eq(restored.current_attack_state.cf_token_resolution,
+			CurrentAttackState.RESOLUTION_DECLINED)
+	assert_false(restored.get_ship(1, 0).command_tokens.has_token(
+			Constants.CommandType.CONCENTRATE_FIRE))
+	assert_eq(restored.get_ship(1, 0).concentrate_fire_resolved_round,
+			restored.current_round)
+	var h9_projection: Dictionary = UIProjector.project(
+			restored, 1).timing_window
+	var h9_decline: Dictionary = {}
+	for opportunity: Dictionary in h9_projection.get("opportunities", []):
+		if str(opportunity.get("capability_id", "")) \
+				== H9_RULE.CAPABILITY_ID:
+			h9_decline = opportunity.get("decline_intent", {})
+	assert_false(h9_decline.is_empty())
+	assert_ne(ConfirmAttackDiceCommand.new(1, {
+		"attack_id": restored.current_attack_state.attack_id,
+	}).validate(restored), "")
+	assert_false(CommandProcessor.submit_deferred_followups(
+			H9_DECLINE.new(1, h9_decline.get("payload", {}))).is_empty())
+
+
+func test_bug070_real_obstructed_squadron_cancellation_returns_in_both_contexts() \
+		-> void:
+	for commanded: bool in [false, true]:
+		CommandProcessor.reset()
+		var state: GameState = _obstructed_squadron_scenario(commanded)
+		assert_not_null(state)
+		if state == null:
+			return
+		GameManager.current_game_state = state
+		GameManager.is_game_active = true
+		var squadron: SquadronInstance = state.get_squadron(0, 0)
+		if commanded:
+			var ship: ShipInstance = state.get_ship(0, 0)
+			assert_false(CommandProcessor.submit_deferred_followups(
+					ActivateShipCommand.new(0, {"ship_index": 0})).is_empty())
+			assert_false(CommandProcessor.submit_deferred_followups(
+					AdvanceActivationStepCommand.new(0, {
+						"ship_index": 0,
+						"step_id": "squadron_step",
+						"ship_activation_identity": ship.ship_activation_identity,
+					})).is_empty())
+		var activation_payload: Dictionary = {
+			"squadron_index": 0,
+			"activation_context": SquadronInstance \
+					.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND if commanded \
+					else SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE,
+		}
+		if commanded:
+			activation_payload.merge({
+				"commanding_ship_player": 0,
+				"commanding_ship_index": 0,
+				"ship_activation_identity": state.get_ship(0, 0) \
+						.ship_activation_identity,
+			})
+		assert_false(CommandProcessor.submit_deferred_followups(
+				ActivateSquadronCommand.new(0, activation_payload)).is_empty())
+		var candidate: Dictionary = {}
+		for entry: Dictionary in TargetingListBuilder \
+				.authoritative_squadron_target_entries(state, 0, 0):
+			if str(entry.get("target_kind", "")) \
+					== CurrentAttackState.KIND_SHIP \
+					and bool(entry.get("obstructed", false)) \
+					and DicePool.get_total_count(entry.get("dice", {})) == 1:
+				candidate = entry
+				break
+		assert_false(candidate.is_empty(),
+				"The real targeting authority must produce one obstructed die.")
+		if candidate.is_empty():
+			return
+		var begin_payload: Dictionary = {
+			"attacker_player": 0,
+			"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+			"attacker_index": 0,
+			"attacker_zone": -1,
+			"defender_player": 1,
+			"defender_kind": CurrentAttackState.KIND_SHIP,
+			"defender_index": int(candidate["target_index"]),
+			"defender_zone": int(candidate["target_zone"]),
+			"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+			"range_band": str(candidate["range_band"]),
+			"obstructed": true,
+			"dice_pool": (candidate["dice"] as Dictionary).duplicate(true),
+			"activation_id": squadron.activation_id,
+			"activation_context": squadron.activation_context,
+		}
+		if commanded:
+			begin_payload["ship_activation_identity"] = state.get_ship(0, 0) \
+					.ship_activation_identity
+		assert_false(CommandProcessor.submit_deferred_followups(
+				BeginAttackCommand.new(0, begin_payload)).is_empty())
+		var attack_id: String = state.current_attack_state.attack_id
+		assert_ne(RollDiceCommand.new(0, {"attack_id": attack_id}) \
+				.validate(state), "")
+		assert_false(CommandProcessor.submit_deferred_followups(
+				ResolveAttackPoolChoiceCommand.new(0, {
+					"attack_id": attack_id,
+					"choice_kind": "obstruction",
+					"rule_id": "",
+					"color": "RED",
+					"no_die": false,
+				})).is_empty())
+		assert_true(state.current_attack_state.dice_pool.is_empty())
+		assert_false(CommandProcessor.submit_deferred_followups(
+				SkipAttackCommand.new(0, {
+					"attack_id": attack_id,
+					"reason": "cancelled",
+				})).is_empty())
+		assert_true(state.current_attack_state.is_inactive())
+		assert_null(state.completed_attack_inspection)
+		var raw: Dictionary = state.serialize()
+		assert_not_null(GameState.deserialize(raw))
+		assert_true(bool(StateFilter.filter_for_player_checked(raw, 0) \
+				.get("ok", false)))
+		var restored: GameState = GameState.deserialize(raw)
+		assert_not_null(restored)
+		assert_true(GameManager.start_new_game_from_state(
+				restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+				CommandProcessor.get_next_sequence()))
+		var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+		add_child_autofree(board)
+		assert_true(restored.current_attack_state.is_inactive())
+		assert_null(restored.completed_attack_inspection)
+		assert_true(restored.validate_declaration_adjacent_state())
+		if commanded:
+			var modal: SquadronActivationModal = \
+					board._squadron_phase_controller.get_modal()
+			assert_true(modal.is_command_mode())
+			assert_eq(modal.get_state(),
+					SquadronActivationModal.State.ACTION_CHOICE)
+			assert_true(modal._has_attacked)
+			var restored_squadron: SquadronInstance = restored.get_squadron(0, 0)
+			var decline: GameCommand = DeclineSquadronMoveCommand.new(0, {
+				"squadron_index": 0,
+				"activation_id": restored_squadron.activation_id,
+				"activation_context": restored_squadron.activation_context,
+				"ship_activation_identity": restored.get_ship(0, 0) \
+						.ship_activation_identity,
+				"completed_attack_inspection_id": "",
+			})
+			assert_eq(decline.validate(restored), "")
+			assert_false(CommandProcessor.submit_deferred_followups(
+					decline).is_empty())
+		else:
+			assert_true(_history_types().has("complete_squadron_activation"))
+			assert_true(restored.current_round >= 1)
+		board.queue_free()
+		await get_tree().process_frame
+
+
+func test_bug071_real_begin_choice_dial_token_and_neither_branches() -> void:
+	for choice: String in [CurrentAttackState.CF_CHOICE_DIAL,
+			CurrentAttackState.CF_CHOICE_TOKEN,
+			CurrentAttackState.CF_CHOICE_NEITHER]:
+		var built: Dictionary = BUG071_BUILDER.committed_choice(1, choice)
+		assert_false(built.is_empty())
+		if built.is_empty():
+			return
+		var state: GameState = built["state"]
+		var ship: ShipInstance = state.get_ship(1, 0)
+		assert_eq(state.current_attack_state.cf_choice, choice)
+		assert_eq(ship.command_dial_stack.get_revealed_dial().is_empty(),
+				choice == CurrentAttackState.CF_CHOICE_DIAL)
+		assert_eq(ship.command_tokens.has_token(
+				Constants.CommandType.CONCENTRATE_FIRE),
+				choice != CurrentAttackState.CF_CHOICE_TOKEN)
+		assert_eq(ship.concentrate_fire_resolved_round,
+				-1 if choice == CurrentAttackState.CF_CHOICE_NEITHER \
+				else state.current_round)
+		var projection: Dictionary = UIProjector.project(state, 1).timing_window
+		var confirm_payload: Dictionary = {
+			"attack_id": state.current_attack_state.attack_id,
+			TimingWindowOrchestrator.COMMAND_KEY_TIMING_WINDOW_ID:
+					state.timing_window_state.timing_window_id,
+			TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID:
+					state.timing_window_state.lifecycle_id,
+			TimingWindowOrchestrator.COMMAND_KEY_SOURCE_ID:
+					state.current_attack_state.attack_id,
+			TimingWindowOrchestrator.COMMAND_KEY_SOURCE_TYPE: "current_attack",
+		}
+		var decline_payload: Dictionary = {}
+		var semantic: String = CF_CHOICE_RULE.DIAL_SEMANTIC_KEY \
+				if choice == CurrentAttackState.CF_CHOICE_DIAL \
+				else CF_RULE.SEMANTIC_KEY
+		for opportunity: Dictionary in projection.get("opportunities", []):
+			if str(opportunity.get("semantic_key", "")) == semantic:
+				decline_payload = (opportunity.get("decline_intent", {}) \
+						as Dictionary).get("payload", {})
+		if choice != CurrentAttackState.CF_CHOICE_NEITHER:
+			assert_false(decline_payload.is_empty())
+			assert_ne(ConfirmAttackDiceCommand.new(1,
+					confirm_payload).validate(state), "")
+			var decline_command: GameCommand = CF_DIAL_DECLINE.new(
+					1, decline_payload) \
+					if choice == CurrentAttackState.CF_CHOICE_DIAL \
+					else CF_DECLINE.new(1, decline_payload)
+			assert_false(CommandProcessor.submit_deferred_followups(
+					decline_command).is_empty())
+			assert_eq(ship.concentrate_fire_resolved_round, state.current_round)
+		assert_eq(ConfirmAttackDiceCommand.new(1,
+				confirm_payload).validate(state), "")
+
+
+func test_bug070_cancelled_first_squadron_reuses_zone_then_allows_normal_attack() \
+		-> void:
+	var state: GameState = _player_one_ship_attack_state()
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	var defender_ship: ShipInstance = state.get_ship(0, 0)
+	defender_ship.pos_x = 0.65
+	defender_ship.pos_y = 0.42
+	_add_rebel_squadron(state, 0.49, 0.55, "bug070-live-first")
+	_add_rebel_squadron(state, 0.51, 0.55, "bug070-live-second")
+	var card: DamageCard = DamageCard.create(
+			"Ship", "Point-Defense Failure")
+	card.effect_id = PointDefenseFailure.EFFECT_ID
+	card.timing = "persistent"
+	card.is_faceup = true
+	card.physical_card_id = "damage:bug070:live-point-defense"
+	card.public_card_ref = "faceup:bug070:live-point-defense"
+	attacker.add_faceup_damage(card)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	assert_false(CommandProcessor.submit_deferred_followups(
+			ActivateShipCommand.new(1, {"ship_index": 0})).is_empty())
+	assert_false(CommandProcessor.submit_deferred_followups(
+			AdvanceActivationStepCommand.new(1, {
+				"ship_index": 0,
+				"step_id": "attack_step",
+				"ship_activation_identity": attacker.ship_activation_identity,
+			})).is_empty())
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			CommandProcessor.get_next_sequence()))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var selector: TargetSelector = board._target_selector
+	var executor: AttackExecutor = board._attack_executor
+	var attacker_token: ShipToken = _board_ship_token(board, attacker)
+	var first_token: SquadronToken = _board_squadron_token(
+			board, state.get_squadron(0, 0))
+	var second_token: SquadronToken = _board_squadron_token(
+			board, state.get_squadron(0, 1))
+	assert_not_null(attacker_token)
+	assert_not_null(first_token)
+	assert_not_null(second_token)
+	if attacker_token == null or first_token == null or second_token == null:
+		return
+	board._panel_mgr.activation_modal._on_attack_pressed()
+	selector._select_attacker_ship_zone(attacker_token, Constants.HullZone.FRONT)
+	assert_true(selector.handle_squadron_click(first_token))
+	var panel: AttackSimPanel = selector.get_panel()
+	assert_true(panel._confirm_is_declaration)
+	panel._on_confirm_pressed()
+	await get_tree().process_frame
+	assert_eq(attacker.anti_squadron_attack_zone, Constants.HullZone.FRONT)
+	assert_eq(_command_count(CommandProcessor.get_history(), "begin_attack"), 1)
+	assert_true(state.current_attack_state.is_inactive())
+	assert_eq(_command_count(CommandProcessor.get_history(), "skip_attack"), 1)
+	assert_eq(_history_types(), ["begin_attack",
+			"resolve_attack_pool_choice", "skip_attack"])
+	assert_eq(CommandProcessor.get_history().back().payload.get("reason"),
+			"cancelled")
+	assert_eq(attacker.anti_squadron_attack_zone, Constants.HullZone.FRONT)
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_STEP)
+	assert_false(attacker.pending_anti_squadron_cancellation_return().is_empty())
+	assert_true(executor.is_target_selecting())
+	assert_false(executor.is_selecting(),
+			"Cancellation must not offer the normal second attack yet.")
+	assert_eq(executor._state.attacker_zone, Constants.HullZone.FRONT)
+	assert_eq(executor._state.attacked_squads, [first_token])
+	assert_true(selector.handle_squadron_click(second_token))
+	assert_eq(selector.build_current_participants().def_squad, second_token)
+	assert_true(panel._confirm_is_declaration)
+	assert_false(panel._confirm_button.disabled)
+	panel._on_confirm_pressed()
+	await get_tree().process_frame
+	assert_eq(_command_count(CommandProcessor.get_history(), "begin_attack"), 2)
+	assert_eq(_command_count(CommandProcessor.get_history(), "skip_attack"), 3,
+			"Two individual cancellations must be followed by one child finish.")
+	assert_eq(_history_types(), ["begin_attack",
+			"resolve_attack_pool_choice", "skip_attack", "begin_attack",
+			"resolve_attack_pool_choice", "skip_attack", "skip_attack"])
+	var history: Array[GameCommand] = CommandProcessor.get_history()
+	assert_eq(history[2].payload.get("reason"), "cancelled")
+	assert_eq(history[5].payload.get("reason"), "cancelled")
+	assert_eq(history[6].payload.get("reason"),
+			SkipAttackCommand.REASON_SQUADRON_DONE)
+	assert_true(state.current_attack_state.is_inactive())
+	assert_eq(attacker.anti_squadron_attack_zone, -1)
+	assert_true(attacker.pending_anti_squadron_cancellation_return().is_empty())
+	assert_eq(attacker.committed_attack_count, 1)
+	assert_true(executor.is_selecting(),
+			"Only the closed anti-squadron child may expose the normal second attack.")
+	var selected_zone: int = -1
+	var resolver: AttackTargetResolver = selector.get_target_resolver()
+	for zone: int in [
+			Constants.HullZone.LEFT,
+			Constants.HullZone.RIGHT,
+			Constants.HullZone.REAR,
+		]:
+		if not resolver.zone_has_targets(attacker_token,
+				zone as Constants.HullZone):
+			continue
+		selector._select_attacker_ship_zone(attacker_token, zone)
+		if selector.is_target_selecting():
+			selected_zone = zone
+			break
+	assert_ne(selected_zone, -1)
+	assert_true(_select_first_legal_ship_target(board, selector,
+			attacker_token))
+	assert_true(selector.has_declaration_candidate())
+	assert_true(panel._confirm_is_declaration)
+	panel._on_confirm_pressed()
+	assert_eq(_command_count(CommandProcessor.get_history(), "begin_attack"), 3)
+	assert_true(state.current_attack_state.active)
+	assert_eq(state.current_attack_state.defender_kind,
+			CurrentAttackState.KIND_SHIP)
+	assert_eq(state.current_attack_state.attacker_zone, selected_zone)
+	assert_eq(attacker.committed_attack_count, 2)
+	assert_eq(attacker.used_attack_hull_zones,
+			[int(Constants.HullZone.FRONT), selected_zone])
+
+
+func test_bug070_raw_cancelled_step_six_return_reconstructs_same_zone_board() \
+		-> void:
+	var state: GameState = _player_one_ship_attack_state()
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	_add_rebel_squadron(state, 0.49, 0.55, "bug070-recovery-first")
+	_add_rebel_squadron(state, 0.51, 0.55, "bug070-recovery-second")
+	var card: DamageCard = DamageCard.create(
+			"Ship", "Point-Defense Failure")
+	card.effect_id = PointDefenseFailure.EFFECT_ID
+	card.timing = "persistent"
+	card.is_faceup = true
+	card.physical_card_id = "damage:bug070:recovery-point-defense"
+	card.public_card_ref = "faceup:bug070:recovery-point-defense"
+	attacker.add_faceup_damage(card)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	assert_false(CommandProcessor.submit_deferred_followups(
+			ActivateShipCommand.new(1, {"ship_index": 0})).is_empty())
+	assert_false(CommandProcessor.submit_deferred_followups(
+			AdvanceActivationStepCommand.new(1, {
+				"ship_index": 0,
+				"step_id": "attack_step",
+				"ship_activation_identity": attacker.ship_activation_identity,
+			})).is_empty())
+	var candidate: Dictionary = {}
+	for entry: Dictionary in TargetingListBuilder \
+			.authoritative_ship_target_entries(state, 1, 0):
+		if str(entry.get("target_kind", "")) \
+				== CurrentAttackState.KIND_SQUADRON \
+				and int(entry.get("target_index", -1)) == 0:
+			candidate = entry
+			break
+	assert_false(candidate.is_empty())
+	if candidate.is_empty():
+		return
+	assert_false(CommandProcessor.submit_deferred_followups(
+			BeginAttackCommand.new(1, {
+				"attacker_player": 1,
+				"attacker_kind": CurrentAttackState.KIND_SHIP,
+				"attacker_index": 0,
+				"attacker_zone": int(candidate["attacker_zone"]),
+				"defender_player": 0,
+				"defender_kind": CurrentAttackState.KIND_SQUADRON,
+				"defender_index": 0,
+				"defender_zone": int(candidate["target_zone"]),
+				"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+				"range_band": str(candidate["range_band"]),
+				"obstructed": bool(candidate["obstructed"]),
+				"ship_activation_identity": attacker.ship_activation_identity,
+			})).is_empty())
+	var attack_id: String = state.current_attack_state.attack_id
+	assert_eq(state.current_attack_state.dice_pool, {"BLUE": 1})
+	assert_false(CommandProcessor.submit_deferred_followups(
+			ResolveAttackPoolChoiceCommand.new(1, {
+				"attack_id": attack_id,
+				"choice_kind": "rule",
+				"rule_id": PointDefenseFailure.RULE_ID,
+				"color": "BLUE",
+				"no_die": false,
+			})).is_empty())
+	assert_false(CommandProcessor.submit_deferred_followups(
+			SkipAttackCommand.new(1, {
+				"attack_id": attack_id,
+				"reason": "cancelled",
+			})).is_empty())
+	assert_eq(_history_types(), ["activate_ship", "advance_activation_step",
+			"begin_attack", "resolve_attack_pool_choice", "skip_attack"])
+	assert_true(state.current_attack_state.is_inactive())
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_STEP)
+	assert_eq(attacker.pending_anti_squadron_cancellation_return()
+			.get("attack_id"), attack_id)
+	var raw: Dictionary = state.serialize()
+	var next_sequence: int = CommandProcessor.get_next_sequence()
+	var restored: GameState = GameState.deserialize(raw)
+	assert_not_null(restored)
+	if restored == null:
+		return
+	assert_eq(restored.serialize(), raw,
+			"The immediate command-produced snapshot must need no test repair.")
+	var filtered: Dictionary = StateFilter.filter_for_player_checked(raw, 1)
+	assert_true(bool(filtered.get("ok", false)))
+	assert_not_null(GameState.deserialize_passive_network(
+			filtered.get(StateFilter.KEY_STATE, {})))
+	assert_true(GameManager.start_new_game_from_state(
+			restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			next_sequence))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var selector: TargetSelector = board._target_selector
+	var executor: AttackExecutor = board._attack_executor
+	var second_token: SquadronToken = _board_squadron_token(
+			board, restored.get_squadron(0, 1))
+	assert_not_null(second_token)
+	if second_token == null:
+		return
+	assert_eq(restored.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			"Board reconstruction must retain the cancellation return flow.")
+	assert_true(executor.is_target_selecting())
+	assert_eq(executor._state.attacker_zone, int(candidate["attacker_zone"]))
+	assert_true(selector.handle_squadron_click(second_token))
+	var panel: AttackSimPanel = selector.get_panel()
+	assert_true(panel._confirm_is_declaration)
+	assert_false(panel._confirm_button.disabled)
+	panel._on_confirm_pressed()
+	assert_eq(_command_count(CommandProcessor.get_history(), "begin_attack"), 1)
+	assert_eq(CommandProcessor.get_history()[0].payload.get("attacker_zone"),
+			int(candidate["attacker_zone"]))
+	assert_eq(CommandProcessor.get_history()[0].payload.get("defender_index"), 1)
+	board.queue_free()
+	await get_tree().process_frame
+
+	var passive: GameState = GameState.deserialize_passive_network(
+			filtered.get(StateFilter.KEY_STATE, {}))
+	assert_not_null(passive)
+	if passive == null:
+		return
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	assert_true(GameManager.start_new_game_from_state(
+			passive, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			next_sequence))
+	var awaiting := AwaitingRecordingSubmitter.new()
+	GameManager.set_command_submitter(awaiting)
+	var passive_board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(passive_board)
+	var passive_selector: TargetSelector = passive_board._target_selector
+	var passive_second: SquadronToken = _board_squadron_token(
+			passive_board, passive.get_squadron(0, 1))
+	assert_not_null(passive_second)
+	if passive_second == null:
+		return
+	assert_eq(passive.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION)
+	assert_true(passive_board._attack_executor.is_target_selecting())
+	assert_eq(passive_board._attack_executor._state.attacker_zone,
+			int(candidate["attacker_zone"]))
+	assert_true(passive_selector.handle_squadron_click(passive_second))
+	var passive_panel: AttackSimPanel = passive_selector.get_panel()
+	assert_true(passive_panel._confirm_is_declaration)
+	assert_false(passive_panel._confirm_button.disabled)
+	passive_panel._on_confirm_pressed()
+	assert_eq(awaiting.submitted_commands.size(), 1)
+	assert_eq(awaiting.submitted_commands[0].command_type, "begin_attack")
+	assert_eq(awaiting.submitted_commands[0].payload.get("attacker_zone"),
+			int(candidate["attacker_zone"]))
+	assert_eq(awaiting.submitted_commands[0].payload.get("defender_index"), 1)
+	assert_true(passive.current_attack_state.is_inactive(),
+			"The passive peer must await the authoritative Begin result.")
+	assert_true(_history_types().is_empty())
+
+
+func test_bug071_real_board_cf_use_menu_and_decline() -> void:
+	var cases: Array[Dictionary] = [
+		{"dial": true, "token": false,
+			"choice": CurrentAttackState.CF_CHOICE_DIAL,
+			"menu": ["Dial"]},
+		{"dial": true, "token": false,
+			"choice": CurrentAttackState.CF_CHOICE_DIAL,
+			"dial_decline": true,
+			"menu": ["Dial"]},
+		{"dial": true, "token": false,
+			"choice": CurrentAttackState.CF_CHOICE_NEITHER,
+			"menu": ["Dial"]},
+		{"dial": false, "token": true,
+			"choice": CurrentAttackState.CF_CHOICE_TOKEN,
+			"token_use": true,
+			"menu": ["Token"]},
+		{"dial": false, "token": true,
+			"choice": CurrentAttackState.CF_CHOICE_TOKEN,
+			"menu": ["Token"]},
+		{"dial": false, "token": true,
+			"choice": CurrentAttackState.CF_CHOICE_NEITHER,
+			"menu": ["Token"]},
+		{"dial": true, "token": true,
+			"choice": CurrentAttackState.CF_CHOICE_DIAL,
+			"dial_colour_index": 1,
+			"menu": ["Dial", "Token", "Dial + Token"]},
+		{"dial": true, "token": true,
+			"choice": CurrentAttackState.CF_CHOICE_TOKEN,
+			"menu": ["Dial", "Token", "Dial + Token"]},
+		{"dial": true, "token": true,
+			"choice": CurrentAttackState.CF_CHOICE_BOTH,
+			"dial_colour_index": 2,
+			"token_use": true,
+			"menu": ["Dial", "Token", "Dial + Token"]},
+		{"dial": true, "token": true,
+			"choice": CurrentAttackState.CF_CHOICE_BOTH,
+			"menu": ["Dial", "Token", "Dial + Token"]},
+		{"dial": true, "token": true,
+			"choice": CurrentAttackState.CF_CHOICE_NEITHER,
+			"menu": ["Dial", "Token", "Dial + Token"]},
+	]
+	for case: Dictionary in cases:
+		var built: Dictionary = BUG071_BUILDER.pending_choice(1,
+				bool(case["dial"]), bool(case["token"]))
+		assert_false(built.is_empty())
+		if built.is_empty():
+			return
+		var state: GameState = built["state"]
+		var ship: ShipInstance = state.get_ship(1, 0)
+		assert_true(GameManager.start_new_game_from_state(
+				state, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+				int(built["command_sequence"])))
+		var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+		add_child_autofree(board)
+		var panel: AttackSimPanel = board._target_selector.get_panel()
+		var projected: Dictionary = UIProjector.project(state, 1).timing_window
+		var opportunity_index: int = -1
+		var opportunity: Dictionary = {}
+		for index: int in range((projected.get("opportunities", [])
+				as Array).size()):
+			var candidate: Dictionary = projected["opportunities"][index]
+			if str(candidate.get("semantic_key", "")) == CF_CHOICE_RULE.SEMANTIC_KEY:
+				opportunity_index = index
+				opportunity = candidate
+				break
+		assert_gte(opportunity_index, 0)
+		if opportunity_index < 0:
+			return
+		var row: HBoxContainer = panel.find_child(
+				"TimingWindowRow_%d" % opportunity_index,
+				true, false) as HBoxContainer
+		var use_button: Button = panel.find_child(
+				"TimingUseButton_%d" % opportunity_index,
+				true, false) as Button
+		var decline_button: Button = panel.find_child(
+				"TimingDeclineButton_%d" % opportunity_index,
+				true, false) as Button
+		assert_not_null(row)
+		assert_not_null(use_button)
+		assert_not_null(decline_button)
+		assert_null(panel.find_child(
+				"TimingUseMenu_%d" % opportunity_index, true, false))
+		if row == null or use_button == null or decline_button == null:
+			return
+		assert_eq((row.get_child(0) as Label).text, "Concentrate Fire")
+		assert_eq(use_button.get_parent(), row)
+		assert_eq(decline_button.get_parent(), row)
+		assert_true(use_button.is_visible_in_tree())
+		assert_true(decline_button.is_visible_in_tree())
+		assert_false(use_button.disabled)
+		assert_false(decline_button.disabled)
+		assert_false(panel._cf_resource_container.visible)
+		var before: Dictionary = state.serialize()
+		var before_count: int = CommandProcessor.get_command_count()
+		if str(case["choice"]) == CurrentAttackState.CF_CHOICE_NEITHER:
+			decline_button.pressed.emit()
+			assert_false(panel._cf_resource_container.visible,
+					"Top-level Decline must not open resource selection.")
+		else:
+			use_button.pressed.emit()
+			assert_eq(state.serialize(), before,
+					"Opening resource selection must leave canonical state unchanged.")
+			assert_eq(CommandProcessor.get_command_count(), before_count)
+			assert_true(panel._cf_resource_container.visible)
+			assert_false(panel._timing_window_container.visible)
+			assert_eq(panel.get_title_text(), "Concentrate Fire Command")
+			assert_eq(panel.get_body_text(), "Choose command resource.")
+			assert_eq(panel._cf_resource_container.get_child_count(),
+					(case["menu"] as Array).size())
+			var options: Array = opportunity.get("use_choices", [])
+			var chosen_button: Button = null
+			for index: int in range(options.size()):
+				var payload: Dictionary = ((options[index] as Dictionary)
+						.get("intent", {}) as Dictionary).get("payload", {})
+				var option_button: Button = panel.find_child(
+						"CFResourceChoice_%s" % str(payload.get("choice", "")),
+						true, false) as Button
+				assert_not_null(option_button)
+				if option_button != null:
+					assert_eq(option_button.get_parent(),
+							panel._cf_resource_container)
+					assert_eq(option_button.text, case["menu"][index])
+				if str(payload.get("choice", "")) == str(case["choice"]):
+					chosen_button = option_button
+			assert_not_null(chosen_button)
+			if chosen_button == null:
+				return
+			chosen_button.pressed.emit()
+		assert_eq(_command_count(CommandProcessor.get_history(),
+				CF_CHOICE_COMMAND.TYPE), 1)
+		assert_eq(state.current_attack_state.cf_choice, case["choice"])
+		var selected_dial: bool = str(case["choice"]) in [
+			CurrentAttackState.CF_CHOICE_DIAL,
+			CurrentAttackState.CF_CHOICE_BOTH]
+		var selected_token: bool = str(case["choice"]) in [
+			CurrentAttackState.CF_CHOICE_TOKEN,
+			CurrentAttackState.CF_CHOICE_BOTH]
+		assert_eq(ship.command_dial_stack.get_revealed_dial().is_empty(),
+				selected_dial)
+		assert_eq(ship.command_tokens.has_token(
+				Constants.CommandType.CONCENTRATE_FIRE),
+				bool(case["token"]) and not selected_token)
+		assert_eq(ship.concentrate_fire_resolved_round == state.current_round,
+				str(case["choice"]) != CurrentAttackState.CF_CHOICE_NEITHER)
+		if selected_dial:
+			var after_choice: Dictionary = UIProjector.project(
+					state, 1).timing_window
+			var dial_index: int = -1
+			var dial_opportunity: Dictionary = {}
+			for index: int in range((after_choice.get(
+					"opportunities", []) as Array).size()):
+				if str(after_choice["opportunities"][index].get(
+						"semantic_key", "")) == CF_CHOICE_RULE.DIAL_SEMANTIC_KEY:
+					dial_index = index
+					dial_opportunity = after_choice["opportunities"][index]
+					break
+			assert_gte(dial_index, 0)
+			if dial_index >= 0:
+				assert_eq(panel.get_title_text(),
+						"Concentrate Fire Command Dial")
+				assert_eq(panel.get_body_text(), "Select die to add.")
+				assert_true(panel._cf_dial_container.visible)
+				assert_false((panel._cf_dial_container.get_child(0) as Label).visible)
+				assert_false(panel._timing_window_container.visible)
+				assert_null(panel.find_child(
+						"TimingUseButton_%d" % dial_index, true, false))
+				assert_null(panel.find_child(
+						"TimingUseMenu_%d" % dial_index, true, false))
+				var legal_colours: Array[String] = []
+				for option: Dictionary in dial_opportunity.get("use_choices", []):
+					var intent: Dictionary = option.get("intent", {})
+					var payload: Dictionary = intent.get("payload", {})
+					legal_colours.append(str(payload.get("color", "")))
+				assert_eq(panel._cf_dial_buttons.get_child_count(),
+						legal_colours.size())
+				assert_eq(panel._cf_dial_buttons.find_children(
+						"*", "Button", false, false).size(), 0)
+				for colour: String in legal_colours:
+					var die_image: TextureRect = panel.find_child(
+							"CFDialDie_%s" % colour, true, false) as TextureRect
+					assert_not_null(die_image)
+					if die_image != null:
+						assert_eq(die_image.get_parent(), panel._cf_dial_buttons)
+						assert_not_null(die_image.texture)
+						assert_eq(die_image.mouse_filter, Control.MOUSE_FILTER_STOP)
+						assert_eq(die_image.tooltip_text,
+								colour.capitalize())
+				var dice_before: int = state.current_attack_state.dice_results.size()
+				if bool(case.get("dial_decline", false)):
+					assert_eq(panel._cf_dial_skip_button.text, "Decline")
+					panel._cf_dial_skip_button.pressed.emit()
+					assert_eq(state.current_attack_state.dice_results.size(),
+							dice_before)
+					assert_eq(state.current_attack_state.cf_dial_resolution,
+							CurrentAttackState.RESOLUTION_DECLINED)
+					assert_true(_history_types().has(CF_DIAL_DECLINE.TYPE))
+				else:
+					assert_false(legal_colours.is_empty())
+					if legal_colours.is_empty():
+						return
+					var chosen_colour: String = legal_colours[
+							int(case.get("dial_colour_index", 0)) % legal_colours.size()]
+					var chosen_die: TextureRect = panel.find_child(
+							"CFDialDie_%s" % chosen_colour,
+							true, false) as TextureRect
+					assert_not_null(chosen_die)
+					if chosen_die == null:
+						return
+					var dial_click := InputEventMouseButton.new()
+					dial_click.button_index = MOUSE_BUTTON_LEFT
+					dial_click.pressed = true
+					chosen_die.gui_input.emit(dial_click)
+					assert_eq(state.current_attack_state.dice_results.size(),
+							dice_before + 1)
+					assert_eq(state.current_attack_state.cf_dial_resolution,
+							CurrentAttackState.RESOLUTION_USED)
+					assert_true(_history_types().has(CF_DIAL_USE_COMMAND.TYPE))
+					for command: GameCommand in CommandProcessor.get_history():
+						if command.command_type == CF_DIAL_USE_COMMAND.TYPE:
+							assert_eq(str(command.payload.get("color", "")),
+									chosen_colour)
+		if selected_token:
+			var after_dial: Dictionary = UIProjector.project(
+					state, 1).timing_window
+			var token_index: int = -1
+			var token_opportunity: Dictionary = {}
+			for index: int in range((after_dial.get(
+					"opportunities", []) as Array).size()):
+				if str(after_dial["opportunities"][index].get(
+						"semantic_key", "")) == CF_RULE.SEMANTIC_KEY:
+					token_index = index
+					token_opportunity = after_dial["opportunities"][index]
+					break
+			assert_gte(token_index, 0)
+			if token_index >= 0:
+				assert_eq(panel.get_title_text(),
+						"Concentrate Fire Command Token")
+				assert_eq(panel.get_body_text(), "Select die to reroll.")
+				assert_true(panel._cf_token_container.visible)
+				assert_false(panel._cf_token_reroll_button.visible)
+				assert_false(panel._timing_window_container.visible)
+				assert_null(panel.find_child(
+						"TimingUseButton_%d" % token_index, true, false))
+				assert_null(panel.find_child(
+						"TimingUseMenu_%d" % token_index, true, false))
+				var legal_indices: Array[int] = []
+				for option: Dictionary in token_opportunity.get("use_choices", []):
+					var intent: Dictionary = option.get("intent", {})
+					var payload: Dictionary = intent.get("payload", {})
+					legal_indices.append(int(payload.get("die_index", -1)))
+				assert_eq(panel._timing_window_die_intents.size(),
+						legal_indices.size())
+				for die_index: int in legal_indices:
+					assert_true(panel._timing_window_die_intents.has(die_index))
+					assert_eq(panel._dice_textures[die_index].mouse_filter,
+							Control.MOUSE_FILTER_STOP)
+				if bool(case.get("token_use", false)):
+					assert_false(legal_indices.is_empty())
+					if legal_indices.is_empty():
+						return
+					var die_index: int = legal_indices.back()
+					if selected_dial:
+						assert_eq(die_index,
+								state.current_attack_state.dice_results.size() - 1)
+					var click := InputEventMouseButton.new()
+					click.button_index = MOUSE_BUTTON_LEFT
+					click.pressed = true
+					panel._dice_textures[die_index].gui_input.emit(click)
+					assert_eq(state.current_attack_state.cf_token_resolution,
+							CurrentAttackState.RESOLUTION_USED)
+					assert_true(_history_types().has(CF_USE.TYPE))
+				else:
+					assert_eq(panel._cf_token_skip_button.text, "Decline")
+					panel._cf_token_skip_button.pressed.emit()
+					assert_eq(state.current_attack_state.cf_token_resolution,
+							CurrentAttackState.RESOLUTION_DECLINED)
+					assert_true(_history_types().has(CF_DECLINE.TYPE))
+				assert_false(ship.command_tokens.has_token(
+					Constants.CommandType.CONCENTRATE_FIRE))
+		board.queue_free()
+		await get_tree().process_frame
+
+	var no_resource: Dictionary = BUG071_BUILDER.pending_choice(1, false, false)
+	assert_false(no_resource.is_empty())
+	if no_resource.is_empty():
+		return
+	var no_resource_state: GameState = no_resource["state"]
+	var no_resource_projection: Dictionary = UIProjector.project(
+			no_resource_state, 1).timing_window
+	for opportunity: Dictionary in no_resource_projection.get("opportunities", []):
+		assert_ne(str(opportunity.get("semantic_key", "")),
+				CF_CHOICE_RULE.SEMANTIC_KEY)
+
+
+func test_bug071_open_cf_resource_choices_are_discarded_on_recovery() \
+		-> void:
+	var built: Dictionary = BUG071_BUILDER.pending_choice(1, true, true)
+	assert_false(built.is_empty())
+	if built.is_empty():
+		return
+	var state: GameState = built["state"]
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			int(built["command_sequence"])))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	var use_button: Button = panel.find_child(
+			"TimingUseButton_0", true, false) as Button
+	assert_not_null(use_button)
+	assert_null(panel.find_child("TimingUseMenu_0", true, false))
+	if use_button == null:
+		return
+	var before: Dictionary = state.serialize()
+	var before_history: int = CommandProcessor.get_command_count()
+	var before_cursor: int = CommandProcessor.get_next_sequence()
+	use_button.pressed.emit()
+	assert_true(panel._cf_resource_container.visible)
+	assert_eq(panel._cf_resource_container.get_child_count(), 3)
+	assert_eq(state.serialize(), before)
+	assert_eq(CommandProcessor.get_command_count(), before_history)
+	assert_eq(CommandProcessor.get_next_sequence(), before_cursor)
+	assert_eq(state.current_attack_state.cf_choice,
+			CurrentAttackState.RESOLUTION_PENDING)
+	assert_eq(state.get_ship(1, 0).concentrate_fire_resolved_round, -1)
+	board.queue_free()
+	await get_tree().process_frame
+
+	var restored: GameState = GameState.deserialize(before)
+	assert_not_null(restored)
+	if restored == null:
+		return
+	assert_eq(restored.serialize(), before)
+	var filtered: Dictionary = StateFilter.filter_for_player_checked(before, 1)
+	assert_true(bool(filtered.get("ok", false)))
+	assert_true(GameManager.start_new_game_from_state(
+			restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			before_cursor))
+	var restored_board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(restored_board)
+	var restored_panel: AttackSimPanel = restored_board._target_selector.get_panel()
+	var restored_use: Button = restored_panel.find_child(
+			"TimingUseButton_0", true, false) as Button
+	assert_not_null(restored_use)
+	assert_null(restored_panel.find_child("TimingUseMenu_0", true, false))
+	if restored_use == null:
+		return
+	assert_false(restored_panel._cf_resource_container.visible)
+	assert_eq((restored_use.get_parent().get_child(0) as Label).text,
+			"Concentrate Fire")
+	restored_use.pressed.emit()
+	assert_true(restored_panel._cf_resource_container.visible)
+	assert_eq(restored_panel._cf_resource_container.get_child_count(), 3)
+	assert_eq((restored_panel._cf_resource_container.get_child(2) as Button).text,
+			"Dial + Token")
+	restored_board.queue_free()
+	await get_tree().process_frame
+
+	var passive: GameState = GameState.deserialize_passive_network(
+			filtered.get(StateFilter.KEY_STATE, {}))
+	assert_not_null(passive)
+	if passive == null:
+		return
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	assert_true(GameManager.start_new_game_from_state(
+			passive, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			before_cursor))
+	var awaiting := AwaitingRecordingSubmitter.new()
+	GameManager.set_command_submitter(awaiting)
+	var passive_board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(passive_board)
+	var passive_panel: AttackSimPanel = passive_board._target_selector.get_panel()
+	var passive_use: Button = passive_panel.find_child(
+			"TimingUseButton_0", true, false) as Button
+	assert_not_null(passive_use)
+	assert_null(passive_panel.find_child("TimingUseMenu_0", true, false))
+	if passive_use == null:
+		return
+	assert_false(passive_panel._cf_resource_container.visible)
+	passive_use.pressed.emit()
+	assert_true(passive_panel._cf_resource_container.visible)
+	assert_eq(passive_panel._cf_resource_container.get_child_count(), 3)
+	var both_button: Button = passive_panel.find_child(
+			"CFResourceChoice_both", true, false) as Button
+	assert_not_null(both_button)
+	if both_button == null:
+		return
+	both_button.pressed.emit()
+	assert_eq(awaiting.submitted_commands.size(), 1)
+	assert_eq(awaiting.submitted_commands[0].command_type,
+			CF_CHOICE_COMMAND.TYPE)
+	assert_eq(awaiting.submitted_commands[0].payload.get("choice"),
+			CurrentAttackState.CF_CHOICE_BOTH)
+	assert_eq(passive.current_attack_state.cf_choice,
+			CurrentAttackState.RESOLUTION_PENDING)
+
+
+func test_bug071_committed_dial_recovery_rebuilds_actionable_board_on_both_peers() \
+		-> void:
+	for choice: String in [CurrentAttackState.CF_CHOICE_DIAL,
+			CurrentAttackState.CF_CHOICE_BOTH]:
+		var built: Dictionary = BUG071_BUILDER.committed_choice(1, choice)
+		assert_false(built.is_empty())
+		if built.is_empty():
+			return
+		var state: GameState = built["state"]
+		var raw: Dictionary = state.serialize()
+		var cursor: int = CommandProcessor.get_next_sequence()
+		var filtered: Dictionary = StateFilter.filter_for_player_checked(raw, 1)
+		assert_true(bool(filtered.get("ok", false)))
+		var restored: GameState = GameState.deserialize(raw)
+		assert_not_null(restored)
+		if restored == null:
+			return
+		assert_eq(restored.serialize(), raw)
+		assert_true(GameManager.start_new_game_from_state(
+				restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID, cursor))
+		var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+		add_child_autofree(board)
+		var panel: AttackSimPanel = board._target_selector.get_panel()
+		assert_eq(panel.get_title_text(), "Concentrate Fire Command Dial")
+		assert_eq(panel.get_body_text(), "Select die to add.")
+		assert_true(panel._cf_dial_container.visible)
+		assert_false(panel._cf_resource_container.visible)
+		var die: TextureRect = panel.find_child(
+				"CFDialDie_%s" % str((built["dial_payload"] as Dictionary)["color"]),
+				true, false) as TextureRect
+		assert_not_null(die)
+		if die == null:
+			return
+		var stale: Dictionary = (built["dial_payload"] as Dictionary).duplicate(true)
+		stale["lifecycle_id"] = "attack_modify:stale"
+		var before_rejection: Dictionary = restored.serialize()
+		var rng_before: int = restored.rng.get_state()
+		var history_before: int = CommandProcessor.get_command_count()
+		assert_true(CommandProcessor.submit_deferred_followups(
+				CF_DIAL_USE_COMMAND.new(1, stale)).is_empty())
+		assert_engine_error(1 if choice == CurrentAttackState.CF_CHOICE_DIAL
+				else 2)
+		assert_eq(restored.serialize(), before_rejection)
+		assert_eq(restored.rng.get_state(), rng_before)
+		assert_eq(CommandProcessor.get_command_count(), history_before)
+		assert_eq(CommandProcessor.get_next_sequence(), cursor)
+		assert_true(panel._cf_dial_container.visible)
+		var click := InputEventMouseButton.new()
+		click.button_index = MOUSE_BUTTON_LEFT
+		click.pressed = true
+		die.gui_input.emit(click)
+		assert_eq(restored.current_attack_state.cf_dial_resolution,
+				CurrentAttackState.RESOLUTION_USED)
+		assert_eq(restored.current_attack_state.cf_token_resolution,
+				CurrentAttackState.RESOLUTION_PENDING if choice \
+				== CurrentAttackState.CF_CHOICE_BOTH \
+				else CurrentAttackState.RESOLUTION_UNAVAILABLE)
+		assert_eq(restored.get_ship(1, 0).concentrate_fire_resolved_round,
+				restored.current_round)
+		board.queue_free()
+		await get_tree().process_frame
+
+		var passive: GameState = GameState.deserialize_passive_network(
+				filtered.get(StateFilter.KEY_STATE, {}))
+		assert_not_null(passive)
+		if passive == null:
+			return
+		PlayMode.set_mode(PlayMode.Mode.NETWORK)
+		NetworkManager.role = NetworkManager.Role.CLIENT
+		NetworkManager._local_player_index = 1
+		assert_true(GameManager.start_new_game_from_state(
+				passive, LearningScenarioSetup.DEFAULT_SCENARIO_ID, cursor))
+		var awaiting := AwaitingRecordingSubmitter.new()
+		GameManager.set_command_submitter(awaiting)
+		var passive_board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+		add_child_autofree(passive_board)
+		var passive_panel: AttackSimPanel = passive_board._target_selector.get_panel()
+		assert_eq(passive_panel.get_title_text(), "Concentrate Fire Command Dial")
+		assert_true(passive_panel._cf_dial_container.visible)
+		var passive_die: TextureRect = passive_panel.find_child(
+				"CFDialDie_%s" % str((built["dial_payload"] as Dictionary)["color"]),
+				true, false) as TextureRect
+		assert_not_null(passive_die)
+		if passive_die == null:
+			return
+		var passive_before: Dictionary = passive.serialize()
+		passive_die.gui_input.emit(click)
+		assert_eq(awaiting.submitted_commands.size(), 1)
+		assert_eq(awaiting.submitted_commands[0].command_type,
+				CF_DIAL_USE_COMMAND.TYPE)
+		assert_eq(passive.serialize(), passive_before,
+				"Passive UI must await the authoritative dial result.")
+		passive_board.queue_free()
+		await get_tree().process_frame
+		PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
+		NetworkManager.role = NetworkManager.Role.NONE
+		NetworkManager._local_player_index = -1
+
+
+func test_bug071_partially_resolved_both_recovery_keeps_token_actionable() \
+		-> void:
+	var built: Dictionary = BUG071_BUILDER.committed_choice(
+			1, CurrentAttackState.CF_CHOICE_BOTH)
+	assert_false(built.is_empty())
+	if built.is_empty():
+		return
+	var state: GameState = built["state"]
+	assert_false(CommandProcessor.submit_deferred_followups(
+			CF_DIAL_USE_COMMAND.new(1, built["dial_payload"])).is_empty())
+	var raw: Dictionary = state.serialize()
+	var cursor: int = CommandProcessor.get_next_sequence()
+	var filtered: Dictionary = StateFilter.filter_for_player_checked(raw, 1)
+	assert_true(bool(filtered.get("ok", false)))
+	var restored: GameState = GameState.deserialize(raw)
+	assert_not_null(restored)
+	if restored == null:
+		return
+	assert_true(GameManager.start_new_game_from_state(
+			restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID, cursor))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_eq(panel.get_title_text(), "Concentrate Fire Command Token")
+	assert_true(panel._cf_token_container.visible)
+	assert_false(panel._cf_resource_container.visible)
+	assert_eq(restored.current_attack_state.dice_results,
+			state.current_attack_state.dice_results)
+	var rng_before: int = restored.rng.get_state()
+	panel._cf_token_skip_button.pressed.emit()
+	assert_eq(restored.current_attack_state.cf_token_resolution,
+			CurrentAttackState.RESOLUTION_DECLINED)
+	assert_eq(restored.rng.get_state(), rng_before)
+	assert_false(restored.get_ship(1, 0).command_tokens.has_token(
+			Constants.CommandType.CONCENTRATE_FIRE))
+	board.queue_free()
+	await get_tree().process_frame
+	var passive: GameState = GameState.deserialize_passive_network(
+			filtered.get(StateFilter.KEY_STATE, {}))
+	assert_not_null(passive)
+	if passive == null:
+		return
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	assert_true(GameManager.start_new_game_from_state(
+			passive, LearningScenarioSetup.DEFAULT_SCENARIO_ID, cursor))
+	var awaiting := AwaitingRecordingSubmitter.new()
+	GameManager.set_command_submitter(awaiting)
+	var passive_board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(passive_board)
+	var passive_panel: AttackSimPanel = passive_board._target_selector.get_panel()
+	assert_eq(passive_panel.get_title_text(), "Concentrate Fire Command Token")
+	assert_true(passive_panel._cf_token_container.visible)
+	var before_passive: Dictionary = passive.serialize()
+	passive_panel._cf_token_skip_button.pressed.emit()
+	assert_eq(awaiting.submitted_commands.size(), 1)
+	assert_eq(awaiting.submitted_commands[0].command_type, CF_DECLINE.TYPE)
+	assert_eq(passive.serialize(), before_passive)
+
+
+func test_bug071_rejected_cf_resource_selection_reprojects_actionable_row() \
+		-> void:
+	var built: Dictionary = BUG071_BUILDER.pending_choice(1, true, true)
+	assert_false(built.is_empty())
+	if built.is_empty():
+		return
+	var state: GameState = built["state"]
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			int(built["command_sequence"])))
+	var rejector := AuthenticatedRecordingSubmitter.new()
+	rejector.authenticated_player = 0
+	GameManager.set_command_submitter(rejector)
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	var use_button: Button = panel.find_child(
+			"TimingUseButton_0", true, false) as Button
+	assert_not_null(use_button)
+	assert_null(panel.find_child("TimingUseMenu_0", true, false))
+	if use_button == null:
+		return
+	var before: Dictionary = state.serialize()
+	var before_cursor: int = CommandProcessor.get_next_sequence()
+	use_button.pressed.emit()
+	var both_button: Button = panel.find_child(
+			"CFResourceChoice_both", true, false) as Button
+	assert_not_null(both_button)
+	if both_button == null:
+		return
+	both_button.pressed.emit()
+	assert_eq(rejector.peer_player_rejections.size(), 1)
+	assert_eq(rejector.peer_player_rejections[0].command_type,
+			CF_CHOICE_COMMAND.TYPE)
+	assert_eq(state.serialize(), before)
+	assert_eq(CommandProcessor.get_next_sequence(), before_cursor)
+	var fresh_use: Button = panel.find_child(
+			"TimingUseButton_0", true, false) as Button
+	assert_not_null(fresh_use)
+	assert_null(panel.find_child("TimingUseMenu_0", true, false))
+	if fresh_use == null:
+		return
+	assert_false(fresh_use.disabled)
+	assert_false(panel._cf_resource_container.visible)
+	fresh_use.pressed.emit()
+	assert_true(panel._cf_resource_container.visible)
+	assert_eq(panel._cf_resource_container.get_child_count(), 3)
+
+
+func test_bug071_real_both_rerolls_authority_added_die() -> void:
+	var built: Dictionary = BUG071_BUILDER.committed_choice(
+			1, CurrentAttackState.CF_CHOICE_BOTH)
+	assert_false(built.is_empty())
+	if built.is_empty():
+		return
+	var state: GameState = built["state"]
+	var ship: ShipInstance = state.get_ship(1, 0)
+	assert_false(CommandProcessor.submit_deferred_followups(
+			CF_DIAL_USE_COMMAND.new(1, built["dial_payload"])).is_empty())
+	var added_index: int = state.current_attack_state.dice_results.size() - 1
+	var projected: Dictionary = UIProjector.project(state, 1).timing_window
+	var reroll_payload: Dictionary = {}
+	for opportunity: Dictionary in projected.get("opportunities", []):
+		if str(opportunity.get("capability_id", "")) != CF_RULE.CAPABILITY_ID:
+			continue
+		for option: Dictionary in opportunity.get("use_choices", []):
+			var payload: Dictionary = (option.get("intent", {}) \
+					as Dictionary).get("payload", {})
+			if int(payload.get("die_index", -1)) == added_index:
+				reroll_payload = payload
+	assert_false(reroll_payload.is_empty())
+	if reroll_payload.is_empty():
+		return
+	var rng_before: int = state.rng.get_state()
+	var count_before: int = state.current_attack_state.dice_results.size()
+	assert_false(CommandProcessor.submit_deferred_followups(
+			CF_USE.new(1, reroll_payload)).is_empty())
+	assert_ne(state.rng.get_state(), rng_before)
+	assert_eq(state.current_attack_state.dice_results.size(), count_before)
+	assert_eq(state.current_attack_state.cf_token_resolution,
+			CurrentAttackState.RESOLUTION_USED)
+	assert_false(ship.command_tokens.has_token(
+			Constants.CommandType.CONCENTRATE_FIRE))
+	assert_eq(ship.concentrate_fire_resolved_round, state.current_round)
+
+
+func _obstructed_squadron_scenario(commanded: bool) -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human())
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP if commanded \
+			else Constants.GamePhase.SQUADRON
+	state.initiative_player = 0
+	state.get_player_state(0).faction = Constants.Faction.REBEL_ALLIANCE
+	state.get_player_state(1).faction = Constants.Faction.GALACTIC_EMPIRE
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
+	var blocker := ShipInstance.create_from_data(DECOY_SHIP_KEY,
+			AssetLoader.load_ship_data(DECOY_SHIP_KEY), 2, 0)
+	blocker.roster_entry_id = "bug070-obstruction-blocker"
+	blocker.pos_x = 0.5
+	blocker.pos_y = 0.49
+	blocker.rotation_deg = 0.0
+	blocker.command_dial_stack.assign_dials([
+			Constants.CommandType.SQUADRON], 1)
+	state.get_player_state(0).ships.append(blocker)
+	var squadron := SquadronInstance.create_from_data(DECOY_SQUADRON_KEY,
+			AssetLoader.load_squadron_data(DECOY_SQUADRON_KEY), 0)
+	squadron.roster_entry_id = "bug070-obstructed-attacker"
+	squadron.pos_x = 0.5
+	squadron.pos_y = 0.43
+	state.get_player_state(0).squadrons.append(squadron)
+	var target := ShipInstance.create_from_data(DECOY_SHIP_KEY,
+			AssetLoader.load_ship_data(DECOY_SHIP_KEY), 2, 1)
+	target.roster_entry_id = "bug070-obstructed-defender"
+	target.pos_x = 0.5
+	target.pos_y = 0.55
+	target.rotation_deg = 180.0
+	state.get_player_state(1).ships.append(target)
+	if commanded:
+		state.interaction_flow = InteractionFlow.make(
+				Constants.InteractionFlow.SHIP_ACTIVATION,
+				Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+				0, Constants.Visibility.ALL, {})
+	else:
+		state.initialize_squadron_phase_progress(0)
+		state.interaction_flow = InteractionFlow.make(
+				Constants.InteractionFlow.SQUADRON_ACTIVATION,
+				Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
+				0, Constants.Visibility.ALL, {})
+	return state
 
 
 func test_resume_before_confirmation_ignores_stale_flow_authority() -> void:
@@ -2389,6 +3955,110 @@ func test_scene_recreation_restores_commanded_squadron_post_skip_projection() ->
 	assert_true(_history_types().is_empty())
 
 
+func test_replayed_squadron_move_converges_token_before_command_range() \
+		-> void:
+	var state: GameState = _phase_squadron_projection_state(false)
+	var ship := ShipInstance.create_from_data(
+			DECOY_SHIP_KEY, AssetLoader.load_ship_data(DECOY_SHIP_KEY),
+			2, 0)
+	ship.roster_entry_id = "replay-range-command-ship"
+	ship.pos_x = 0.5
+	ship.pos_y = 0.52
+	assert_true(ship.command_dial_stack.assign_dials([
+		Constants.CommandType.SQUADRON], 1))
+	assert_false(ship.command_dial_stack.reveal_top().is_empty())
+	state.get_player_state(0).ships.append(ship)
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	squadron.pos_x = 0.1
+	squadron.pos_y = 0.1
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 0))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var token: SquadronToken = board._find_squadron_token_for_instance(
+			squadron)
+	var ship_token: ShipToken = board._find_ship_token_for_instance(ship)
+	assert_not_null(token)
+	assert_not_null(ship_token)
+	if token == null or ship_token == null:
+		return
+	var initial: Dictionary = state.serialize()
+	var resolver: SquadronCommandResolver = board._ship_activation_controller \
+			._create_squadron_command_resolver(ship, ship_token)
+	assert_false(resolver.is_squadron_in_range(token.global_position))
+	var destination := Vector2(0.5, 0.52)
+	# Live drag precedes the accepted command; replay has no drag event.
+	token.global_position = destination * GameScale.play_area_size_px
+	var moved: Dictionary = CommandProcessor.submit_deferred_followups(
+			MoveSquadronCommand.new(0, {
+				"squadron_index": 0,
+				"activation_id": squadron.activation_id,
+				"activation_context": squadron.activation_context,
+				"pos_x": destination.x,
+				"pos_y": destination.y,
+			}))
+	assert_false(moved.is_empty())
+	if moved.is_empty():
+		return
+	assert_true(resolver.is_squadron_in_range(token.global_position))
+	var authority_final: Dictionary = state.serialize()
+	var authority_history: Array[Dictionary] = CommandProcessor.serialize_history()
+	assert_eq(_history_types(), ["move_squadron"])
+	var replay_file: GameReplay = CommandProcessor.create_replay()
+	assert_not_null(replay_file)
+	if replay_file == null:
+		return
+	var loaded: GameReplay = GameReplay.deserialize(
+			JSON.parse_string(JSON.stringify(replay_file.serialize())))
+	assert_not_null(loaded)
+	if loaded == null:
+		return
+	board.queue_free()
+	await get_tree().process_frame
+
+	var replay_state: GameState = GameState.deserialize(initial)
+	assert_not_null(replay_state)
+	if replay_state == null:
+		return
+	assert_true(GameManager.start_new_game_from_state(
+			replay_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			int(loaded.header["initial_command_sequence"])))
+	var replay_board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(replay_board)
+	var replay_squadron: SquadronInstance = replay_state.get_squadron(0, 0)
+	var replay_token: SquadronToken = replay_board \
+			._find_squadron_token_for_instance(replay_squadron)
+	var replay_ship_token: ShipToken = replay_board \
+			._find_ship_token_for_instance(replay_state.get_ship(0, 0))
+	assert_not_null(replay_token)
+	assert_not_null(replay_ship_token)
+	if replay_token == null or replay_ship_token == null:
+		return
+	var replay_resolver: SquadronCommandResolver = replay_board \
+			._ship_activation_controller._create_squadron_command_resolver(
+				replay_state.get_ship(0, 0), replay_ship_token)
+	assert_false(replay_resolver.is_squadron_in_range(
+			replay_token.global_position))
+	var driver: Node = REPLAY_DRIVER_SCRIPT.new()
+	add_child_autofree(driver)
+	driver._replay = loaded
+	CommandProcessor.command_executed.connect(driver._on_command_executed)
+	for command_data: Dictionary in loaded.commands:
+		var cursor: int = driver._observed_count
+		assert_true(await driver._submit_local_step(
+				command_data, cursor, true))
+		assert_eq(driver._observed_count, cursor + 1)
+	assert_eq(JSON.stringify(CommandProcessor.serialize_history()),
+			JSON.stringify(authority_history))
+	assert_eq(JSON.stringify(replay_state.serialize()),
+			JSON.stringify(authority_final))
+	assert_eq(replay_token.global_position,
+			replay_squadron.get_pixel_position(GameScale.play_area_size_px))
+	assert_true(replay_resolver.is_squadron_in_range(
+			replay_token.global_position),
+			"The recorded next Squadron command must not auto-spend its dial.")
+
+
 func test_commanded_move_no_target_waits_for_skip_and_preserves_capacity() \
 		-> void:
 	var state: GameState = _command_squadron_projection_state(false)
@@ -3437,7 +5107,7 @@ func test_live_authority_resume_drains_one_deterministic_terminal_chain() -> voi
 	assert_eq(_history_types(), ["resolve_damage", "complete_attack"])
 
 
-func _network_roll_context() -> Dictionary:
+func _network_roll_context(commit_cf_token: bool = false) -> Dictionary:
 	var authority_state: GameState = _roll_state()
 	var state: GameState = GameState.deserialize_passive_network(
 			StateFilter.filter_for_player(authority_state.serialize(), 0))
@@ -3468,7 +5138,52 @@ func _network_roll_context() -> Dictionary:
 	assert_true(GameManager._apply_network_command_result(
 			roll, NetworkManager._build_result_envelope(
 					roll, authority_result, 0)))
-	assert_eq(_history_types(), ["roll_dice"])
+	assert_eq(state.current_attack_state.cf_choice,
+			authority_state.current_attack_state.cf_choice)
+	if commit_cf_token:
+		assert_eq(state.current_attack_state.cf_choice,
+				CurrentAttackState.RESOLUTION_PENDING)
+		assert_eq(authority_state.current_attack_state.cf_choice,
+				CurrentAttackState.RESOLUTION_PENDING)
+		assert_true(bool(TIMING_WINDOW_ORCHESTRATOR.open_window(
+				authority_state,
+				TimingWindowDefinitions.ATTACK_MODIFY, 0,
+				{TimingWindowState.CONTINUATION_KEY_ID:
+					ConfirmAttackDiceCommand.TYPE,
+				TimingWindowState.CONTINUATION_KEY_RESUME_POINT:
+					"attack_after_modify",
+				TimingWindowState.CONTINUATION_KEY_SOURCE_ID: "attack:0",
+				TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE:
+					"current_attack",
+				TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER: 0,
+				}).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)))
+	if commit_cf_token:
+		var timing_projection: Dictionary = UIProjector.project(
+				authority_state, 0).timing_window
+		var opportunities: Array = timing_projection.get("opportunities", [])
+		var choice_payload: Dictionary = {}
+		for opportunity: Dictionary in opportunities:
+			if str(opportunity.get("semantic_key", "")) \
+					!= CF_CHOICE_RULE.SEMANTIC_KEY:
+				continue
+			for option: Dictionary in opportunity.get("use_choices", []):
+				var intent: Dictionary = option.get("intent", {})
+				var proposed: Dictionary = intent.get("payload", {})
+				if str(proposed.get("choice", "")) \
+						== CurrentAttackState.CF_CHOICE_TOKEN:
+					choice_payload = proposed
+					break
+		assert_false(choice_payload.is_empty())
+		var choice: GameCommand = CF_CHOICE_COMMAND.new(
+				0, choice_payload)
+		choice.sequence = 1
+		var choice_result: Dictionary = choice.execute(authority_state)
+		assert_false(choice_result.is_empty())
+		assert_true(GameManager._apply_network_command_result(
+				choice, NetworkManager._build_result_envelope(
+					choice, choice_result, 0)))
+	assert_eq(_history_types(), ["roll_dice", "choose_concentrate_fire"] \
+			if commit_cf_token else ["roll_dice"])
 	return {
 		"state": state,
 		"board": board,
@@ -3506,8 +5221,6 @@ func _roll_state() -> GameState:
 	var state: GameState = _state_at(CurrentAttackState.STAGE_PRE_ROLL, {
 		"attack_id": "attack:0",
 		"dice_pool": {"RED": 2, "BLUE": 1},
-		"cf_dial_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
-		"cf_token_resolution": CurrentAttackState.RESOLUTION_PENDING,
 	})
 	var attacker: ShipInstance = state.get_ship(0, 0)
 	attacker.roster_entry_id = "bug-015-network-attacker"
@@ -3518,6 +5231,11 @@ func _roll_state() -> GameState:
 			H9_RULE.DATA_KEY, "bug-015-h9", "TURBOLASERS", 0)
 	assert_true(attacker.command_tokens.add_token(
 			Constants.CommandType.CONCENTRATE_FIRE))
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_ROLL, 0,
+			Constants.Visibility.ALL,
+			{"attacker_player": 0, "defender_player": 1})
 	return state
 
 
@@ -3569,7 +5287,8 @@ func _assert_network_timing_intent(
 		capability_id: String,
 		expected_command_type: String,
 		decline: bool) -> void:
-	var context: Dictionary = _network_roll_context()
+	var context: Dictionary = _network_roll_context(
+			capability_id == CF_RULE.CAPABILITY_ID)
 	var state: GameState = context.get("state") as GameState
 	var panel: AttackSimPanel = context.get("panel") as AttackSimPanel
 	var submitter: AuthenticatedRecordingSubmitter = \
@@ -3584,7 +5303,23 @@ func _assert_network_timing_intent(
 			break
 	assert_gte(opportunity_index, 0)
 	var submitted_before: int = submitter.submitted_commands.size()
-	if decline:
+	if capability_id == CF_RULE.CAPABILITY_ID:
+		assert_true(panel._cf_token_container.visible)
+		assert_false(panel._cf_token_reroll_button.visible)
+		assert_null(panel.find_child(
+				"TimingUseButton_%d" % opportunity_index, true, false))
+		assert_null(panel.find_child(
+				"TimingUseMenu_%d" % opportunity_index, true, false))
+		if decline:
+			panel._cf_token_skip_button.pressed.emit()
+		else:
+			assert_false(panel._timing_window_die_intents.is_empty())
+			var die_index: int = int(panel._timing_window_die_intents.keys()[0])
+			var click := InputEventMouseButton.new()
+			click.button_index = MOUSE_BUTTON_LEFT
+			click.pressed = true
+			panel._dice_textures[die_index].gui_input.emit(click)
+	elif decline:
 		var decline_button: Button = panel.find_child(
 				"TimingDeclineButton_%d" % opportunity_index,
 				true, false) as Button
@@ -3636,6 +5371,8 @@ func _state_at(stage: String, options: Dictionary) -> GameState:
 			and attacker_kind == CurrentAttackState.KIND_SHIP:
 		configured["cf_token_resolution"] = \
 				CurrentAttackState.RESOLUTION_PENDING
+		configured["cf_choice_lifecycle_id"] = "attack_modify:%d" % int(
+				str(configured.get("attack_id", "attack:0")).get_slice(":", 1))
 	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, configured))
 	if stage == CurrentAttackState.STAGE_ATTACK_MODIFY \
 			and attacker_kind == CurrentAttackState.KIND_SHIP:

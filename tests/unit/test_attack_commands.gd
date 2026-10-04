@@ -725,12 +725,24 @@ func test_voluntary_anti_squadron_child_finish_requires_inspection() -> void:
 func test_squadron_done_skip_closes_iteration_and_retains_second_attack() -> void:
 	var ship_index: int = _add_ship(0)
 	var ship: ShipInstance = _state.get_ship(0, ship_index)
+	assert_true(ship.establish_ship_activation("ship-activation:finish"))
 	ship.begin_attack_step()
 	ship.commit_attack(Constants.HullZone.FRONT, 1,
 			CurrentAttackState.KIND_SQUADRON, 0)
+	assert_true(ship.record_anti_squadron_cancellation_return("attack:finish"))
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ATTACK_STEP, 0,
+			Constants.Visibility.ALL,
+			{"ship_index": ship_index,
+				"ship_activation_identity": ship.ship_activation_identity})
 	var cmd := SkipAttackCommand.new(0, {
 		"reason": "squadron_done",
 		"ship_index": ship_index,
+		"attack_id": "attack:finish",
+		"ship_activation_identity": ship.ship_activation_identity,
+		"attack_ordinal": ship.committed_attack_count,
+		"zone": ship.anti_squadron_attack_zone,
 	})
 	assert_eq(cmd.validate(_state), "")
 	var result: Dictionary = cmd.execute(_state)
@@ -751,6 +763,33 @@ func test_squadron_done_skip_requires_authoritative_iteration_identity() -> void
 		"ship_index": ship_index,
 	})
 	assert_ne(cmd.validate(_state), "")
+
+
+func test_squadron_done_rejects_earlier_iteration_after_later_attack() -> void:
+	var ship_index: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, ship_index)
+	assert_true(ship.establish_ship_activation("ship-activation:two-iterations"))
+	ship.begin_attack_step()
+	ship.commit_attack(Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0)
+	assert_true(ship.record_anti_squadron_cancellation_return("attack:first"))
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ATTACK_STEP, 0,
+			Constants.Visibility.ALL,
+			{"ship_index": ship_index,
+				"ship_activation_identity": ship.ship_activation_identity})
+	var old_payload: Dictionary = ship.pending_anti_squadron_cancellation_return()
+	old_payload["reason"] = SkipAttackCommand.REASON_SQUADRON_DONE
+	old_payload["ship_index"] = ship_index
+	assert_eq(SkipAttackCommand.new(0, old_payload).validate(_state), "")
+	ship.end_anti_squadron_attack()
+	ship.commit_attack(Constants.HullZone.LEFT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0)
+	assert_true(ship.record_anti_squadron_cancellation_return("attack:later"))
+	var later_snapshot: Dictionary = _state.serialize()
+	assert_ne(SkipAttackCommand.new(0, old_payload).validate(_state), "")
+	assert_eq(_state.serialize(), later_snapshot)
 
 
 func test_active_skip_accepts_authoritative_flow_replaced_reason() -> void:

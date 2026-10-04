@@ -33,6 +33,9 @@ const RESUME_KEY_ENCLOSING_CONTINUATION: String = "enclosing_continuation"
 const RESUME_RULE_CHOICE: String = "resolve_attack_pool_choice"
 const RESUME_CF_DIAL: String = "resolve_concentrate_fire_dial"
 const RESUME_ROLL: String = "roll_dice"
+const RESUME_CANCEL_EMPTY: String = "cancel_empty_gather"
+const GATHER_READINESS: GDScript = preload(
+		"res://src/core/commands/attack_gather_readiness.gd")
 const RESUME_TIMING_WINDOW: String = "timing_window"
 const RESUME_CONFIRM: String = "confirm_attack_dice"
 const RESUME_ACCURACY: String = "commit_accuracy"
@@ -410,20 +413,20 @@ func resume_inactive_ship_attack_continuation(
 	if not _flow_fsm.restore_projection(
 			AttackFlowFSM.Step.DECLARE, ship.owner_player, -1, projection):
 		return _resume_failure(
-				"Canonical ship attack continuation has no declaration route.")
+			"Canonical ship attack continuation has no declaration route.")
 	var prior_flow: InteractionFlow = game_state.interaction_flow
-	var flow: InteractionFlow = FlowSpec.make_interaction_flow(
-			Constants.InteractionFlow.ATTACK,
-			_flow_fsm.get_interaction_step(),
-			game_state,
-			{
-				"attacker_player": ship.owner_player,
-				"defender_player": -1,
-				"controller_player": ship.owner_player,
-			},
-			Constants.Visibility.ALL,
-			projection)
-	game_state.interaction_flow = flow
+	var cancellation_return_flow: bool = prior_flow != null \
+			and prior_flow.flow_type \
+				== Constants.InteractionFlow.SHIP_ACTIVATION \
+			and prior_flow.step_id == Constants.InteractionStep.ATTACK_STEP
+	if not cancellation_return_flow:
+		game_state.interaction_flow = FlowSpec.make_interaction_flow(
+				Constants.InteractionFlow.ATTACK,
+				_flow_fsm.get_interaction_step(), game_state,
+				{"attacker_player": ship.owner_player,
+					"defender_player": -1,
+					"controller_player": ship.owner_player},
+				Constants.Visibility.ALL, projection)
 	var local_player: int = NetworkManager.get_local_player_index()
 	if local_player < 0 or local_player == ship.owner_player:
 		var presentation: Dictionary = _render_inactive_ship_continuation(
@@ -438,7 +441,7 @@ func resume_inactive_ship_attack_continuation(
 		RESUME_KEY_ATTACK_ID: "",
 		RESUME_KEY_TRANSITION: continuation,
 		RESUME_KEY_REQUIRES_INPUT: true,
-		RESUME_KEY_FLOW: flow,
+		RESUME_KEY_FLOW: game_state.interaction_flow,
 		RESUME_KEY_ACTIVATING_SHIP: ship,
 		RESUME_KEY_ACTIVATING_SHIP_TOKEN: ship_token,
 		RESUME_KEY_ENCLOSING_CONTINUATION: continuation,
@@ -516,12 +519,18 @@ func resume_live_progression(plan: Dictionary) -> bool:
 		RESUME_RULE_CHOICE:
 			var colours: Array[String] = _string_values(
 					plan.get("available_colours", []))
-			if colours.size() != 1:
+			if colours.size() != 1 \
+					and not bool(plan.get("no_die", false)):
 				return false
 			var choice_kind: String = str(plan.get("choice_kind", ""))
 			var rule_id: String = str(plan.get("rule_id", ""))
 			var result: Dictionary = GameManager.submit_attack_pool_choice(
-					attack.attacker_player, choice_kind, colours[0], rule_id)
+					attack.attacker_player, choice_kind,
+					"" if colours.is_empty() else colours[0], rule_id)
+			return not result.is_empty()
+		RESUME_CANCEL_EMPTY:
+			var result: Dictionary = GameManager.submit_skip_attack(
+					attack.attacker_player, "cancelled")
 			return not result.is_empty()
 		RESUME_ACCURACY:
 			var result: Dictionary = GameManager.submit_commit_accuracy(
@@ -692,36 +701,24 @@ func _derive_resume_plan(game_state: GameState,
 
 func _derive_pre_roll_resume_plan(
 		attack: CurrentAttackState, plan: Dictionary) -> Dictionary:
-	var context: EffectContext = _derive_gather_dice_context()
-	var rule_id: String = str(context.get_meta_value(
-			EffectContext.META_PENDING_DIE_REMOVAL_RULE_ID, ""))
-	if not rule_id.is_empty() and not attack.resolved_pool_choices.has(rule_id):
-		var available: Array[String] = _metadata_die_colours(
-				context.get_meta_value(
-						EffectContext.META_AVAILABLE_DIE_COLOURS, []))
-		if not available.is_empty():
-			plan[RESUME_KEY_TRANSITION] = RESUME_RULE_CHOICE
-			plan[RESUME_KEY_REQUIRES_INPUT] = available.size() > 1
-			plan["choice_kind"] = "rule"
-			plan["rule_id"] = rule_id
-			plan["choice_title"] = str(context.get_meta_value(
-					EffectContext.META_PENDING_DIE_REMOVAL_TITLE,
-					"Remove 1 die:"))
-			plan["available_colours"] = available
-			return plan
-	if attack.obstructed and not attack.obstruction_resolved:
-		var obstruction_colours: Array[String] = _pool_colours(attack.dice_pool)
-		if obstruction_colours.is_empty():
-			return _resume_failure("Obstructed attack has no removable die.")
+	var readiness: Dictionary = GATHER_READINESS.derive(
+			GameManager.current_game_state, attack)
+	if not bool(readiness.get("ok", false)):
+		return _resume_failure(str(readiness.get("reason", "Invalid Gather state.")))
+	if not bool(readiness.get("complete", false)):
+		var available: Array[String] = _string_values(
+				readiness.get("available_colours", []))
 		plan[RESUME_KEY_TRANSITION] = RESUME_RULE_CHOICE
-		plan[RESUME_KEY_REQUIRES_INPUT] = obstruction_colours.size() > 1
-		plan["choice_kind"] = ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION
-		plan["rule_id"] = ""
-		plan["available_colours"] = obstruction_colours
+		plan[RESUME_KEY_REQUIRES_INPUT] = available.size() > 1
+		plan["choice_kind"] = str(readiness.get("choice_kind", ""))
+		plan["rule_id"] = str(readiness.get("rule_id", ""))
+		plan["choice_title"] = str(readiness.get("rule_id", "Remove 1 die:"))
+		plan["available_colours"] = available
+		plan["no_die"] = bool(readiness.get("no_die", false))
 		return plan
-	if attack.cf_dial_resolution == CurrentAttackState.RESOLUTION_PENDING:
-		plan[RESUME_KEY_TRANSITION] = RESUME_CF_DIAL
-		plan["available_colours"] = _get_cf_dial_colours(attack.dice_pool)
+	if bool(readiness.get("empty", false)):
+		plan[RESUME_KEY_TRANSITION] = RESUME_CANCEL_EMPTY
+		plan[RESUME_KEY_REQUIRES_INPUT] = false
 		return plan
 	plan[RESUME_KEY_TRANSITION] = RESUME_ROLL
 	return plan
@@ -868,6 +865,9 @@ func _render_resume_projection(plan: Dictionary) -> void:
 		RESUME_RULE_CHOICE:
 			var colours: Array[String] = _string_values(
 					plan.get("available_colours", []))
+			if bool(plan.get("no_die", false)):
+				panel.show_empty_pool_auto_skip()
+				return
 			if str(plan.get("choice_kind", "")) \
 					== ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION:
 				_state.obstruction_step = true
@@ -882,6 +882,8 @@ func _render_resume_projection(plan: Dictionary) -> void:
 					plan.get("available_colours", [])))
 		RESUME_ROLL:
 			panel.show_roll_button()
+		RESUME_CANCEL_EMPTY:
+			panel.show_empty_pool_auto_skip()
 		RESUME_CONFIRM:
 			panel.show_confirm_button()
 		RESUME_ACCURACY:
@@ -1557,28 +1559,88 @@ func apply_begin_attack_result(_result: Dictionary) -> void:
 		_complete_declaration_submission()
 	_pre_begin_squadron_selection = false
 	_sync_scene_from_current_attack()
-	var gather_context: EffectContext = _derive_gather_dice_context()
 	_publish_attack_declare_patch(range_band)
 	_get_panel().hide_confirm_button()
 	_get_panel().hide_skip_attack_button()
-	if _handle_attack_pool_die_choice(gather_context):
+	_advance_gather_from_authority()
+
+
+func _advance_gather_from_authority() -> void:
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_PRE_ROLL:
 		return
-	# Empty pool guard: if no dice remain after gather-dice hooks, the
-	# attack cannot be declared.
-	# Rules Reference: "Attack", Step 1, p.2 — "The attacker must be
-	# able to add at least one die to the attack pool."
-	if DicePool.get_total_count(_state.dice_pool) <= 0:
-		_handle_empty_attack_pool()
+	_sync_scene_from_current_attack()
+	var readiness: Dictionary = GATHER_READINESS.derive(
+			GameManager.current_game_state, attack)
+	if not bool(readiness.get("ok", false)):
+		_log.warn(str(readiness.get("reason", "Invalid Gather state.")))
 		return
-	# Obstruction: attacker must remove 1 die before rolling.
-	# Rules Reference: "Obstructed", RRG v1.5.0, p.10.
-	# Requirements: AE-OBS-001, AE-OBS-002.
-	if _state.obstructed:
-		_handle_obstruction_step()
+	if bool(readiness.get("complete", false)):
+		if bool(readiness.get("empty", false)):
+			_auto_cancel_final_empty_attack()
+		else:
+			_attack_exec_show_roll_button()
 		return
-	if _try_offer_cf_dial():
+	var colours: Array[String] = _string_values(
+			readiness.get("available_colours", []))
+	var kind: String = str(readiness.get("choice_kind", ""))
+	var rule_id: String = str(readiness.get("rule_id", ""))
+	if colours.size() <= 1:
+		var color: String = colours[0] if colours.size() == 1 else ""
+		_attack_pool_die_choice_rule_id = rule_id
+		_state.obstruction_step = kind \
+				== ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION
+		var result: Dictionary = GameManager.submit_attack_pool_choice(
+				attack.attacker_player, kind, color, rule_id)
+		if _is_waiting_for_remote_command_result(result):
+			return
+		if result.is_empty():
+			_render_gather_choice_after_rejection(readiness)
+			return
+		if kind == ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION:
+			apply_obstruction_choice_result(result)
+		else:
+			apply_attack_pool_choice_result(result)
 		return
-	_attack_exec_show_roll_button()
+	if kind == ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION:
+		_state.obstruction_step = true
+		_get_panel().show_obstruction_die_choice(colours)
+	else:
+		_attack_pool_die_choice_rule_id = rule_id
+		_get_panel().show_attack_pool_die_choice(
+				rule_id, rule_id, colours)
+
+
+func _render_gather_choice_after_rejection(readiness: Dictionary) -> void:
+	var colours: Array[String] = _string_values(
+			readiness.get("available_colours", []))
+	if str(readiness.get("choice_kind", "")) \
+			== ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION:
+		_state.obstruction_step = true
+		_get_panel().show_obstruction_die_choice(colours)
+	else:
+		_attack_pool_die_choice_rule_id = str(readiness.get("rule_id", ""))
+		_get_panel().show_attack_pool_die_choice(
+				_attack_pool_die_choice_rule_id,
+				_attack_pool_die_choice_rule_id, colours)
+
+
+func _auto_cancel_final_empty_attack() -> void:
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or not attack.active:
+		return
+	_pending_zero_squad_skip = true
+	var result: Dictionary = GameManager.submit_skip_attack(
+			attack.attacker_player, "cancelled")
+	if _is_waiting_for_remote_command_result(result):
+		return
+	if result.is_empty():
+		_pending_zero_squad_skip = false
+		_get_panel().show_empty_pool_auto_skip()
+		return
+	if _pending_zero_squad_skip:
+		apply_skip_attack_result(result)
 
 
 ## Applies a targeted network rejection without synthesizing a fallback
@@ -1586,6 +1648,18 @@ func apply_begin_attack_result(_result: Dictionary) -> void:
 ## available.
 func apply_declaration_command_rejection(
 		command: GameCommand, reason: String) -> void:
+	if command != null and command.command_type \
+			== ResolveAttackPoolChoiceCommand.TYPE:
+		var attack: CurrentAttackState = _current_attack()
+		if attack != null and attack.active \
+				and attack.stage == CurrentAttackState.STAGE_PRE_ROLL:
+			var readiness: Dictionary = GATHER_READINESS.derive(
+					GameManager.current_game_state, attack)
+			if bool(readiness.get("ok", false)) \
+					and not bool(readiness.get("complete", false)):
+				_render_gather_choice_after_rejection(readiness)
+		_log.info("Gather choice rejected — %s" % reason)
+		return
 	if command != null and command.command_type == "skip_attack" \
 			and _pending_squadron_done_after_skip:
 		_pending_squadron_done_after_skip = false
@@ -1641,22 +1715,6 @@ func _handle_empty_attack_pool() -> void:
 	if _get_panel():
 		_get_panel().show_empty_pool_auto_skip()
 
-
-## Offers the CF dial colour selection when the attacker has an
-## unspent CF command dial and at least one matching die colour in
-## the pool.  Returns [code]true[/code] when the CF dial section was
-## shown (caller must not advance to the roll step).
-func _try_offer_cf_dial() -> bool:
-	if _state.exec_ship_token == null or _state.cf_dial_used:
-		return false
-	if not _attack_exec_has_cf_dial():
-		return false
-	var available: Array[String] = _get_cf_dial_colours(_state.dice_pool)
-	if available.is_empty():
-		return false
-	_get_panel().show_cf_dial_section(available)
-	_log.info("CF dial available — offering colours: %s." % [str(available)])
-	return true
 
 ## Re-derives gather metadata for presentation; BeginAttackCommand owns pool.
 func _derive_gather_dice_context() -> EffectContext:
@@ -1770,15 +1828,7 @@ func _on_attack_pool_die_selected(reason_id: String, colour_key: String) -> void
 
 
 func _attack_exec_continue_after_attack_pool_die_choice() -> void:
-	if DicePool.get_total_count(_state.dice_pool) <= 0:
-		_handle_empty_attack_pool()
-		return
-	if _state.obstructed:
-		_handle_obstruction_step()
-		return
-	if _try_offer_cf_dial():
-		return
-	_attack_exec_show_roll_button()
+	_advance_gather_from_authority()
 
 ## Checks whether a persistent damage-card rule blocks this attack.
 ## Builds an attack-target context with range, obstruction, and attack count.
@@ -1817,18 +1867,6 @@ func _handle_obstruction_step() -> void:
 	_log.info(
 			"Obstruction: awaiting die removal choice from %s."
 			% [str(removable)])
-
-## Checks whether the activated ship has a revealed CF dial.
-## Requirements: AE-CF-001.
-func _attack_exec_has_cf_dial() -> bool:
-	return _dice_resolver.has_cf_dial(_state.exec_ship_token)
-
-## Returns which colour keys are available for CF dial extra die.
-## Only colours already in the pool may be chosen.
-## Requirements: AE-CF-003.
-## Rules Reference: "Concentrate Fire", p.3.
-func _get_cf_dial_colours(pool: Dictionary) -> Array[String]:
-	return _dice_resolver.get_cf_dial_colours(pool)
 
 ## Computes the string-keyed dice pool for the current attacker/target.
 ## Same logic as _compute_attack_dice_text but returns the Dictionary.
@@ -1879,15 +1917,7 @@ func apply_obstruction_choice_result(result: Dictionary) -> void:
 		var dice_text: String = DicePool.format_pool(_state.dice_pool)
 		_get_panel().show_dice_count(dice_text)
 		_get_panel().hide_obstruction_section()
-	# Check if pool is now empty — auto-skip.
-	var total: int = DicePool.get_total_count(_state.dice_pool)
-	if total <= 0:
-		_log.info("Obstruction: pool empty after removal — skipping attack.")
-		if _get_panel():
-			_get_panel().show_obstruction_auto_skip()
-		return
-	# Continue to CF dial or Roll.
-	_attack_exec_continue_after_obstruction()
+	_advance_gather_from_authority()
 
 ## Called when the attacker selects a die colour to remove for obstruction.
 ## Requirements: AE-OBS-002.
@@ -1896,20 +1926,9 @@ func _on_obstruction_die_selected(colour_key: String) -> void:
 		return
 	_attack_exec_remove_obstruction_die(colour_key)
 
-## Continues the attack sequence after the obstruction die has been removed.
-## Checks CF dial availability and proceeds to roll if none.
+## Continues the authoritative Gather sequence after obstruction resolution.
 func _attack_exec_continue_after_obstruction() -> void:
-	if _state.exec_ship_token and not _state.cf_dial_used \
-			and _attack_exec_has_cf_dial():
-		var available: Array[String] = _get_cf_dial_colours(
-				_state.dice_pool)
-		if available.size() > 0:
-			if _get_panel():
-				_get_panel().show_cf_dial_section(available)
-			_log.info("CF dial available — offering colours: %s." % [
-					str(available)])
-			return
-	_attack_exec_show_roll_button()
+	_advance_gather_from_authority()
 
 ## Called when the player selects a colour for the CF dial extra die.
 ## Requirements: AE-CF-003, AE-CF-004.
@@ -1922,16 +1941,12 @@ func _on_attack_cf_dial_colour(colour_key: String) -> void:
 
 
 func apply_concentrate_fire_dial_result(result: Dictionary) -> void:
-	if _state.cf_dial_used:
-		return
 	_sync_scene_from_current_attack()
 	_log.info("CF dial resolved: %s." % str(result.get("resolution", "")))
-	# Update dice count display.
 	if _get_panel():
 		var dice_text: String = DicePool.format_pool(_state.dice_pool)
 		_get_panel().show_dice_count(dice_text)
-	# Proceed to roll.
-	_attack_exec_show_roll_button()
+	# The shared Attack Modify lifecycle rederives token and H9 opportunities.
 
 ## Called when the player skips the CF dial.
 ## Requirements: AE-CF-005.
@@ -4560,7 +4575,7 @@ func _has_remaining_authoritative_anti_squadron_target(
 func apply_skip_attack_result(result: Dictionary) -> void:
 	if _pending_zero_squad_skip:
 		_pending_zero_squad_skip = false
-		_finish_zero_dice_squadron()
+		_finish_cancelled_gather_attack()
 		return
 	if _pending_squadron_done_after_skip:
 		_pending_squadron_done_after_skip = false
@@ -4572,6 +4587,30 @@ func apply_skip_attack_result(result: Dictionary) -> void:
 	if _pending_declaration_command == "skip_attack":
 		_complete_declaration_submission()
 	_finish_attack_execution()
+
+
+func _finish_cancelled_gather_attack() -> void:
+	_target_selector.clear_target_state()
+	var ship: ShipInstance = _authoritative_attack_ship()
+	if ship == null or not ship.attack_step_active:
+		_finish_attack_execution()
+		return
+	if ship.anti_squadron_attack_zone >= 0:
+		if _has_remaining_authoritative_anti_squadron_target(ship):
+			# The cancellation command published a durable Ship Activation
+			# return. Rebuild only its declaration presentation; the normal
+			# Step 6 helper would replace that flow before the child finishes.
+			var resumed: Dictionary = \
+					resume_inactive_ship_attack_continuation(Callable(
+							_target_selector, "ship_token_for_instance"))
+			if not bool(resumed.get(RESUME_KEY_OK, false)):
+				_log.warn(str(resumed.get(RESUME_KEY_REASON,
+						"Cancelled anti-squadron presentation could not resume.")))
+		# When no target remains, the command processor's existing
+		# squadron_done transaction must close the child before the normal
+		# ship attack is presented.
+		return
+	_continue_after_normal_attack()
 
 ## Fades out a destroyed token over 0.8 seconds, then hides it.
 ## Called when a ship or squadron is destroyed during an attack.

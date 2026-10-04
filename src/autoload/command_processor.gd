@@ -44,6 +44,8 @@ const UseConcentrateFireTokenRerollCommandScript: GDScript = preload(
 		"res://src/core/commands/use_concentrate_fire_token_reroll_command.gd")
 const DeclineConcentrateFireTokenRerollCommandScript: GDScript = preload(
 		"res://src/core/commands/decline_concentrate_fire_token_reroll_command.gd")
+const ChooseConcentrateFireCommandScript: GDScript = preload(
+		"res://src/core/commands/choose_concentrate_fire_command.gd")
 const UseH9CommandScript: GDScript = preload(
 		"res://src/core/commands/use_h9_command.gd")
 const DeclineH9CommandScript: GDScript = preload(
@@ -106,6 +108,7 @@ func _ready() -> void:
 	# Tier 2 — attack commands.
 	BeginAttackCommand.register()
 	ResolveAttackPoolChoiceCommand.register()
+	ChooseConcentrateFireCommandScript.register()
 	UseConcentrateFireDialCommand.register()
 	DeclineConcentrateFireDialCommand.register()
 	RollDiceCommand.register()

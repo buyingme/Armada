@@ -174,6 +174,8 @@ func _route_to_controllers(cmd: GameCommand, result: Dictionary) -> void:
 		_emit_candidate_damage_events(cmd, result)
 	if cmd != null and cmd.command_type == "apply_maneuver_transform":
 		_project_applied_maneuver_transform(cmd)
+	if cmd != null and cmd.command_type == "move_squadron":
+		_project_applied_squadron_move(cmd)
 	if cmd != null and cmd.command_type == "complete_maneuver" \
 			and _ship_activation_controller != null:
 		var local_player: int = NetworkManager.get_local_player_index()
@@ -297,6 +299,22 @@ func _project_applied_maneuver_transform(cmd: GameCommand) -> void:
 	token.position = ship.get_pixel_position(GameScale.play_area_size_px)
 	token.rotation = deg_to_rad(ship.rotation_deg)
 	EventBus.ship_moved.emit(token)
+
+
+## Converges the scene token on an accepted canonical move. During live
+## placement the token has already been dragged; replay submits the same
+## command without a drag and must get the same position before range UI runs.
+func _project_applied_squadron_move(cmd: GameCommand) -> void:
+	var state: GameState = GameManager.current_game_state
+	if state == null or not _find_squadron_token_fn.is_valid():
+		return
+	var squadron: SquadronInstance = state.get_squadron(
+			cmd.player_index, int(cmd.payload.get("squadron_index", -1)))
+	var token: Node2D = _find_squadron_token_fn.call(squadron) as Node2D \
+			if squadron != null else null
+	if token != null:
+		token.global_position = squadron.get_pixel_position(
+				GameScale.play_area_size_px)
 
 
 func _emit_destroyed_ship_presentation(cmd: GameCommand) -> void:

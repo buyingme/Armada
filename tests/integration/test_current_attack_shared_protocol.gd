@@ -22,6 +22,10 @@ const GAME_BOARD_SCENE: PackedScene = preload(
 		"res://src/scenes/game_board/game_board.tscn")
 const CF_RULE: GDScript = preload(
 		"res://src/core/effects/rules/concentrate_fire_token.gd")
+const CF_CHOICE_RULE: GDScript = preload(
+		"res://src/core/effects/rules/concentrate_fire_choice.gd")
+const CF_CHOICE_COMMAND: GDScript = preload(
+		"res://src/core/commands/choose_concentrate_fire_command.gd")
 const CF_DECLINE: GDScript = preload(
 		"res://src/core/commands/decline_concentrate_fire_token_reroll_command.gd")
 
@@ -137,7 +141,7 @@ func test_distinct_attacks_and_squadron_targets_use_fresh_sequence_identity() ->
 		identities.append(str(result.get("attack_id", "")))
 		var cancelled: Dictionary = processor.submit(SkipAttackCommand.new(0, {
 			"attack_id": state.current_attack_state.attack_id,
-			"reason": "cancelled",
+			"reason": "flow_replaced",
 		}))
 		assert_true(bool(cancelled.get("skipped", false)))
 	assert_eq(identities, ["attack:0", "attack:2", "attack:4", "attack:6"])
@@ -573,6 +577,7 @@ func test_stale_or_duplicate_commands_leave_state_and_cursor_unchanged() -> void
 
 func test_production_opened_lifecycle_continues_same_canonical_attack() -> void:
 	CF_RULE.register()
+	CF_CHOICE_RULE.register()
 	CF_DECLINE.register()
 	var state: GameState = _make_state()
 	assert_true(state.get_ship(0, 0).command_tokens.add_token(
@@ -581,17 +586,29 @@ func test_production_opened_lifecycle_continues_same_canonical_attack() -> void:
 	processor.submit(BeginAttackCommand.new(0, _ship_attack_payload()))
 	processor.submit(RollDiceCommand.new(0, {"attack_id": "attack:0"}))
 	assert_true(state.timing_window_state.active)
-	state.interaction_flow = InteractionFlow.make(
-			Constants.InteractionFlow.ATTACK,
-			Constants.InteractionStep.ATTACK_MODIFY,
-			0, Constants.Visibility.ALL, {"attacker_player": 0})
+	var choice_payload: Dictionary = {}
+	for opportunity: Dictionary in UIProjector.project(
+			state, 0).timing_window.get("opportunities", []):
+		if str(opportunity.get("semantic_key", "")) \
+				!= CF_CHOICE_RULE.SEMANTIC_KEY:
+			continue
+		for option: Dictionary in opportunity.get("use_choices", []):
+			var payload: Dictionary = (option.get("intent", {}) \
+					as Dictionary).get("payload", {})
+			if str(payload.get("choice", "")) \
+					== CurrentAttackState.CF_CHOICE_TOKEN:
+				choice_payload = payload
+	assert_false(choice_payload.is_empty())
+	assert_false(processor.submit(CF_CHOICE_COMMAND.new(
+			0, choice_payload)).is_empty())
 	processor.submit(CF_DECLINE.new(0, _cf_identity_payload(state)))
 	assert_eq(state.current_attack_state.attack_id, "attack:0")
 	assert_eq(state.current_attack_state.stage,
 			CurrentAttackState.STAGE_ACCURACY)
 	assert_true(state.timing_window_state.is_inactive())
 	assert_eq(_history_types(processor.serialize_history()), [
-		"begin_attack", "roll_dice", CF_DECLINE.TYPE,
+		"begin_attack", "roll_dice", CF_CHOICE_COMMAND.TYPE,
+		CF_DECLINE.TYPE,
 		ConfirmAttackDiceCommand.TYPE,
 	])
 
@@ -975,7 +992,7 @@ func test_production_in_memory_replay_is_exact_and_driver_compatible() -> void:
 			"Production replay creation must capture the semantic history.")
 	var loaded: GameReplay = GameReplay.deserialize(
 			JSON.parse_string(JSON.stringify(replay_file.serialize())))
-	assert_not_null(loaded, "The non-fixture replay-10 payload must load.")
+	assert_not_null(loaded, "The non-fixture replay-11 payload must load.")
 	assert_typeof(loaded.header["rng_seed"], TYPE_INT)
 	assert_eq(loaded.header["rng_seed"], EXACT_REPLAY_SEED,
 			"The exact 64-bit replay seed must survive JSON serialization.")

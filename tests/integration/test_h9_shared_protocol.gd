@@ -105,9 +105,9 @@ func test_save_load_and_reconnect_preserve_h9_guard_and_remaining_blocker() -> v
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 8)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 8)
-	assert_eq(GameReplay.FORMAT_VERSION, 10)
+	assert_eq(metadata.save_format_version, 9)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 9)
+	assert_eq(GameReplay.FORMAT_VERSION, 11)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			expected_projection)
 	assert_eq(UIProjector.project(restored, 0).attack_dice_results,
@@ -199,9 +199,9 @@ func test_decline_round_trips_through_save_reconnect_network_and_replay() -> voi
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 8)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 8)
-	assert_eq(GameReplay.FORMAT_VERSION, 10)
+	assert_eq(metadata.save_format_version, 9)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 9)
+	assert_eq(GameReplay.FORMAT_VERSION, 11)
 	_assert_declined_h9_state(restored, initial_dice)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			controller_projection)
@@ -246,7 +246,7 @@ func test_decline_round_trips_through_save_reconnect_network_and_replay() -> voi
 	replay_file.set_commands(authoritative_history)
 	var replay_data: Dictionary = replay_file.serialize()
 	assert_eq((replay_data.get("header", {}) as Dictionary).get(
-			"format_version"), 10)
+			"format_version"), 11)
 	assert_not_null(GameReplay.deserialize(replay_data))
 
 	var client_state: GameState = GameState.deserialize_passive_network(
@@ -381,7 +381,7 @@ func _run_network_replay_order(h9_first: bool) -> Dictionary:
 	replay_file.set_commands(authoritative_history)
 	var replay_data: Dictionary = replay_file.serialize()
 	assert_eq((replay_data.get("header", {}) as Dictionary).get(
-			"format_version"), 10)
+			"format_version"), 11)
 	assert_not_null(GameReplay.deserialize(replay_data))
 
 	var client_state: GameState = GameState.deserialize_passive_network(
@@ -450,6 +450,7 @@ func _make_pending_state() -> GameState:
 		"attacker_kind": CurrentAttackState.KIND_SHIP,
 		"defender_kind": CurrentAttackState.KIND_SHIP,
 		"cf_token_resolution": CurrentAttackState.RESOLUTION_PENDING,
+		"cf_choice_lifecycle_id": "attack_modify:0",
 		"dice_results": [{
 			"color": int(Constants.DiceColor.RED),
 			"face": int(Constants.DiceFace.HIT),

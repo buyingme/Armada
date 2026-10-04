@@ -88,9 +88,9 @@ func test_save_load_and_reconnect_rederive_pending_choice_at_version_three() -> 
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 8)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 8)
-	assert_eq(GameReplay.FORMAT_VERSION, 10)
+	assert_eq(metadata.save_format_version, 9)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 9)
+	assert_eq(GameReplay.FORMAT_VERSION, 11)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			expected_projection)
 	assert_eq((ORCHESTRATOR.derive_current_opportunities(restored).get(
@@ -153,7 +153,7 @@ func test_host_client_and_format_five_replay_preserve_use_and_continuation() -> 
 	replay_file.set_commands(authoritative_history)
 	var replay_data: Dictionary = replay_file.serialize()
 	assert_eq((replay_data.get("header", {}) as Dictionary).get(
-			"format_version"), 10)
+			"format_version"), 11)
 	assert_not_null(GameReplay.deserialize(replay_data))
 
 	var client_state: GameState = GameState.deserialize_passive_network(
@@ -218,6 +218,7 @@ func _make_pending_state() -> GameState:
 		"attacker_kind": CurrentAttackState.KIND_SHIP,
 		"defender_kind": CurrentAttackState.KIND_SHIP,
 		"cf_token_resolution": CurrentAttackState.RESOLUTION_PENDING,
+		"cf_choice_lifecycle_id": "attack_modify:0",
 		"dice_results": [{
 			"color": int(Constants.DiceColor.RED),
 			"face": int(Constants.DiceFace.HIT),

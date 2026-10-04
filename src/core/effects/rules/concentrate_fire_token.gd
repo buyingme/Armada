@@ -147,6 +147,9 @@ static func pending_source(game_state: GameState,
 	if attack == null or not attack.active \
 			or attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY \
 			or attack.attacker_kind != CurrentAttackState.KIND_SHIP \
+			or attack.cf_choice not in [CurrentAttackState.CF_CHOICE_TOKEN,
+				CurrentAttackState.CF_CHOICE_BOTH] \
+			or attack.cf_dial_resolution == CurrentAttackState.RESOLUTION_PENDING \
 			or attack.cf_token_resolution \
 					!= CurrentAttackState.RESOLUTION_PENDING:
 		return {}
@@ -164,9 +167,11 @@ static func pending_source(game_state: GameState,
 		return {}
 	var ship: ShipInstance = game_state.get_ship(
 			attack.attacker_player, attack.attacker_index)
-	if ship == null or ship.command_tokens == null \
-			or not ship.command_tokens.has_token(
-				Constants.CommandType.CONCENTRATE_FIRE):
+	if ship == null or attack.cf_choice_round != game_state.current_round \
+			or ship.concentrate_fire_resolved_round != game_state.current_round \
+			or attack.cf_choice_lifecycle_id != timing_state.lifecycle_id \
+			or attack.cf_choice_activation_id \
+				!= ship.ship_activation_identity:
 		return {}
 	return _authoritative_source(game_state)
 

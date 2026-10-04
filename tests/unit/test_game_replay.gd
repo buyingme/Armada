@@ -112,8 +112,8 @@ func test_create_replay_rejects_unpaired_reconstructed_cursor() -> void:
 
 
 func test_bug_031_cutover_uses_replay_format_nine() -> void:
-	assert_eq(GameReplay.FORMAT_VERSION, 10,
-			"Ship Maneuver convergence requires replay format 10")
+	assert_eq(GameReplay.FORMAT_VERSION, 11,
+			"BUG-070 / BUG-071 semantic cutover requires replay format 11")
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION,
 			"Signing must not create a second semantic replay format")
 
@@ -276,7 +276,7 @@ func test_deserialize_accepts_contiguous_reconstructed_sequence_column() -> void
 
 
 func test_deserialize_rejects_every_non_current_semantic_format() -> void:
-	for format: int in [1, 2, 3, 4, 5, 6, 7, 99]:
+	for format: int in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 99]:
 		var data: Dictionary = _make_replay(1).serialize()
 		(data["header"] as Dictionary)["format_version"] = format
 		(data["commands"] as Array)[0]["type"] = "unknown_before_apply"

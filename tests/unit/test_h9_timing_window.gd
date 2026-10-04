@@ -325,7 +325,7 @@ func test_confirm_cleans_guard_and_generated_accuracy_drives_defense() -> void:
 
 
 func test_terminal_attack_commands_clean_matching_guard_idempotently() -> void:
-	for reason: String in ["cancelled", "flow_replaced", "flow_terminated"]:
+	for reason: String in ["flow_replaced", "flow_terminated"]:
 		var state: GameState = _make_state()
 		var runtime_upgrade: Dictionary = _h9_source(state)
 		assert_true(RULE.write_resolution_guard(
@@ -551,8 +551,8 @@ func test_roll_dice_activates_ship_window_and_compatibility_boundary() -> void:
 			TimingWindowDefinitions.ATTACK_MODIFY)
 	assert_true(bool(projected.get("is_interactive", false)))
 	assert_false(_projected_h9(projected).is_empty())
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 8)
-	assert_eq(GameReplay.FORMAT_VERSION, 10)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 9)
+	assert_eq(GameReplay.FORMAT_VERSION, 11)
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION)
 	assert_ne(ConfirmAttackDiceCommand.new(0, {"attack_id": "attack:0"}) \
 			.validate(state), "")

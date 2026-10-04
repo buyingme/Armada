@@ -243,8 +243,21 @@ func test_cf_dial_colour_signal_emitted() -> void:
 	_panel.show_initial_attack_exec("Test Ship")
 	watch_signals(_panel)
 	_panel.show_cf_dial_section(["RED"] as Array[String])
-	# Simulate the callback directly.
-	_panel._on_cf_dial_colour("RED")
+	var die_image: TextureRect = _panel.find_child(
+			"CFDialDie_RED", true, false) as TextureRect
+	assert_not_null(die_image)
+	assert_eq(_panel._cf_dial_buttons.find_children(
+			"*", "Button", false, false).size(), 0)
+	if die_image == null:
+		return
+	assert_not_null(die_image.texture)
+	assert_eq(die_image.texture.resource_path,
+			Dice.get_face_image_path(
+					Constants.DiceColor.RED, Constants.DiceFace.HIT))
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	die_image.gui_input.emit(click)
 	assert_signal_emitted(_panel, "cf_dial_colour_selected",
 			"cf_dial_colour_selected should be emitted.")
 

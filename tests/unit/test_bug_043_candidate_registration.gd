@@ -36,9 +36,9 @@ func test_protocol9_candidate_routes_deserialize_to_purpose_specific_commands() 
 
 
 func test_coordinated_compatibility_versions_are_active_together() -> void:
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 8)
-	assert_eq(GameReplay.FORMAT_VERSION, 10)
-	assert_eq(NetworkManager.PROTOCOL_VERSION, 9)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 9)
+	assert_eq(GameReplay.FORMAT_VERSION, 11)
+	assert_eq(NetworkManager.PROTOCOL_VERSION, 10)
 	assert_eq(GameCommand.APPLICATION_CONTRACT_VERSION, 2)
 	assert_eq(PassiveDamageLedger.SCHEMA_VERSION, 1)
 

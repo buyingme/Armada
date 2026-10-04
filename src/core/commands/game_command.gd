@@ -38,6 +38,7 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 		"attacker_player", "attacker_index", "attacker_zone",
 		"defender_player", "defender_index", "defender_zone",
 	],
+	"choose_concentrate_fire": ["round"],
 	"commit_defense": ["ship_index"],
 	"commit_setup_deployment": ["owner_player", "speed"],
 	"complete_squadron_activation": [
@@ -99,7 +100,7 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	],
 	"set_speed": ["ship_index", "new_speed"],
 	"skip_attack": [
-		"ship_index", "squadron_index",
+		"ship_index", "squadron_index", "attack_ordinal", "zone",
 		"commanding_ship_player", "commanding_ship_index",
 	],
 	"spend_defense_token": [
@@ -145,6 +146,18 @@ const _MAX_SAFE_JSON_INTEGER: float = 9007199254740991.0
 const APPLICATION_CONTRACT_VERSION: int = 2
 const _EXACT_LIVE_PAYLOAD_FIELDS: Dictionary = {
 	"roll_dice": ["attack_id"],
+	"choose_concentrate_fire": ["attack_id", "choice",
+		"ship_activation_identity", "round", "timing_window_id",
+		"lifecycle_id", "source_owner_kind", "runtime_source_id",
+		"semantic_key"],
+	"use_concentrate_fire_dial": ["attack_id", "color",
+		"ship_activation_identity", "round", "timing_window_id",
+		"lifecycle_id", "source_owner_kind", "runtime_source_id",
+		"semantic_key"],
+	"decline_concentrate_fire_dial": ["attack_id",
+		"ship_activation_identity", "round", "timing_window_id",
+		"lifecycle_id", "source_owner_kind", "runtime_source_id",
+		"semantic_key"],
 	"reroll_attack_die": [
 		"attack_id", "die_index", "expected_color", "expected_face",
 		"source_rule_id",

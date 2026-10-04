@@ -6,6 +6,10 @@ const PROCESSOR_SCRIPT: GDScript = preload(
 		"res://src/autoload/command_processor.gd")
 const RULE: GDScript = preload(
 		"res://src/core/effects/rules/concentrate_fire_token.gd")
+const CHOICE_RULE: GDScript = preload(
+		"res://src/core/effects/rules/concentrate_fire_choice.gd")
+const CHOICE_COMMAND: GDScript = preload(
+		"res://src/core/commands/choose_concentrate_fire_command.gd")
 const ORCHESTRATOR: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_orchestrator.gd")
 const DEFINITIONS: GDScript = preload(
@@ -53,6 +57,7 @@ func before_each() -> void:
 	assert_true(_processor.restore_next_sequence(2))
 	GameManager.set_command_submitter(ProcessorSubmitter.new(_processor))
 	RULE.register()
+	CHOICE_RULE.register()
 
 
 func after_each() -> void:
@@ -107,7 +112,7 @@ func test_resolved_source_enumerates_but_derives_no_opportunity() -> void:
 			_state).get(ORCHESTRATOR.KEY_OPPORTUNITIES, []) as Array).is_empty())
 
 
-func test_use_spends_one_token_rerolls_selected_die_and_then_continues() -> void:
+func test_use_retained_token_authorization_rerolls_selected_die_and_continues() -> void:
 	var attacker: ShipInstance = _state.get_ship(0, 0)
 	var before_tokens: int = attacker.command_tokens.get_token_count()
 	var before_rng: int = _state.rng.get_state()
@@ -118,9 +123,8 @@ func test_use_spends_one_token_rerolls_selected_die_and_then_continues() -> void
 	var result: Dictionary = _processor.submit_deferred_followups(command)
 
 	assert_false(result.is_empty())
-	assert_eq(attacker.command_tokens.get_token_count(), before_tokens - 1)
-	assert_false(attacker.command_tokens.has_token(
-			Constants.CommandType.CONCENTRATE_FIRE))
+	assert_eq(attacker.command_tokens.get_token_count(), before_tokens,
+			"The token was spent at the advance choice, not at reroll.")
 	assert_ne(_state.rng.get_state(), before_rng)
 	assert_eq(result.get("die_index"), 1)
 	assert_eq(_state.current_attack_state.dice_results[0], before_dice[0],
@@ -201,7 +205,7 @@ func test_squadron_attacker_never_derives_concentrate_fire_participant() -> void
 	assert_true(opportunities.is_empty())
 
 
-func test_ship_without_concentrate_fire_token_derives_no_opportunity() -> void:
+func test_spent_token_authorization_survives_loss_of_possession() -> void:
 	var attacker: ShipInstance = _state.get_ship(0, 0)
 	assert_true(attacker.command_tokens.spend_token(
 			Constants.CommandType.CONCENTRATE_FIRE))
@@ -217,9 +221,9 @@ func test_ship_without_concentrate_fire_token_derives_no_opportunity() -> void:
 			RULE.SOURCE_OWNER_KIND,
 			runtime_source_id)
 	assert_typeof(derived, TYPE_ARRAY)
-	assert_true((derived as Array).is_empty())
-	assert_true((ORCHESTRATOR.derive_current_opportunities(
-			_state).get(ORCHESTRATOR.KEY_OPPORTUNITIES, []) as Array).is_empty())
+	assert_eq((derived as Array).size(), 1)
+	assert_eq((ORCHESTRATOR.derive_current_opportunities(
+			_state).get(ORCHESTRATOR.KEY_OPPORTUNITIES, []) as Array).size(), 1)
 
 
 func test_normal_roll_opens_production_window_only_for_ship_attacker() -> void:
@@ -242,6 +246,209 @@ func test_normal_roll_opens_production_window_only_for_ship_attacker() -> void:
 		"attack_id": squadron_state.current_attack_state.attack_id,
 	})).is_empty())
 	assert_false(squadron_state.timing_window_state.active)
+
+
+func test_advance_choice_spends_selected_resources_once_and_marks_round() -> void:
+	for choice: String in [CurrentAttackState.CF_CHOICE_DIAL,
+			CurrentAttackState.CF_CHOICE_TOKEN,
+			CurrentAttackState.CF_CHOICE_BOTH,
+			CurrentAttackState.CF_CHOICE_NEITHER]:
+		var state: GameState = _make_roll_state(CurrentAttackState.KIND_SHIP)
+		var ship: ShipInstance = state.get_ship(0, 0)
+		var dials: Array[int] = []
+		for _index: int in range(ship.command_dial_stack.get_dials_needed()):
+			dials.append(Constants.CommandType.CONCENTRATE_FIRE)
+		assert_true(ship.command_dial_stack.assign_dials(dials, 1))
+		assert_false(ship.command_dial_stack.reveal_top().is_empty())
+		GameManager.current_game_state = state
+		var processor: Node = PROCESSOR_SCRIPT.new()
+		add_child_autofree(processor)
+		assert_false(processor.submit_deferred_followups(
+				RollDiceCommand.new(0, {"attack_id": "attack:0"})).is_empty())
+		assert_eq(state.current_attack_state.cf_choice,
+				CurrentAttackState.RESOLUTION_PENDING)
+		var payload: Dictionary = {}
+		var projected: Dictionary = UIProjector.project(state, 0).timing_window
+		for opportunity: Dictionary in projected.get("opportunities", []):
+			if str(opportunity.get("semantic_key", "")) \
+					!= CHOICE_RULE.SEMANTIC_KEY:
+				continue
+			var intents: Array = opportunity.get("use_choices", [])
+			if choice == CurrentAttackState.CF_CHOICE_NEITHER:
+				payload = (opportunity.get("decline_intent", {}) \
+						as Dictionary).get("payload", {})
+			else:
+				for option: Dictionary in intents:
+					var proposed: Dictionary = (option.get("intent", {}) \
+							as Dictionary).get("payload", {})
+					if str(proposed.get("choice", "")) == choice:
+						payload = proposed
+		assert_false(payload.is_empty())
+		if payload.is_empty():
+			continue
+		var before_rng: int = state.rng.get_state()
+		assert_false(processor.submit_deferred_followups(
+				CHOICE_COMMAND.new(0, payload)).is_empty())
+		assert_eq(state.rng.get_state(), before_rng,
+				"Advance commitment must not roll the added die.")
+		assert_eq(state.current_attack_state.cf_choice, choice)
+		var dial_spent: bool = choice in [CurrentAttackState.CF_CHOICE_DIAL,
+				CurrentAttackState.CF_CHOICE_BOTH]
+		var token_spent: bool = choice in [CurrentAttackState.CF_CHOICE_TOKEN,
+				CurrentAttackState.CF_CHOICE_BOTH]
+		assert_eq(ship.command_dial_stack.get_revealed_dial().is_empty(),
+				dial_spent)
+		assert_eq(ship.command_tokens.has_token(
+				Constants.CommandType.CONCENTRATE_FIRE), not token_spent)
+		assert_eq(ship.concentrate_fire_resolved_round,
+				1 if choice != CurrentAttackState.CF_CHOICE_NEITHER else -1)
+		assert_eq(processor.submit_deferred_followups(
+				CHOICE_COMMAND.new(0, payload)), {})
+	assert_engine_error(4)
+
+
+func test_combined_choice_rejects_atomically_after_either_resource_disappears() \
+		-> void:
+	for missing: String in ["dial", "token"]:
+		var state: GameState = _make_roll_state(CurrentAttackState.KIND_SHIP)
+		var ship: ShipInstance = state.get_ship(0, 0)
+		var dials: Array[int] = []
+		for _index: int in range(ship.command_dial_stack.get_dials_needed()):
+			dials.append(Constants.CommandType.CONCENTRATE_FIRE)
+		assert_true(ship.command_dial_stack.assign_dials(dials, 1))
+		assert_false(ship.command_dial_stack.reveal_top().is_empty())
+		GameManager.current_game_state = state
+		var processor: Node = PROCESSOR_SCRIPT.new()
+		add_child_autofree(processor)
+		assert_false(processor.submit_deferred_followups(RollDiceCommand.new(
+				0, {"attack_id": "attack:0"})).is_empty())
+		var payload: Dictionary = _advance_choice_payload(
+				state, CurrentAttackState.CF_CHOICE_BOTH)
+		assert_false(payload.is_empty())
+		if missing == "dial":
+			assert_false(ship.command_dial_stack.spend_revealed().is_empty())
+		else:
+			assert_true(ship.command_tokens.spend_token(
+					Constants.CommandType.CONCENTRATE_FIRE))
+		var before: Dictionary = state.serialize()
+		var rng_before: int = state.rng.get_state()
+		var history_before: Array[Dictionary] = processor.serialize_history()
+		var cursor_before: int = processor.get_next_sequence()
+		var command: GameCommand = CHOICE_COMMAND.new(0, payload)
+		assert_true(processor.submit_deferred_followups(command).is_empty())
+		assert_eq(state.serialize(), before,
+				"Rejected combined choice cannot partially spend either resource.")
+		assert_eq(state.rng.get_state(), rng_before)
+		assert_eq(processor.serialize_history(), history_before)
+		assert_eq(processor.get_next_sequence(), cursor_before)
+		assert_eq(command.sequence, -1)
+		assert_eq(ship.concentrate_fire_resolved_round, -1)
+		assert_eq(state.current_attack_state.cf_choice,
+				CurrentAttackState.RESOLUTION_PENDING)
+	assert_engine_error(2)
+
+
+func test_later_attack_and_anti_squadron_target_suppress_spent_cf_until_round_reset() \
+		-> void:
+	for defender_kind: String in [CurrentAttackState.KIND_SHIP,
+			CurrentAttackState.KIND_SQUADRON]:
+		var state: GameState = _make_roll_state(
+				CurrentAttackState.KIND_SHIP, defender_kind)
+		var ship: ShipInstance = state.get_ship(0, 0)
+		GameManager.current_game_state = state
+		var processor: Node = PROCESSOR_SCRIPT.new()
+		add_child_autofree(processor)
+		assert_false(processor.submit_deferred_followups(RollDiceCommand.new(
+				0, {"attack_id": "attack:0"})).is_empty())
+		var payload: Dictionary = _advance_choice_payload(
+				state, CurrentAttackState.CF_CHOICE_TOKEN)
+		assert_false(payload.is_empty())
+		assert_false(processor.submit_deferred_followups(
+				CHOICE_COMMAND.new(0, payload)).is_empty())
+		assert_eq(ship.concentrate_fire_resolved_round, state.current_round)
+		var later: GameState = _make_roll_state(
+				CurrentAttackState.KIND_SHIP, defender_kind, "attack:10")
+		assert_ne(later.current_attack_state.attack_id,
+				state.current_attack_state.attack_id)
+		var later_ship: ShipInstance = later.get_ship(0, 0)
+		later_ship.concentrate_fire_resolved_round = \
+				ship.concentrate_fire_resolved_round
+		GameManager.current_game_state = later
+		var later_processor: Node = PROCESSOR_SCRIPT.new()
+		add_child_autofree(later_processor)
+		assert_false(later_processor.submit_deferred_followups(
+				RollDiceCommand.new(0, {"attack_id": "attack:10"})).is_empty())
+		assert_true(_advance_choice_payload(later,
+				CurrentAttackState.CF_CHOICE_TOKEN).is_empty(),
+				"The once-per-round marker suppresses later targets and attacks.")
+		later_ship.reset_activation()
+		assert_eq(later_ship.concentrate_fire_resolved_round, -1)
+		assert_eq(later.current_attack_state.cf_choice,
+				CurrentAttackState.RESOLUTION_UNAVAILABLE)
+		var next_round: GameState = _make_roll_state(
+				CurrentAttackState.KIND_SHIP, defender_kind,
+				"attack:20")
+		next_round.current_round = 2
+		next_round.get_ship(0, 0).concentrate_fire_resolved_round = \
+				later_ship.concentrate_fire_resolved_round
+		GameManager.current_game_state = next_round
+		var next_processor: Node = PROCESSOR_SCRIPT.new()
+		add_child_autofree(next_processor)
+		assert_false(next_processor.submit_deferred_followups(
+				RollDiceCommand.new(0, {
+					"attack_id": "attack:20"})).is_empty())
+		assert_false(_advance_choice_payload(next_round,
+				CurrentAttackState.CF_CHOICE_TOKEN).is_empty(),
+				"Round reset must make a newly held CF resource eligible.")
+
+
+func test_top_level_decline_preserves_resource_and_next_attack_eligibility() \
+		-> void:
+	var state: GameState = _make_roll_state(CurrentAttackState.KIND_SHIP)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	GameManager.current_game_state = state
+	var processor: Node = PROCESSOR_SCRIPT.new()
+	add_child_autofree(processor)
+	assert_false(processor.submit_deferred_followups(RollDiceCommand.new(
+			0, {"attack_id": "attack:0"})).is_empty())
+	var payload: Dictionary = _advance_choice_payload(
+			state, CurrentAttackState.CF_CHOICE_NEITHER)
+	assert_false(payload.is_empty())
+	var tokens_before: Dictionary = ship.command_tokens.serialize()
+	var rng_before: int = state.rng.get_state()
+	assert_false(processor.submit_deferred_followups(
+			CHOICE_COMMAND.new(0, payload)).is_empty())
+	assert_eq(ship.command_tokens.serialize(), tokens_before)
+	assert_eq(ship.concentrate_fire_resolved_round, -1)
+	assert_eq(state.rng.get_state(), rng_before)
+	var later: GameState = _make_roll_state(CurrentAttackState.KIND_SHIP,
+			CurrentAttackState.KIND_SQUADRON, "attack:30")
+	later.get_ship(0, 0).concentrate_fire_resolved_round = \
+			ship.concentrate_fire_resolved_round
+	GameManager.current_game_state = later
+	var later_processor: Node = PROCESSOR_SCRIPT.new()
+	add_child_autofree(later_processor)
+	assert_false(later_processor.submit_deferred_followups(RollDiceCommand.new(
+			0, {"attack_id": "attack:30"})).is_empty())
+	assert_false(_advance_choice_payload(later,
+			CurrentAttackState.CF_CHOICE_TOKEN).is_empty())
+
+
+func _advance_choice_payload(state: GameState, choice: String) -> Dictionary:
+	var projected: Dictionary = UIProjector.project(state, 0).timing_window
+	for opportunity: Dictionary in projected.get("opportunities", []):
+		if str(opportunity.get("semantic_key", "")) \
+				!= CHOICE_RULE.SEMANTIC_KEY:
+			continue
+		if choice == CurrentAttackState.CF_CHOICE_NEITHER:
+			return (opportunity.get("decline_intent", {}) \
+				as Dictionary).get("payload", {})
+		for option: Dictionary in opportunity.get("use_choices", []):
+			var proposed: Dictionary = ((option.get("intent", {}) \
+					as Dictionary).get("payload", {}) as Dictionary)
+			if str(proposed.get("choice", "")) == choice:
+				return proposed
+	return {}
 
 
 func test_rejected_repeat_roll_cannot_open_or_replace_production_window() -> void:
@@ -295,7 +502,7 @@ func test_projection_is_public_but_only_attacker_receives_command_intents() -> v
 	assert_false((observer_opportunities[0] as Dictionary).has("decline_intent"))
 
 
-func test_live_panel_collects_cf_die_before_submitting_complete_use() -> void:
+func test_live_panel_committed_cf_token_click_submits_complete_use() -> void:
 	var projected: Dictionary = UIProjector.project(_state, 0).timing_window
 	var opportunities: Array = projected.get("opportunities", []) as Array
 	var opportunity: Dictionary = opportunities[0] as Dictionary
@@ -312,13 +519,14 @@ func test_live_panel_collects_cf_die_before_submitting_complete_use() -> void:
 	panel.show_timing_window_opportunities(opportunities, true)
 	panel.show_dice_results(_state.current_attack_state.dice_results)
 
-	var use_button: Button = panel.find_child(
-			"TimingUseButton_0", true, false) as Button
-	assert_not_null(use_button)
-	use_button.pressed.emit()
+	assert_null(panel.find_child("TimingUseButton_0", true, false))
+	assert_null(panel.find_child("TimingUseMenu_0", true, false))
+	assert_true(panel._cf_token_container.visible)
+	assert_false(panel._cf_token_reroll_button.visible)
+	assert_eq(panel.get_title_text(), "Concentrate Fire Command Token")
+	assert_eq(panel.get_body_text(), "Select die to reroll.")
 	assert_signal_not_emitted(panel, "timing_window_use_requested")
 	assert_true(_processor.serialize_history().is_empty())
-	assert_true(use_button.disabled)
 	assert_eq(panel._dice_textures[0].mouse_filter, Control.MOUSE_FILTER_STOP)
 	assert_eq(panel._dice_textures[1].mouse_filter, Control.MOUSE_FILTER_STOP)
 	var original_die: TextureRect = panel._dice_textures[0]
@@ -368,10 +576,9 @@ func test_live_panel_cf_decline_submits_immediately_without_parameter_mode() -> 
 	panel.show_timing_window_opportunities(opportunities, true)
 	panel.show_dice_results(_state.current_attack_state.dice_results)
 
-	var decline_button: Button = panel.find_child(
-			"TimingDeclineButton_0", true, false) as Button
-	assert_not_null(decline_button)
-	decline_button.pressed.emit()
+	assert_null(panel.find_child("TimingDeclineButton_0", true, false))
+	assert_eq(panel._cf_token_skip_button.text, "Decline")
+	panel._cf_token_skip_button.pressed.emit()
 	assert_signal_emitted(panel, "timing_window_decline_requested")
 	assert_eq(get_signal_parameters(
 			panel, "timing_window_decline_requested"), [expected_intent])
@@ -482,10 +689,15 @@ func _make_pending_state(
 			DEFINITIONS.ATTACK_MODIFY,
 			1,
 			_context(state)).get(ORCHESTRATOR.KEY_OK, false)))
+	if attacker_kind == CurrentAttackState.KIND_SHIP:
+		assert_eq(state.current_attack_state.cf_choice_lifecycle_id,
+				state.timing_window_state.lifecycle_id)
 	return state
 
 
-func _make_roll_state(attacker_kind: String) -> GameState:
+func _make_roll_state(attacker_kind: String,
+		defender_kind: String = CurrentAttackState.KIND_SQUADRON,
+		attack_id: String = "attack:0") -> GameState:
 	var state := GameState.new()
 	state.initialize()
 	state.current_round = 1
@@ -498,13 +710,10 @@ func _make_roll_state(attacker_kind: String) -> GameState:
 			Constants.InteractionStep.ATTACK_ROLL,
 			0)
 	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
-		"attack_id": "attack:0",
+		"attack_id": attack_id,
 		"stage": CurrentAttackState.STAGE_PRE_ROLL,
 		"attacker_kind": attacker_kind,
-		"defender_kind": CurrentAttackState.KIND_SQUADRON,
-		"cf_token_resolution": CurrentAttackState.RESOLUTION_PENDING \
-				if attacker_kind == CurrentAttackState.KIND_SHIP \
-				else CurrentAttackState.RESOLUTION_UNAVAILABLE,
+		"defender_kind": defender_kind,
 	}))
 	if attacker_kind == CurrentAttackState.KIND_SHIP:
 		assert_true(state.get_ship(0, 0).command_tokens.add_token(

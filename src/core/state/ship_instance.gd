@@ -111,6 +111,12 @@ var maneuver_opportunity_disposition: String = \
 		ACTIVATION_DISPOSITION_INACTIVE
 var squadron_command_activations_committed: int = 0
 
+## One command-produced, no-inspection return from a cancelled Step 6 child.
+var _pending_anti_squadron_cancellation_return: Dictionary = {}
+
+## The round in which a Concentrate Fire dial/token choice was committed.
+var concentrate_fire_resolved_round: int = -1
+
 ## Narrow ADR-006 Maneuver commitment record. The dictionary is private so
 ## callers can only mutate it through the identity-bound owner operations
 ## below. An empty dictionary represents no committed Maneuver execution.
@@ -1496,6 +1502,7 @@ func begin_attack_step() -> void:
 	used_attack_hull_zones.clear()
 	anti_squadron_attack_zone = -1
 	anti_squadron_target_history.clear()
+	_pending_anti_squadron_cancellation_return.clear()
 	_log_attack_progress("begin_attack_step")
 
 
@@ -1532,6 +1539,7 @@ func commit_attack(attacker_zone: int, defender_player: int,
 		defender_kind: String, defender_index: int) -> void:
 	if not attack_step_active:
 		return
+	_pending_anti_squadron_cancellation_return.clear()
 	if anti_squadron_attack_zone >= 0:
 		anti_squadron_target_history.append(
 				_make_squadron_target_ref(defender_player, defender_index))
@@ -1565,6 +1573,7 @@ func end_anti_squadron_attack() -> void:
 			or not anti_squadron_target_history.is_empty()
 	anti_squadron_attack_zone = -1
 	anti_squadron_target_history.clear()
+	_pending_anti_squadron_cancellation_return.clear()
 	if changed:
 		_log_attack_progress("end_anti_squadron_attack")
 
@@ -1578,6 +1587,8 @@ func attack_progress_snapshot() -> Dictionary:
 		"anti_squadron_attack_zone": anti_squadron_attack_zone,
 		"anti_squadron_target_history":
 				anti_squadron_target_history.duplicate(true),
+		"pending_anti_squadron_cancellation_return":
+				_pending_anti_squadron_cancellation_return.duplicate(true),
 	}
 
 
@@ -1597,12 +1608,35 @@ func restore_attack_progress(snapshot: Dictionary) -> void:
 			anti_squadron_target_history.append(_make_squadron_target_ref(
 					int(target_data.get("owner", -1)),
 					int(target_data.get("index", -1))))
+	_pending_anti_squadron_cancellation_return = (snapshot.get(
+			"pending_anti_squadron_cancellation_return", {}) as Dictionary).duplicate(true)
 	_log_attack_progress("restore_attack_progress")
+
+
+func pending_anti_squadron_cancellation_return() -> Dictionary:
+	return _pending_anti_squadron_cancellation_return.duplicate(true)
+
+
+func record_anti_squadron_cancellation_return(attack_id: String) -> bool:
+	if attack_id.is_empty() or not attack_step_active \
+			or anti_squadron_attack_zone < 0 \
+			or ship_activation_identity.is_empty() \
+			or committed_attack_count <= 0 \
+			or anti_squadron_target_history.is_empty():
+		return false
+	_pending_anti_squadron_cancellation_return = {
+		"attack_id": attack_id,
+		"ship_activation_identity": ship_activation_identity,
+		"attack_ordinal": committed_attack_count,
+		"zone": anti_squadron_attack_zone,
+	}
+	return true
 
 
 ## Resets activation-local state for a new round.
 func reset_activation() -> void:
 	activated_this_round = false
+	concentrate_fire_resolved_round = -1
 	attack_step_active = false
 	committed_attack_count = 0
 	used_attack_hull_zones.clear()
@@ -2091,6 +2125,9 @@ func serialize() -> Dictionary:
 		"anti_squadron_attack_zone": anti_squadron_attack_zone,
 		"anti_squadron_target_history":
 				anti_squadron_target_history.duplicate(true),
+		"pending_anti_squadron_cancellation_return":
+				_pending_anti_squadron_cancellation_return.duplicate(true),
+		"concentrate_fire_resolved_round": concentrate_fire_resolved_round,
 		"ship_activation_identity": ship_activation_identity,
 		"squadron_command_opportunity_disposition":
 				squadron_command_opportunity_disposition,
@@ -2159,9 +2196,37 @@ static func deserialize(
 			inst.anti_squadron_target_history.append(
 					_make_squadron_target_ref(
 							int(target_data.get("owner", -1)),
-								int(target_data.get("index", -1))))
+							int(target_data.get("index", -1))))
+	var cancellation_return: Variant = data.get(
+			"pending_anti_squadron_cancellation_return", {})
+	if not cancellation_return is Dictionary:
+		return null
+	var return_data: Dictionary = cancellation_return as Dictionary
+	if not return_data.is_empty():
+		if return_data.size() != 4 \
+				or typeof(return_data.get("attack_id")) != TYPE_STRING \
+				or typeof(return_data.get("ship_activation_identity")) != TYPE_STRING \
+				or typeof(return_data.get("attack_ordinal")) not in [TYPE_INT, TYPE_FLOAT] \
+				or typeof(return_data.get("zone")) not in [TYPE_INT, TYPE_FLOAT] \
+				or str(return_data["attack_id"]).is_empty() \
+				or int(return_data["attack_ordinal"]) \
+						!= inst.committed_attack_count \
+				or int(return_data["zone"]) \
+						!= inst.anti_squadron_attack_zone:
+			return null
+		inst._pending_anti_squadron_cancellation_return = \
+				return_data.duplicate(true)
+	inst.concentrate_fire_resolved_round = int(data.get(
+			"concentrate_fire_resolved_round", -1))
+	if inst.concentrate_fire_resolved_round < -1:
+		return null
 	inst.ship_activation_identity = str(data.get(
 			"ship_activation_identity", ""))
+	if not return_data.is_empty() \
+			and (str(return_data["ship_activation_identity"]) \
+				!= inst.ship_activation_identity \
+				or inst.ship_activation_identity.is_empty()):
+		return null
 	inst.squadron_command_opportunity_disposition = str(data.get(
 			"squadron_command_opportunity_disposition",
 			ACTIVATION_DISPOSITION_INACTIVE))

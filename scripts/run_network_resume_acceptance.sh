@@ -28,6 +28,7 @@ RUN_BUG031_ONLY=false
 RUN_COMMANDED_ONLY=false
 RUN_BUG043_ONLY=false
 RUN_FRESH_ONLY=false
+RUN_BUG070071_ONLY=false
 if [[ "${1:-}" == "--section-d-only" ]]; then
   RUN_SECTION_D_ONLY=true
 elif [[ "${1:-}" == "--bug-031-only" ]]; then
@@ -38,8 +39,10 @@ elif [[ "${1:-}" == "--bug-043-only" ]]; then
   RUN_BUG043_ONLY=true
 elif [[ "${1:-}" == "--fresh-only" ]]; then
   RUN_FRESH_ONLY=true
+elif [[ "${1:-}" == "--bug-070-071-only" ]]; then
+  RUN_BUG070071_ONLY=true
 elif [[ $# -ne 0 ]]; then
-  echo "Usage: $0 [--section-d-only|--bug-031-only|--commanded-squadron-only|--bug-043-only|--fresh-only]" >&2
+  echo "Usage: $0 [--section-d-only|--bug-031-only|--commanded-squadron-only|--bug-043-only|--fresh-only|--bug-070-071-only]" >&2
   exit 2
 fi
 wait_for_child() {
@@ -154,19 +157,20 @@ run_commanded_squadron() {
 }
 run_bug031_scenario() {
   local scenario="$1" label="$2" port="$3"
+  local mapping="${4:-0}"
   local host_home="$RUN_ROOT/home-$scenario-host"
   local client_home="$RUN_ROOT/home-$scenario-client"
   mkdir -p "$host_home" "$client_home"
   HOME="$host_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
     res://tests/acceptance/network_resume/driver.tscn -- \
-    --role=host --scenario="$scenario" --mapping=0 --port="$port" \
+    --role=host --scenario="$scenario" --mapping="$mapping" --port="$port" \
     --shared="$SHARED" >"$LOGS/$scenario-host.log" 2>&1 &
   local host=$!
   CHILD_PIDS+=("$host")
   sleep 1
   HOME="$client_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
     res://tests/acceptance/network_resume/driver.tscn -- \
-    --role=client --scenario="$scenario" --mapping=0 --port="$port" \
+    --role=client --scenario="$scenario" --mapping="$mapping" --port="$port" \
     --shared="$SHARED" >"$LOGS/$scenario-client.log" 2>&1 &
   local client=$!
   CHILD_PIDS+=("$client")
@@ -259,6 +263,48 @@ run_bug043_stabilization() {
   wait_for_child "$reconnect" "BUG-043 reconnected client"
   wait_for_child "$host" "BUG-043 authority"
 }
+run_bug070071_reconnect_scenario() {
+  local scenario="$1" mapping="$2" port="$3"
+  local host_home="$RUN_ROOT/home-$scenario-$mapping-host"
+  local client_home="$RUN_ROOT/home-$scenario-$mapping-client"
+  local reconnect_home="$RUN_ROOT/home-$scenario-$mapping-reconnect"
+  mkdir -p "$host_home" "$client_home" "$reconnect_home"
+  HOME="$host_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=host --scenario="$scenario" --mapping="$mapping" --port="$port" \
+    --shared="$SHARED" >"$LOGS/$scenario-host-$mapping.log" 2>&1 &
+  local host=$!
+  CHILD_PIDS+=("$host")
+  sleep 1
+  HOME="$client_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=client --scenario="$scenario" --mapping="$mapping" --port="$port" \
+    --shared="$SHARED" >"$LOGS/$scenario-client-$mapping.log" 2>&1 &
+  local client=$!
+  CHILD_PIDS+=("$client")
+  wait_for_child "$client" "$scenario initial client mapping $mapping"
+  sleep 1
+  HOME="$reconnect_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=reconnect --scenario="$scenario" --mapping="$mapping" --port="$port" \
+    --shared="$SHARED" >"$LOGS/$scenario-reconnect-$mapping.log" 2>&1 &
+  local reconnect=$!
+  CHILD_PIDS+=("$reconnect")
+  wait_for_child "$reconnect" "$scenario reconnected client mapping $mapping"
+  wait_for_child "$host" "$scenario host mapping $mapping"
+}
+if [[ "$RUN_BUG070071_ONLY" == true ]]; then
+  run_bug070071_reconnect_scenario bug070_gather 0 $((29100 + ($$ % 100)))
+  run_bug070071_reconnect_scenario bug070_gather 1 $((29200 + ($$ % 100)))
+  run_bug070071_reconnect_scenario bug071_cf 0 $((29300 + ($$ % 100)))
+  run_bug070071_reconnect_scenario bug071_cf 1 $((29400 + ($$ % 100)))
+  "$GODOT_BIN" --headless --path "$PROJECT_DIR" --script \
+    res://tests/acceptance/network_resume/assertions.gd -- --shared="$SHARED" \
+    --bug-070-071-only=true
+  echo "PASS: BUG-070 / BUG-071 real ENet command chains completed."
+  RESULT="passed"
+  exit 0
+fi
 if [[ "$RUN_BUG043_ONLY" == true ]]; then
   run_bug043_stabilization $((28100 + ($$ % 700)))
 elif [[ "$RUN_FRESH_ONLY" == true ]]; then

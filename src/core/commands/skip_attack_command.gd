@@ -21,6 +21,8 @@ const ECM_SCRIPT: GDScript = preload(
 const H9_RULE: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+const GATHER_READINESS: GDScript = preload(
+		"res://src/core/commands/attack_gather_readiness.gd")
 const CONTEXT_SHIP_ATTACK: String = "ship_attack"
 const REASON_SQUADRON_DONE: String = "squadron_done"
 const REASON_ANTI_SQUADRON_VOLUNTARY_DONE: String = \
@@ -75,6 +77,11 @@ func validate(game_state: GameState) -> String:
 								reason == REASON_SQUADRON_DONE)
 				if context_reason != "":
 					return context_reason
+			elif reason == REASON_SQUADRON_DONE:
+				var return_reason: String = \
+						_validate_cancelled_anti_squadron_finish(game_state, ship)
+				if not return_reason.is_empty():
+					return return_reason
 			return ""
 		return _validate_declaration_skip(game_state)
 	if attack.attack_id != str(payload.get("attack_id", "")):
@@ -83,6 +90,16 @@ func validate(game_state: GameState) -> String:
 		return "Attack cancellation belongs to the attacker."
 	if not TERMINAL_REASONS.has(str(payload.get("reason", ""))):
 		return "Invalid active-attack terminal reason."
+	if str(payload.get("reason", "")) == "cancelled":
+		if game_state.timing_window_state.active:
+			return "Gather cancellation cannot retire an active timing lifecycle."
+		var readiness: Dictionary = GATHER_READINESS.derive(
+				game_state, attack)
+		if not bool(readiness.get("ok", false)):
+			return str(readiness.get("reason", "Invalid Gather state."))
+		if not bool(readiness.get("complete", false)) \
+				or not bool(readiness.get("empty", false)):
+			return "Gather cancellation requires a complete empty pool."
 	if game_state.timing_window_state.active:
 		var context: Dictionary = game_state.timing_window_state.continuation_context
 		if str(context.get(TimingWindowState.CONTINUATION_KEY_SOURCE_ID, "")) \
@@ -105,8 +122,42 @@ func execute(game_state: GameState) -> Dictionary:
 	var continuation: String = ""
 	var result: Dictionary = {}
 	if attack.active:
+		var cancellation_route: Dictionary = {}
+		var cancellation_ship: ShipInstance = null
+		var progress_before: Dictionary = {}
+		if str(payload.get("reason", "")) == "cancelled":
+			cancellation_route = _active_cancellation_route(game_state, attack)
+			if cancellation_route.is_empty():
+				return {}
+			if attack.attacker_kind == CurrentAttackState.KIND_SHIP:
+				cancellation_ship = game_state.get_ship(
+						attack.attacker_player, attack.attacker_index)
+				if cancellation_ship != null:
+					progress_before = cancellation_ship.attack_progress_snapshot()
 		if not game_state.set_current_attack_state(CurrentAttackState.inactive()):
 			return {}
+		if not cancellation_route.is_empty():
+			if cancellation_ship != null \
+					and cancellation_ship.anti_squadron_attack_zone >= 0 \
+					and not cancellation_ship \
+							.record_anti_squadron_cancellation_return(attack_id):
+				game_state.set_current_attack_state(attack)
+				cancellation_ship.restore_attack_progress(progress_before)
+				return {}
+			var enclosing: InteractionFlow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+					int(cancellation_route["flow_type"])
+							as Constants.InteractionFlow,
+					int(cancellation_route["step"])
+							as Constants.InteractionStep, game_state,
+					{"active_player": attack.attacker_player},
+					Constants.Visibility.ALL,
+					cancellation_route["payload"])
+			if enclosing == null:
+				game_state.set_current_attack_state(attack)
+				if cancellation_ship != null:
+					cancellation_ship.restore_attack_progress(progress_before)
+				return {}
+			game_state.interaction_flow = enclosing
 		if game_state.timing_window_state.active:
 			var cancelled: Dictionary = TimingWindowOrchestrator.cancel_window(
 					game_state, game_state.timing_window_state.lifecycle_id)
@@ -139,6 +190,8 @@ func execute(game_state: GameState) -> Dictionary:
 		return result
 	result = {
 		"attack_id": attack_id,
+		"attacker_index": attack.attacker_index if attack.active else -1,
+		"attacker_kind": attack.attacker_kind if attack.active else "",
 		"skipped": true,
 		"reason": payload.get("reason", "voluntary"),
 		"ecm_cleared_runtime_upgrade_ids": cleared,
@@ -147,6 +200,77 @@ func execute(game_state: GameState) -> Dictionary:
 	if not continuation.is_empty():
 		result["continuation"] = continuation
 	return result
+
+
+func _active_cancellation_route(game_state: GameState,
+		attack: CurrentAttackState) -> Dictionary:
+	if attack.attacker_kind == CurrentAttackState.KIND_SHIP:
+		var ship: ShipInstance = game_state.get_ship(
+				attack.attacker_player, attack.attacker_index)
+		if ship == null or not ship.attack_step_active \
+				or ship.ship_activation_identity.is_empty():
+			return {}
+		return {"flow_type": Constants.InteractionFlow.SHIP_ACTIVATION,
+			"step": Constants.InteractionStep.ATTACK_STEP,
+			"payload": {"ship_index": attack.attacker_index,
+				"ship_activation_identity": ship.ship_activation_identity}}
+	var squadron: SquadronInstance = game_state.get_squadron(
+			attack.attacker_player, attack.attacker_index)
+	if squadron == null or squadron.activation_id.is_empty():
+		return {}
+	var route: Dictionary = {"squadron_index": attack.attacker_index,
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context}
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		return {"flow_type": Constants.InteractionFlow.SQUADRON_ACTIVATION,
+			"step": Constants.InteractionStep.ACTION_CHOICE,
+			"payload": route}
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		var commanding_ship: ShipInstance = game_state.get_ship(
+				squadron.commanding_ship_player, squadron.commanding_ship_index)
+		if commanding_ship == null \
+				or commanding_ship.ship_activation_identity.is_empty():
+			return {}
+		route["ship_index"] = squadron.commanding_ship_index
+		route["ship_activation_identity"] = \
+				commanding_ship.ship_activation_identity
+		return {"flow_type": Constants.InteractionFlow.SHIP_ACTIVATION,
+			"step": Constants.InteractionStep.SQUADRON_STEP,
+			"payload": route}
+	return {}
+
+
+func _validate_cancelled_anti_squadron_finish(game_state: GameState,
+		ship: ShipInstance) -> String:
+	if game_state.completed_attack_inspection != null:
+		return "No-inspection finish cannot consume a completed result."
+	var marker: Dictionary = ship.pending_anti_squadron_cancellation_return()
+	if marker.is_empty() or str(payload.get("attack_id", "")) \
+			!= str(marker.get("attack_id", "")) \
+			or str(payload.get("ship_activation_identity", "")) \
+				!= str(marker.get("ship_activation_identity", "")) \
+			or int(payload.get("attack_ordinal", -1)) \
+				!= int(marker.get("attack_ordinal", -2)) \
+			or int(payload.get("zone", -1)) != int(marker.get("zone", -2)):
+		return "Stale anti-squadron cancellation-return identity."
+	if ship.ship_activation_identity \
+			!= str(marker["ship_activation_identity"]) \
+			or ship.committed_attack_count != int(marker["attack_ordinal"]) \
+			or ship.anti_squadron_attack_zone != int(marker["zone"]) \
+			or game_state.current_phase != Constants.GamePhase.SHIP \
+			or game_state.get_active_ship_activation() != ship:
+		return "Anti-squadron iteration is no longer active."
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type \
+			!= Constants.InteractionFlow.SHIP_ACTIVATION \
+			or flow.step_id != Constants.InteractionStep.ATTACK_STEP \
+			or flow.controller_player != player_index \
+			or ship.owner_player != player_index \
+			or _has_remaining_squadron_target(game_state, ship):
+		return "An eligible anti-squadron target remains or the owner changed."
+	return ""
 
 
 func _validate_declaration_skip(game_state: GameState) -> String:

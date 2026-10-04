@@ -11,6 +11,8 @@ extends GameCommand
 
 
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+const GATHER_READINESS: GDScript = preload(
+		"res://src/core/commands/attack_gather_readiness.gd")
 
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
@@ -65,6 +67,7 @@ func execute_with_application_result(game_state: GameState,
 	var replacement: CurrentAttackState = attack.with_patch({
 		"dice_results": results,
 		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"cf_choice": _cf_choice_after_roll(game_state, attack),
 	})
 	if replacement == null or not game_state.set_current_attack_state(replacement):
 		return {}
@@ -95,10 +98,11 @@ func validate(game_state: GameState) -> String:
 			and (game_state.timing_window_state == null \
 					or game_state.timing_window_state.active):
 		return "Ship attack roll requires an inactive timing lifecycle."
-	if not attack.obstruction_resolved:
-		return "Obstruction choice is unresolved."
-	if attack.cf_dial_resolution == CurrentAttackState.RESOLUTION_PENDING:
-		return "Concentrate Fire dial choice is unresolved."
+	var readiness: Dictionary = GATHER_READINESS.derive(game_state, attack)
+	if not bool(readiness.get("ok", false)):
+		return str(readiness.get("reason", "Invalid Gather state."))
+	if not bool(readiness.get("complete", false)):
+		return "Gather Attack Dice has an unresolved mandatory effect."
 	if player_index != attack.attacker_player:
 		return "Attack roll belongs to player %d." % attack.attacker_player
 	if DicePool.get_total_count(attack.dice_pool) <= 0:
@@ -118,6 +122,7 @@ func execute(game_state: GameState) -> Dictionary:
 	var replacement: CurrentAttackState = attack.with_patch({
 		"dice_results": results,
 		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"cf_choice": _cf_choice_after_roll(game_state, attack),
 	})
 	if replacement == null or not game_state.set_current_attack_state(replacement):
 		game_state.rng.set_state(rng_state)
@@ -158,3 +163,24 @@ func _record_ship_target_attack(game_state: GameState,
 	var attacker: ShipInstance = game_state.get_ship(
 			attack.attacker_player, attack.attacker_index)
 	game_state.record_ship_target_attack(attacker)
+
+
+func _cf_choice_after_roll(game_state: GameState,
+		attack: CurrentAttackState) -> String:
+	if attack.attacker_kind != CurrentAttackState.KIND_SHIP:
+		return CurrentAttackState.RESOLUTION_UNAVAILABLE
+	var ship: ShipInstance = game_state.get_ship(
+			attack.attacker_player, attack.attacker_index)
+	if ship == null or ship.concentrate_fire_resolved_round \
+			== game_state.current_round:
+		return CurrentAttackState.RESOLUTION_UNAVAILABLE
+	var dial: Dictionary = ship.command_dial_stack.get_revealed_dial() \
+			if ship.command_dial_stack != null else {}
+	var has_dial: bool = not dial.is_empty() \
+			and int(dial.get("command", -1)) \
+				== int(Constants.CommandType.CONCENTRATE_FIRE)
+	var has_token: bool = ship.command_tokens != null \
+			and ship.command_tokens.has_token(
+				Constants.CommandType.CONCENTRATE_FIRE)
+	return CurrentAttackState.RESOLUTION_PENDING \
+			if has_dial or has_token else CurrentAttackState.RESOLUTION_UNAVAILABLE

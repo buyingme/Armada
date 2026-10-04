@@ -113,6 +113,7 @@ func _cleanup_ships(game_state: GameState, ps: PlayerState,
 		if si.is_destroyed():
 			# Destroyed ships bypass reset_activation(), so clear any stale facts.
 			si.reset_ship_activation_boundary()
+			si.concentrate_fire_resolved_round = -1
 			continue
 		if _is_token_ready_blocked(game_state, si):
 			result["ships_blocked"].append(si.data_key)

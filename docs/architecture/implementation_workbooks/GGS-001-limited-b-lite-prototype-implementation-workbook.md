@@ -2,1137 +2,1090 @@
 
 Status: Draft
 
-Purpose: Implementation workbook for an experimental Golden Gameplay Sample
-(GGS) B-lite prototype
+Purpose: Economically falsifiable implementation workbook for one experimental
+Golden Gameplay Sample (GGS) B-lite vertical slice
 
 Implementation status: Not started
 
-Implementation authorization: None. This Draft must be reviewed and accepted by
-the Project Owner before implementation begins.
+Implementation authorization: None. This revised Draft must be independently
+audited and accepted by the Project Owner before implementation begins.
 
-Decision input: Project Owner direction recorded on 2026-10-06. That direction
-authorizes preparation of this Draft and fixes the prototype policy listed in
-§2. It does not mark this workbook Owner-accepted.
+Decision input: Project Owner direction recorded on 2026-10-06. The direction
+authorizes revision of this Draft and fixes the experiment constraints in §2.
+It does not mark this workbook Owner-accepted.
 
 Primary evidence:
 
 - [GGS-001 decision workbook](../decision_workbooks/GGS-001-golden-gameplay-ui-assurance-decision-workbook.md)
 - [GGS-001 adversarial repository audit](../evidence/GGS-001-adversarial-repository-audit.md)
+- [Independent B-lite workbook adversarial audit](../evidence/GGS-001-b-lite-prototype-workbook-adversarial-audit.md)
 
-## 1. Purpose And Hypothesis
+## 1. Revised Verdict And Purpose
 
-This workbook defines the smallest implementation experiment that can test the
-repository audit's recommendation to proceed with a limited GGS B-lite
-prototype. It is not a permanent GGS architecture, an ADR, a fixture catalogue,
-or an assurance-governance change.
+The independent audit verdict is **PASS WITH REQUIRED REFINEMENTS**
+([audit §1](../evidence/GGS-001-b-lite-prototype-workbook-adversarial-audit.md#L1)).
+The underlying B-lite concept remains sound: serialized authoritative S0, an
+exact cursor, ordinary commands, replay-mode execution, and a final canonical
+digest reuse existing Armada authority rather than creating another gameplay
+engine.
 
-The prototype tests this hypothesis:
+The previous Draft was too broad and spent too much before testing its highest
+risk. This revision replaces the two-family/Large plan with one maneuver-family
+experiment whose work through the first genuine Owner-recorded Candidate must
+remain a **Medium-sized work package**.
 
-> For selected high-risk, multi-command gameplay compositions, a genuine
-> Owner-recorded serialized canonical state, its command cursor, a short stream
-> of normal authoritative commands, and a canonical result oracle reduce total
-> regression-verification, manual-QA, and diagnosis/convergence cost enough to
-> justify maintaining the artifact in addition to focused tests.
+The experiment tests this narrower hypothesis:
 
-The prototype must demonstrate that value against Armada's existing focused
-tests and full replay. It must not assume that a new fixture is valuable merely
-because it can be executed.
+> A genuine Owner-recorded maneuver obstacle-order sequence can provide a
+> practical verification or diagnosis advantage over the nearest focused test
+> without substantial fixture engineering, duplicate authority, or permanent
+> infrastructure.
 
-The repository already proves much of the technical mechanism. A focused replay
-test reconstructs serialized state, executes real commands, and obtains exact
-final state and RNG equality
-([test_replay_driver.gd](../../../tests/unit/test_replay_driver.gd#L20)). The
-audit therefore recommends generalizing that capability rather than building a
-new gameplay engine
-([audit §2](../evidence/GGS-001-adversarial-repository-audit.md#L95)).
+Technical feasibility is necessary but insufficient. The first Candidate must
+show a clearly observable marginal advantage in at least one of these forms:
+
+1. reproduce meaningful production gameplay with materially less synthetic
+   setup than the nearest focused test;
+2. localize a regression or first divergence more effectively; or
+3. provide reusable executable evidence that is cheaper to understand or rerun
+   during later feature work.
+
+If no material marginal advantage is observed, the default outcome is **STOP**.
 
 ## 2. Fixed Owner Decisions
 
-The following decisions are inputs to this Draft and are not reopened here:
+The following decisions are inputs and are not reopened by implementation:
 
-1. Proceed with a limited GGS B-lite prototype.
-2. Initial S0 support is limited to explicitly whitelisted decision boundaries.
-3. Accepted GGS authority belongs only to the Project Owner. Codex may create or
-   record a Candidate only when explicitly instructed. Codex must never
-   establish, regenerate, replace, or silently update accepted expected
-   gameplay behavior.
-4. A bounded UIC bootstrap/reconciliation pilot will proceed separately.
-5. UIP may proceed separately only as a narrow semantic-pattern catalogue, not
-   as a generic UI component framework.
-6. Historical coverage/backfill is risk-based and opportunistic.
-7. GGS, UIC, UIP, and UIF are not Definition-of-Done requirements. Permanent
-   governance may be reconsidered only after measured prototype value.
+1. Proceed with the limited B-lite experiment.
+2. All work through the first genuine Candidate is one Medium-sized package. If
+   evidence indicates Large effort is required, stop and return to the Owner.
+3. The only initial S0 boundary is
+   `maneuver_obstacle_order_choice_v1`.
+4. Candidate capture is a lightweight extension of genuine Owner gameplay, not
+   fixture engineering.
+5. Diagnostic comparison uses the same controlled disposable defect in shared
+   production behavior for both GGS and the nearest focused test.
+6. Concentrate Fire is not part of the initial experiment. It is only a
+   preferred positive-control second family after a favorable first-candidate
+   result and explicit Owner authorization.
+7. Prototype-specific machinery is isolated and removable. No new production
+   autoload or permanent runtime dependency is permitted.
+8. Candidate scope uses a planned approximate command budget plus a small
+   margin. No gameplay or compatibility contract contains a universal fixed
+   command-count limit.
+9. The experimental envelope has its own explicit version. App, save, replay,
+   command, and network versions are advisory provenance only.
+10. Only explicitly authorized genuine Owner gameplay may create a Candidate.
+    Synthetic machinery-test data is never a Candidate.
+11. The runner must directly call
+    `GameManager.start_new_game_from_state()`, `GameCommand.deserialize()`, and
+    `CommandProcessor.submit_replay()`.
+12. Initial diagnostics are limited to command identity, immediate rejection
+    reason, actual per-command canonical digests where useful, and final
+    expected-versus-actual digest.
+13. The obstacle-order S0 proof is a hard falsification gate before any GGS
+    schema, parser, runner, recorder, or Candidate infrastructure.
+14. Completion of a gate never authorizes crossing the next Owner gate
+    automatically.
 
-The Owner has deliberately deferred:
+Still deferred:
 
-- the pre-board Setup authority model; and
+- pre-board Setup authority; and
 - the eventual full-replay start boundary.
 
-Those deferred decisions do not block this prototype. They must not be inferred
-or resolved by implementation.
+Those decisions do not block this experiment and must not be inferred here.
 
-## 3. Authority And Interpretation
+## 3. Authority And Architecture Guards
 
 Repository document authority remains governed by
-[DOCUMENT_AUTHORITY.md](../DOCUMENT_AUTHORITY.md). The accepted architecture and
-contracts continue to own gameplay authority, deterministic command behavior,
-reconstruction, RNG, and UI/controller boundaries.
+[DOCUMENT_AUTHORITY.md](../DOCUMENT_AUTHORITY.md). This workbook is
+implementation planning only after Owner acceptance. Existing accepted ADRs,
+Contracts, gameplay state, command validation, deterministic RNG, recovery and
+fixture policy remain authoritative.
 
-This workbook is planning authority only after Owner acceptance. It does not:
+The experiment must preserve these guards:
 
-- change gameplay rules;
-- make an experimental GGS sample authoritative;
-- elevate current implementation into normative architecture;
-- authorize accepted fixture creation or regeneration;
-- change any accepted ADR, Contract, capability package, or TEST document; or
-- resolve any deferred Setup decision.
+- canonical gameplay authority remains outside GGS and presentation;
+- the GGS envelope stores captured authority; it does not describe or compute
+  gameplay rules;
+- UI reconstructs decisions from canonical state and does not supply missing
+  gameplay facts;
+- commands are re-executed, not replaced by persisted result envelopes;
+- rejected or malformed data fails closed;
+- no accepted expectation is silently regenerated;
+- no existing replay, save, app, command or network version is changed merely
+  for this experiment; and
+- no existing implementation is made normative merely because it exists.
 
-Where this workbook names an implementation seam, the accepted authority and
-the behavior of the normal command path remain controlling. If implementation
-would require alternate gameplay semantics, a general continuation engine, a
-new Setup authority, or a second canonical state model, implementation stops.
+If a gate requires new gameplay authority, canonical state added solely for
+GGS, a parallel reconstruction/execution path, or substantial production
+architecture changes, the result is STOP/return-to-Owner—not permission to
+expand scope.
 
-## 4. Prototype Scope
+## 4. Scope
 
-### 4.1 Included
+### 4.1 Included Through The First Candidate
 
-The prototype includes exactly:
+Only the following work is in scope:
 
-1. one experimental, strictly parsed, versioned GGS envelope;
-2. one serialized full-authority canonical S0;
-3. one initial authoritative command cursor;
-4. one short, contiguous, ordered stream of normal serialized authoritative
-   commands;
-5. strict headless execution through `GameCommand.deserialize()` and the
-   existing `CommandProcessor.submit_replay()` path;
-6. immediate failure on artifact parsing, S0 reconstruction, boundary
-   validation, cursor restoration, command deserialization, command validation,
-   or command rejection;
-7. one expected final canonical digest;
-8. mechanically derived, non-semantic diagnostic hashes sufficient to identify
-   the first differing command and useful final-state structural paths;
-9. the two initial S0 boundary allowlist entries in §9;
-10. proof that each allowed S0 reconstructs into an actionable,
-    decision-equivalent production state;
-11. minimal Debug-only Start/Stop capture support for two genuine,
-    Owner-recorded experimental Candidate samples;
-12. execution of one explicitly named sample;
-13. family/all filtering only if the conditional rule in §12.5 is satisfied;
-14. focused verification and one bounded convergence pass; and
-15. the measurement record and post-prototype Owner decision gate in §17.
+1. baseline and economic-measurement preparation;
+2. an exact feasibility proof for
+   `maneuver_obstacle_order_choice_v1` using existing production authority;
+3. after that proof and an Owner checkpoint, one experimental versioned
+   envelope;
+4. serialized canonical S0 and exact initial cursor;
+5. one short ordered stream of ordinary serialized commands;
+6. strict fresh-process execution;
+7. direct production state installation and replay-mode command submission;
+8. one expected final canonical digest;
+9. minimal diagnostics listed in §2;
+10. minimal bounded Debug Start/Stop capture;
+11. one explicitly authorized, genuine Owner-recorded maneuver Candidate;
+12. 10/10 fresh-process reliability unless Gate 0 records a better bounded
+    criterion supported by repository evidence;
+13. comparison with the nearest focused test; and
+14. the economic/diagnostic Owner gate.
 
-The first implementation is full-authority Hot-Seat only. Network result
-transport and passive filtered state are existing comparison evidence, not GGS
-artifact inputs. The commands still execute through the same replay-mode
-authority path used by production reconstruction.
+### 4.2 Explicitly Excluded
 
-### 4.2 Explicitly Out Of Scope
+The initial experiment excludes:
 
-The following are prohibited in this workbook:
-
-- permanent GGS architecture or governance;
-- broad or arbitrary-S0 support;
-- general scenario construction or a GGS state DSL;
-- a full Debug sample browser;
-- pause/step UI;
-- extensive accepted intermediate checkpoints;
-- broad GGS catalogue or lifecycle tooling;
-- automatic generation or regeneration of accepted samples;
-- exhaustive historical GGS backfill;
-- UIC or UIP implementation;
+- Concentrate Fire implementation or any second family;
+- `maneuver_obstacle_pre_effect_ack_v1` as an allowlisted boundary;
+- generic recursive structural hashes, state trees or structural diffs;
+- accepted intermediate checkpoints;
+- family/all discovery;
+- broad catalogue or lifecycle machinery;
+- compatibility migrations;
+- a browser, sample browser, pause or step debugger;
+- UIC bootstrap;
+- UIP catalogue work;
 - UIF;
-- screenshot or visual regression testing;
-- Setup authority changes;
-- Setup Review repair;
-- Setup speed-preview repair;
-- pre-board Setup replay;
-- full-match replay redesign;
-- Definition-of-Done changes;
-- a new command protocol;
-- a parallel gameplay executor;
-- transport-result replay; and
-- any gameplay-rule change introduced merely to make a sample pass.
+- visual golden testing;
+- Setup authority, replay or refactoring;
+- full-replay redesign;
+- arbitrary S0;
+- a general declarative gameplay/state DSL;
+- broad historical backfill;
+- permanent GGS governance;
+- CI integration or a Definition-of-Done mandate;
+- automatic Candidate generation, regeneration, promotion or supersession;
+- speculative save/replay/app/network/command version changes; and
+- any gameplay-rule change made to satisfy the experiment.
 
-The separate UIC/UIP experiment tests a different maintenance and traceability
-hypothesis. It must not be absorbed into this implementation task.
+The acknowledgement boundary may remain a future research candidate, but it
+requires its own exact proof. The independent audit found that its evaluator
+does not return the acting principal demanded by the old Draft and that the
+cited tests do not cover the exact boundary
+([audit blocking findings](../evidence/GGS-001-b-lite-prototype-workbook-adversarial-audit.md#L9)).
 
-## 5. Repository Evidence And Reuse Boundary
+## 5. Repository Basis And Mandatory Reuse
 
-### 5.1 Observed Reusable Infrastructure
+### 5.1 Existing Authority To Reuse
 
-| Concern | Existing evidence | Prototype posture |
+| Concern | Existing evidence | Required posture |
 |---|---|---|
-| Canonical S0 | `GameState.serialize()` includes flow, timing, current attack, inspections, deck, binding, players and RNG ([game_state.gd](../../../src/core/state/game_state.gd#L1044)) | Reuse unchanged |
-| Reconstruction | `GameState.deserialize()` reconstructs and validates canonical references and lifecycles ([game_state.gd](../../../src/core/state/game_state.gd#L1169)) | Reuse unchanged |
-| Live-install validation | Full-authority validation requires RNG, deck, binding and lifecycle invariants ([game_state.gd](../../../src/core/state/game_state.gd#L452)) | Reuse; never weaken |
-| State installation | `start_new_game_from_state()` validates, reconciles timing, restores the cursor, and publishes normal game start ([game_manager.gd](../../../src/autoload/game_manager.gd#L445)) | Reuse semantics; isolate headless side effects |
-| RNG | `GameRng` serializes both initial seed and current state ([game_rng.gd](../../../src/core/state/game_rng.gd#L60)) | Reuse inside S0 and final digest |
-| Command registry | Startup registers normal attack and maneuver consequence commands ([command_processor.gd](../../../src/autoload/command_processor.gd#L98)) | Reuse unchanged |
-| Command execution | `_submit()` performs sequence, semantic-schema, preflight, command validation, execution and recording ([command_processor.gd](../../../src/autoload/command_processor.gd#L379)) | Reuse unchanged |
-| Replay submission | `submit_replay()` preserves recorded sequence and enters the common submission path ([command_processor.gd](../../../src/autoload/command_processor.gd#L246)) | Required runner path |
-| Cursor | `get_next_sequence()` and `restore_next_sequence()` expose the sole cursor ([command_processor.gd](../../../src/autoload/command_processor.gd#L743)) | Reuse unchanged |
-| History | `serialize_history()` returns normal serialized authoritative commands ([command_processor.gd](../../../src/autoload/command_processor.gd#L779)) | Slice from the capture start index |
-| Timing recovery | Timing reconstruction validates current-attack source, stage and controller identity ([timing_window_orchestrator.gd](../../../src/core/timing_windows/timing_window_orchestrator.gd#L534)) | Reuse unchanged |
-| Maneuver recovery | `ManeuverExecutionEvaluator.next_action()` derives the next legal action without storing a second workflow ([maneuver_execution_evaluator.gd](../../../src/core/movement/maneuver_execution_evaluator.gd#L15)) | Reuse as boundary proof |
-| Canonical hash | `CanonicalJson` performs sorted-key JSON and SHA-256 hashing ([canonical_json.gd](../../../src/utils/canonical_json.gd#L9)) | Reuse unchanged |
-| Debug capture precedent | Debug annotation already serializes live state, and replay saving already exposes a bounded debug affordance ([debug_mode.gd](../../../src/autoload/debug_mode.gd#L55), [debug_mode.gd](../../../src/autoload/debug_mode.gd#L117)) | Reuse interaction style, not whole-session replay schema |
+| Canonical S0 | `GameState.serialize()` includes players, flow, attack/timing lifecycles, inspections, deck, binding and RNG ([game_state.gd](../../../src/core/state/game_state.gd#L1044)) | Reuse unchanged |
+| Reconstruction | `GameState.deserialize()` validates canonical references and lifecycles ([game_state.gd](../../../src/core/state/game_state.gd#L1169)) | Reuse unchanged |
+| Live installation | `start_new_game_from_state()` validates, reconciles timing, resets singletons, restores the cursor and publishes normal game start ([game_manager.gd](../../../src/autoload/game_manager.gd#L459)) | Runner must call directly |
+| Command parsing | `GameCommand.deserialize()` uses the registered normal command types | Runner must call directly |
+| Replay execution | `submit_replay()` enters the common submission path while preserving recorded sequence ([command_processor.gd](../../../src/autoload/command_processor.gd#L246)) | Runner must call directly |
+| Common validation | `_submit()` performs sequence, schema, preflight, command validation, execution and history recording ([command_processor.gd](../../../src/autoload/command_processor.gd#L379)) | Never clone |
+| Cursor | The sole cursor is exposed and restored by `CommandProcessor` ([command_processor.gd](../../../src/autoload/command_processor.gd#L743)) | Record exact value |
+| RNG | Initial seed and current internal state are serialized ([game_rng.gd](../../../src/core/state/game_rng.gd#L60)) | Preserve and compare |
+| Decision recovery | `ManeuverExecutionEvaluator.next_action()` derives obstacle-order choice from canonical overlaps and maneuver identity ([maneuver_execution_evaluator.gd](../../../src/core/movement/maneuver_execution_evaluator.gd#L113)) | Boundary signature source |
+| Production board | Existing tests reconstruct the same obstacle-order decision without submitting gameplay ([test_bug_043_stabilization_projection_recovery.gd](../../../tests/integration/test_bug_043_stabilization_projection_recovery.gd#L66)) | Extend as exact proof |
+| Canonical digest | `CanonicalJson.hash()` hashes sorted-key JSON ([canonical_json.gd](../../../src/utils/canonical_json.gd#L18)) | Reuse unchanged |
 
-### 5.2 Existing Mechanisms That Must Not Be Reused Wholesale
+### 5.2 Mechanisms Not To Reuse Wholesale
 
-1. `GameReplay` is a full-session scenario/bootstrap artifact. Its Version 11
-   header does not carry arbitrary S0 even though it carries cursor metadata
-   ([game_replay.gd](../../../src/core/commands/game_replay.gd#L31),
-   [game_replay.gd](../../../src/core/commands/game_replay.gd#L63)).
-2. `CommandProcessor.create_replay()` correctly rejects a non-zero history
-   start without a paired initial state
-   ([command_processor.gd](../../../src/autoload/command_processor.gd#L787)).
-   The GGS envelope supplies that missing pair; it must not weaken normal replay.
-3. `ReplayDriver` assumes scenario bootstrap and normally logs rejection rather
-   than failing at the first rejected command
-   ([replay_driver.gd](../../../src/autoload/replay_driver.gd#L114),
-   [replay_driver.gd](../../../src/autoload/replay_driver.gd#L504)).
-4. `CommandProcessor.replay_commands()` skips an unknown command and continues
-   ([command_processor.gd](../../../src/autoload/command_processor.gd#L826)).
-   The GGS runner must instead fail immediately and identify the command.
-5. Save-game safe-point policy is a product policy, not the GGS S0 policy. An S0
-   is permitted only by the allowlist and proof obligations in §9.
-6. `BaselineTrace` provides useful hash precedent, but its existing record is
-   not the new envelope or diagnostic schema. The audit found its per-command
-   information too coarse for GGS first-divergence diagnosis
-   ([audit §2](../evidence/GGS-001-adversarial-repository-audit.md#L68)).
+`GameReplay` remains a full-session scenario/bootstrap artifact without paired
+arbitrary S0. `ReplayDriver` remains scenario-coupled and normally logs a
+rejection rather than failing immediately
+([replay_driver.gd](../../../src/autoload/replay_driver.gd#L114),
+[replay_driver.gd](../../../src/autoload/replay_driver.gd#L504)). The experiment
+uses a dedicated thin runner, not a fork or generalization of that orchestration.
 
-### 5.3 New Prototype Seams
+`CommandProcessor.replay_commands()` is also unsuitable because it skips an
+unknown command and continues
+([command_processor.gd](../../../src/autoload/command_processor.gd#L826)). The
+thin runner deserializes and submits exactly one command at a time and exits on
+the first failure.
 
-Only these new seams are justified:
+### 5.3 Mandatory Stop On Cloning
 
-- a strict experimental GGS envelope parser/serializer;
-- an explicit two-entry boundary allowlist and family-specific validators;
-- a dedicated strict headless runner that delegates gameplay to existing
-  reconstruction and command paths;
-- a generic mechanical diagnostic-digest helper;
-- a bounded capture session held by Debug mode; and
-- focused tests and a measurement record.
+Stop and return to the Owner if clean direct reuse requires:
 
-No new gameplay command, rule, RNG, recovery model, state DSL, or canonical
-state type is justified.
+- a GGS-specific installer instead of `start_new_game_from_state()`;
+- a GGS command parser instead of `GameCommand.deserialize()`;
+- direct concrete-command `execute()` calls instead of `submit_replay()`;
+- duplicated maneuver/obstacle legality;
+- GGS-authored continuation commands;
+- persisted transport results; or
+- repair of invalid S0 or command history.
 
-## 6. Experimental Artifact Contract
+## 6. The Only Initial S0 Boundary
 
-### 6.1 Identity And Version Namespace
+### 6.1 Boundary ID
 
-The root object must contain:
+The initial allowlist contains exactly:
 
 ```text
-artifact_kind: "armada_golden_gameplay_sample"
-ggs_format_version: 1
+maneuver_obstacle_order_choice_v1
 ```
 
-The GGS format requires its own namespace because its semantic identity is
-different from both a full `GameReplay` and a save file. It pairs arbitrary
-whitelisted S0 with a cursor and a short command suffix, while `GameReplay`
-Version 11 reconstructs from scenario/bootstrap data.
+No fallback such as “any state that validates” exists.
 
-Creating `ggs_format_version = 1` does not require a cutover of:
+### 6.2 Canonical Boundary Contract
 
-- `GameReplay.FORMAT_VERSION`, currently 11
-  ([game_replay.gd](../../../src/core/commands/game_replay.gd#L31));
-- `SaveGameMetadata.CURRENT_VERSION`, currently 9
-  ([save_game_metadata.gd](../../../src/core/state/save_game_metadata.gd#L37));
-  or
-- the app version, currently `0.1.0`
-  ([project.godot](../../../project.godot#L15)).
+The boundary is after the maneuver's authoritative final transform is committed
+and before the owner chooses the order of two or more unresolved overlapping
+obstacles.
 
-None of those versions may be incremented merely because a separate
-experimental artifact is introduced. If implementation changes an existing
-serialized contract, it has escaped this workbook and must stop for the normal
-compatibility decision.
+The proof must establish:
 
-### 6.2 Required Fields
+- full-authority Hot-Seat state;
+- Ship phase and Ship Activation/Maneuver interaction flow;
+- exactly one active ship activation;
+- one matching open maneuver execution with stable activation and execution
+  identities;
+- final maneuver transform applied;
+- no unresolved displacement, collision or damaged-controls obligation with
+  higher priority than obstacle ordering;
+- at least two canonical unresolved overlaps;
+- no previously committed obstacle resolution order;
+- stable obstacle IDs, types, placement order and overlap option order;
+- no pending obstacle pre-effect, active obstacle resolution, immediate damage
+  resolution, faceup-damage inspection or asteroid completion;
+- `ManeuverExecutionEvaluator.next_action()` returns `kind == decision`,
+  `command_type == commit_maneuver_obstacle_order`, the ship owner as actor,
+  matching activation/execution identities, and the same obstacle options;
+- the production board presents the same actionable ordering choice;
+- reconstruction submits no command and does not advance history/cursor; and
+- the first selected order command validates against those same identities and
+  options.
 
-The strict Version 1 envelope contains only:
+The evaluator explicitly returns a decision only when multiple unresolved
+overlaps exist
+([maneuver_execution_evaluator.gd](../../../src/core/movement/maneuver_execution_evaluator.gd#L130)).
+Existing production reconstruction and save/install tests include the
+`obstacle_order` case
+([test_bug_043_stabilization_projection_recovery.gd](../../../tests/integration/test_bug_043_stabilization_projection_recovery.gd#L66),
+[test_bug_043_stabilization_projection_recovery.gd](../../../tests/integration/test_bug_043_stabilization_projection_recovery.gd#L145)).
+
+### 6.3 Exact Gate 1 Proof
+
+Before any GGS infrastructure exists, one focused feasibility test must:
+
+1. reach the exact boundary through existing production-authoritative setup and
+   command paths rather than assigning the target decision facts after capture;
+2. record the current non-negative command cursor in memory;
+3. serialize S0 to JSON, parse it, and call `GameState.deserialize()`;
+4. prove the reconstructed state's activation identity, maneuver execution ID,
+   obstacle identities/options, deck order, RNG initial seed and RNG current
+   state equal the source;
+5. call `GameManager.start_new_game_from_state()` directly with the recorded
+   cursor;
+6. prove history is empty and the cursor is unchanged;
+7. derive and compare the exact canonical decision signature before and after
+   roundtrip;
+8. instantiate normal production board composition and prove the ordering
+   choice is actionable and identical;
+9. prove board reconstruction automatically submits no semantic command;
+10. serialize the selected first normal command in memory;
+11. deserialize it through `GameCommand.deserialize()`;
+12. execute it through `CommandProcessor.submit_replay()`; and
+13. prove the command is accepted with the expected cursor/history transition.
+
+This test data is a feasibility specimen, not a Candidate and not expected
+gameplay evidence.
+
+### 6.4 Hard Falsification Conditions
+
+Gate 1 fails and returns to the Owner if the proof requires:
+
+- new gameplay authority;
+- canonical state added solely for GGS;
+- scene/process-owned gameplay facts;
+- a parallel installer or reconstruction path;
+- a GGS-specific command or legality rule;
+- substantive changes to production gameplay architecture;
+- a second boundary to make the first usable; or
+- effort that makes the through-first-Candidate package Large.
+
+Passing Gate 1 establishes only that this boundary is technically safe. It does
+not prove GGS value and does not itself start Gate 2; the Owner reviews the Gate
+1 evidence and explicitly authorizes the minimal vertical slice.
+
+## 7. Candidate Authority Versus Test Specimens
+
+### 7.1 Genuine Candidate
+
+A genuine Candidate requires all of:
+
+- an explicit Owner instruction naming the recording;
+- genuine Owner gameplay or gameplay the Owner personally validates;
+- capture from the allowlisted live boundary;
+- ordinary accepted authoritative commands;
+- provenance recording the Owner instruction and recording session; and
+- create-new storage in the dedicated Candidate directory.
+
+Capture writes only `Candidate`. The prototype has no promotion, acceptance,
+supersession, regeneration or update command. Accepted expected gameplay remains
+Owner-controlled outside this experimental machinery.
+
+Codex must not create, synthesize, reconstruct, regenerate, replace, silently
+update, or promote a Candidate. Changed behavior must never be made green by
+mechanically regenerating expected outcomes.
+
+### 7.2 Synthetic Test Specimen
+
+Codex may create synthetic parser/schema/runner/rejection specimens for
+machinery tests. Every such object must be explicitly tagged
+`synthetic_test_specimen` and is ordinary test data. It must never:
+
+- use `Candidate` status or Owner provenance;
+- be stored in the Candidate directory;
+- be cited as gameplay evidence;
+- be promoted or renamed into a Candidate;
+- supply the first repository-stored runnable Candidate; or
+- be retained as an accepted expected gameplay outcome.
+
+Prefer in-memory or temporary-directory specimens. A fresh-process machinery
+test may write a tagged specimen to a temporary path and must remove it through
+normal test cleanup. Normal Candidate execution rejects the specimen tag; any
+test-only execution mode must be explicit and unavailable as a capture or
+promotion path.
+
+### 7.3 First Stored Runnable Evidence
+
+Before Gate 3, no repository-stored runnable GGS file may claim Candidate
+status. The first repository-stored runnable Candidate must come from the
+explicitly authorized Owner recording in Gate 3.
+
+## 8. Minimal Experimental Envelope
+
+The envelope is implemented only after Gate 1 passes and the Owner authorizes
+Gate 2.
+
+### 8.1 Version And Fields
+
+The root identifies its own experimental contract:
+
+```text
+artifact_kind: "armada_experimental_ggs"
+ggs_format_version: 1
+evidence_class: "owner_candidate"
+```
+
+The minimal owner-Candidate envelope contains:
 
 ```text
 artifact_kind
 ggs_format_version
-sample
-compatibility
+evidence_class
+candidate_metadata
+diagnostic_provenance
+scenario_id
 initial_state
 initial_command_sequence
 commands
 expected_final_digest
-diagnostics
 ```
 
-`sample` contains:
+`candidate_metadata` contains only sample ID, title, `Candidate` status,
+boundary ID, recording timestamp and explicit Owner-recording provenance.
 
-```text
-sample_id
-title
-status
-capability_family
-s0_boundary_id
-related_authority
-recorded_at_utc
-recording_method
-```
+`diagnostic_provenance` may record app, save, replay, command/network protocol
+versions and source revision. Those values explain the environment but do not
+determine GGS validity. GGS validity depends on its own format version plus
+successful state/command parsing, installation and execution.
 
-`compatibility` records the app, save, and replay format versions observed at
-capture time. Those values are compatibility evidence; they do not turn the GGS
-into a save or `GameReplay` artifact.
+`scenario_id` is the required production reconstruction input passed to
+`GameManager.start_new_game_from_state()`. It is not a proxy compatibility
+version and must identify the scenario in which the Owner reached S0.
 
-`initial_state` is exactly one `GameState.serialize()` dictionary.
-`initial_command_sequence` is an exact non-negative JSON integer. `commands` is
-a non-empty, short array of canonical serialized `GameCommand` dictionaries
-whose sequences are contiguous from that cursor.
+`initial_state` is one canonical `GameState.serialize()` result.
+`initial_command_sequence` is an exact non-negative cursor. `commands` is a
+non-empty contiguous sequence of canonical normal commands. The final digest is
+`CanonicalJson.hash(final_state.serialize())`.
 
-`expected_final_digest` is `CanonicalJson.hash(final_state.serialize())`.
+No expected final state, result envelope, rule semantics, structural tree,
+semantic checkpoint list or compatibility migration data is stored.
 
-The Version 1 parser rejects:
+### 8.2 Strict Failure
 
-- an unknown artifact kind or version;
-- missing or unknown root fields;
-- wrong JSON types;
-- fractional or negative integer identity/cursor values;
-- an empty command stream;
-- more than 12 commands;
-- unknown or noncanonical commands;
-- noncontiguous command sequences;
-- any status other than `Candidate`, or an unknown capability family or S0
-  boundary;
-- malformed SHA-256 digests;
-- incompatible diagnostic list lengths; and
-- any full-authority S0 that cannot be reconstructed and validated.
+The parser/runner fails immediately on:
 
-Twelve commands is a prototype guardrail, not a permanent GGS rule. Raising it
-requires measurement evidence and Owner review rather than silent relaxation.
+- unknown GGS kind or GGS format version;
+- missing, unknown or wrong-typed required fields;
+- wrong evidence class for the selected execution mode;
+- invalid provenance/status/boundary;
+- malformed S0 or final digest;
+- fractional, negative or noncontiguous cursor/sequence values;
+- unknown/noncanonical command serialization;
+- failed state reconstruction or live installation;
+- boundary mismatch;
+- command deserialization, preflight, validation or execution rejection; or
+- final digest mismatch.
 
-### 6.3 Candidate Status And Owner Authority
+A separate non-semantic implementation safety ceiling may reject a pathological
+artifact by byte size, nesting or command count. That ceiling is defensive
+resource protection only. It is not stored as gameplay architecture, a sample
+promise, or GGS compatibility policy.
 
-Minimal status metadata is necessary to prevent experimental output from being
-mistaken for accepted behavior. It is not a lifecycle-management system.
+### 8.3 Minimal Diagnostics
 
-- Capture can write only `Candidate`.
-- The experimental Version 1 parser accepts only `Candidate`. It does not
-  implement `Valid` or `Superseded` states.
-- A Candidate may be executed only when the caller names it explicitly and the
-  runner reports its Candidate status prominently.
-- No implementation command may promote, regenerate, supersede, or overwrite a
-  sample.
-- If the Owner later accepts or supersedes a sample, representation of that act
-  requires a separately reviewed follow-up; it is not inferred by this parser.
-- A string claiming that the Owner accepted an artifact would not prove Owner
-  authority. Acceptance remains a human review/version-control act.
-- Codex may capture or record a Candidate only when the Owner explicitly asks it
-  to do so and the Owner manually performs or validates the gameplay.
+Initial output contains only:
 
-The capture path uses a create-new-file operation and fails if the target sample
-ID already exists. It never updates a sample in place.
+- Candidate ID and boundary;
+- failing command index, sequence, type and player;
+- immediate parse/installation/rejection reason;
+- actual canonical digest after each command when diagnostic logging is enabled;
+- expected and actual final canonical digest; and
+- process exit status.
 
-## 7. Diagnostics Without A Second Expected-State Model
+The envelope does not store expected per-command state or a recursive structural
+hash/diff tree. For controlled comparison, a clean run's actual digest log may
+be compared with the disposable-defect run to identify the first changed
+command. Richer diagnostics require later evidence and explicit Owner
+authorization.
 
-### 7.1 Normative Oracle
+## 9. Thin Fresh-Process Runner
 
-The only normative gameplay-result oracle in Version 1 is
-`expected_final_digest`. The serialized S0 and normal commands are inputs, not a
-second rule description. The prototype stores no expected final `GameState`, no
-hand-authored semantic result object, and no duplicate command effects.
+For one explicitly named Owner Candidate, the runner must:
 
-### 7.2 Diagnostic-Only Data
+1. start a fresh Godot process;
+2. parse the strict experimental envelope;
+3. deserialize S0 with `GameState.deserialize()`;
+4. set the fixed Hot-Seat experiment mode and call
+   `GameManager.start_new_game_from_state()` directly with S0, the recorded
+   `scenario_id` and the exact recorded cursor;
+5. recheck the allowlisted obstacle-order boundary and empty history;
+6. deserialize one command at a time with `GameCommand.deserialize()`;
+7. call `CommandProcessor.submit_replay()` for each command;
+8. stop immediately on the first failure;
+9. optionally print the actual post-command canonical digest;
+10. compare the final canonical digest; and
+11. exit nonzero on any failure.
 
-`diagnostics` may contain only mechanically derived hashes:
+The runner must not call concrete `execute()` directly, clone production
+installation, repair data, infer commands, replay result envelopes, reuse the
+full `ReplayDriver`, continue after rejection, or write/update a Candidate.
 
-1. `post_command_digests`: one full canonical state digest after each accepted
-   command in the captured stream; and
-2. `final_structure_digests`: generic canonical hashes for container paths in
-   the final serialized `GameState`, produced recursively by one schema-agnostic
-   helper with a bounded depth/entry limit.
+Fresh-process execution avoids proving only that a singleton happened to be
+restored correctly inside a long-lived test process, as recommended by the
+independent audit
+([audit optional improvements](../evidence/GGS-001-b-lite-prototype-workbook-adversarial-audit.md#L55)).
 
-These hashes are generated from genuine captured execution. They are not
-manually curated checkpoints and are not independent expected gameplay state.
-They have two diagnostic purposes:
+## 10. First Candidate Plan And Capture Budget
 
-- report the earliest command after which actual state differs from capture;
-- report the smallest available final canonical container paths whose hashes
-  differ, including `rng` when it is the first differing path.
+### 10.1 Planned Sequence
 
-The runner's pass/fail result remains the final digest. A diagnostic-only
-intermediate mismatch is reported even if later commands converge, but it does
-not silently become an additional accepted semantic contract.
+The Owner reaches a genuine two-or-more-obstacle ordering choice during normal
+testing/gameplay and explicitly starts capture at
+`maneuver_obstacle_order_choice_v1`. Capture ends at the first stable
+post-consequence maneuver/activation decision.
 
-The diagnostic report must include:
-
-- sample ID and status;
-- S0 boundary ID;
-- command index, sequence, type and player;
-- parse/reconstruction/validation/rejection reason, when applicable;
-- expected and actual final digest;
-- first differing post-command digest index, when available; and
-- a bounded list of differing structural paths, never a dump of sensitive or
-  enormous state values.
-
-The measurement gate must count artifact size and hash churn. If the diagnostic
-data creates material duplicate maintenance burden, it is reduced or removed;
-the project must not preserve it merely because it is technically possible.
-
-## 8. Strict Headless Runner
-
-### 8.1 Required Sequence
-
-For one explicitly named artifact, the runner must:
-
-1. read JSON and apply the exact Version 1 schema;
-2. require `Candidate` status plus an explicit Candidate-execution flag, and
-   print that status prominently;
-3. reconstruct S0 with `GameState.deserialize()`;
-4. assert canonical roundtrip equality by hashing the input S0 and the
-   reconstructed `serialize()` output;
-5. run `validate_for_live_installation()` and timing reconciliation;
-6. evaluate the allowlisted boundary validator and its decision-equivalence
-   signature;
-7. install state using `GameManager.start_new_game_from_state()` semantics with
-   the recorded cursor;
-8. confirm the command history is empty and the cursor equals
-   `initial_command_sequence`;
-9. deserialize one command at a time with `GameCommand.deserialize()`;
-10. submit each through `CommandProcessor.submit_replay()`; never call a
-    concrete command's `execute()` directly;
-11. fail immediately if deserialization, sequence admission, preflight,
-    validation, or execution rejects;
-12. compute actual post-command digests for diagnostics;
-13. compare the final canonical digest; and
-14. emit one concise machine-readable result plus a human-readable failure.
-
-The runner must restore any singleton/autoload state it changes when used inside
-a test process. The standalone headless process must exit nonzero on any failure.
-
-### 8.2 Forbidden Shortcuts
-
-The runner must not:
-
-- bypass `CommandProcessor`;
-- assign command results directly;
-- load transport result envelopes as authoritative outcomes;
-- reconstruct through the full scenario-coupled `ReplayDriver`;
-- continue after a malformed/rejected command;
-- repair an invalid S0;
-- infer a missing command;
-- skip an unknown command;
-- update an expected digest; or
-- write to any sample artifact.
-
-ADR-012 requires deterministic command re-execution rather than replaying
-transport outcomes
-([ADR-012](../adr/ADR-012-live-network-rng-authority-and-result-application.md#L174)).
-
-## 9. Initial S0 Boundary Allowlist
-
-The Version 1 allowlist contains exactly two IDs. No fallback such as "any state
-that passes live-install validation" is permitted.
-
-### 9.1 `attack_modify_cf_resource_choice_v1`
-
-This boundary is immediately after a ship attack's dice roll has opened the
-canonical `ATTACK_MODIFY` timing window and before the player commits the
-Concentrate Fire resource choice.
-
-The validator must prove all of the following:
-
-- full-authority Hot-Seat state with valid RNG, deck and principal binding;
-- Ship or Squadron phase as permitted by the current attack, with a live
-  standard ship attack;
-- `CurrentAttackState.stage == ATTACK_MODIFY`;
-- active `TimingWindowState` is the production Attack Modify lifecycle;
-- timing lifecycle source, controller and attack identity agree;
-- the attacker has the captured Concentrate Fire resources;
-- `UIProjector`/timing opportunity derivation exposes the same blocking
-  Concentrate Fire resource choice, actor, lifecycle identity and command type
-  before and after roundtrip;
-- no completed-attack or faceup-damage inspection owns the next input;
-- no transient die hover/selection or panel-local preview is required; and
-- the first recorded command is a legal Concentrate Fire choice command for the
-  derived actor/lifecycle.
-
-Existing production evidence reconstructs the committed dial choice into an
-actionable board and preserves state, RNG, history and cursor on stale-command
-rejection
-([test_current_attack_production_resume.gd](../../../tests/integration/test_current_attack_production_resume.gd#L1466)).
-Save/load evidence also restores the cursor before resuming Attack Modify
-([test_current_attack_production_resume.gd](../../../tests/integration/test_current_attack_production_resume.gd#L2661)).
-
-### 9.2 `maneuver_obstacle_pre_effect_ack_v1`
-
-This boundary is after an accepted maneuver transform and committed obstacle
-resolution order have opened a canonical obstacle pre-effect acknowledgement,
-but before any required principal has acknowledged that occurrence.
-
-The validator must prove all of the following:
-
-- full-authority Hot-Seat state with valid RNG, deck and principal binding;
-- one live ship activation and one active maneuver execution with stable
-  activation/execution identities;
-- the final maneuver transform is already committed;
-- obstacle order is canonical and the current obstacle is unresolved;
-- exactly one pending obstacle pre-effect occurrence owns the next player input;
-- its required/received principal sets, occurrence ID, obstacle ID and maneuver
-  identity are valid;
-- `ManeuverExecutionEvaluator.next_action()` returns the same acknowledgement
-  command type, payload identity and acting principal before and after
-  roundtrip;
-- normal board reconstruction presents the same actionable acknowledgement and
-  submits no semantic work during reconstruction;
-- no maneuver-tool drag, ruler preview, displacement drag, or modal-local
-  selection is required; and
-- the first recorded command acknowledges the derived occurrence.
-
-Production-composition evidence already proves live and reconstructed maneuver
-decisions are equivalent and reconstruction submits no semantic command
-([test_bug_043_stabilization_projection_recovery.gd](../../../tests/integration/test_bug_043_stabilization_projection_recovery.gd#L66)).
-Existing focused replay evidence executes obstacle ordering, acknowledgement,
-asteroid resolution, faceup acknowledgement, completion and maneuver completion
-and reaches exact final serialized state
+Existing focused evidence shows an ordinary asteroid chain of six commands:
+order commitment, pre-effect acknowledgement, obstacle resolution, faceup
+acknowledgement, obstacle completion and maneuver completion
 ([test_candidate_obstacle_consequences.gd](../../../tests/unit/test_candidate_obstacle_consequences.gd#L222)).
+Because genuine gameplay may open an additional consequence, the first sample
+plan expects approximately five to eight commands with a small working margin
+through ten.
 
-### 9.3 Boundary Proof Is Required, Not Assumed
+This is a planning and economic-review range, not a parser limit. Actual command
+count is measured. Reaching beyond the margin pauses the recording evaluation
+for Owner review rather than silently broadening the sample. The defensive
+resource ceiling in §8.2 remains unrelated.
 
-For each allowlist entry, acceptance requires three independent proofs:
+### 10.2 Minimal Start/Stop Capture
 
-1. **Canonical proof:** deserialize, reserialize, validate, reconcile, preserve
-   cursor and preserve exact canonical/RNG digest.
-2. **Decision proof:** the family-specific authoritative evaluator/projector
-   returns the same actor, decision identity, command type and identity-bearing
-   payload before and after reconstruction.
-3. **Production-resume proof:** normal board composition reconstructs the same
-   actionable control for the entitled player, a passive/non-entitled view is
-   non-actionable where applicable, and reconstruction itself submits no
-   semantic command.
-
-Passing `validate_for_live_installation()` alone is insufficient. The audit
-found that Armada still has scene/process state and therefore arbitrary S0 is
-unproven
-([audit §2](../evidence/GGS-001-adversarial-repository-audit.md#L95)).
-
-If either family fails any proof, remove that boundary from the prototype. Do
-not broaden the validator or copy presentation state into S0 to make it pass.
-
-### 9.4 Explicit Rejections
-
-The allowlist rejects at least:
-
-- pre-board Setup and all unresolved Setup authority states;
-- board Setup for this prototype;
-- uncommitted maneuver or deployment previews;
-- active ruler, drag, hover, die-selection, or panel-local choice state;
-- passive filtered Network state;
-- result-transport envelopes;
-- current-attack states outside the exact CF choice boundary;
-- maneuver consequences outside the exact pre-effect acknowledgement boundary;
-- terminal or inconsistent inspection lifecycles;
-- states with a missing/invalid RNG, deck or principal binding; and
-- states whose next authoritative action cannot be re-derived uniquely.
-
-## 10. Experimental Capability Families And Samples
-
-### 10.1 Sample A — Concentrate Fire Attack-Modify Composition
-
-The Owner plays a genuine attack to the post-roll Concentrate Fire resource
-choice and starts capture at `attack_modify_cf_resource_choice_v1`. The short
-captured suffix should include a meaningful multi-command branch such as:
-
-- choose both dial and token;
-- choose and roll the dial-added die;
-- use or decline the token reroll based on the genuine Owner decision; and
-- reach the next stable canonical attack decision or continuation within the
-  12-command limit.
-
-The workbook does not prescribe the dice, target, outcome, payload IDs, or final
-digest. Those arise only from Owner gameplay.
-
-This family is representative because it crosses:
-
-- a canonical current attack;
-- a shared timing lifecycle and projected opportunities;
-- multiple normal commands;
-- RNG consumption;
-- resource ownership and use/decline semantics;
-- recovery into actionable production UI; and
-- a capability that also appears in the 546-command full replay
-  ([replay_hot_seat_solo.json](../../../tests/fixtures/baseline_traces/replay_hot_seat_solo.json#L2500)).
-
-It therefore tests whether a short GGS localizes failures more cheaply than both
-the nearest focused integration tests and full-match replay.
-
-### 10.2 Sample B — Maneuver Obstacle Consequence Recovery
-
-The Owner performs a genuine maneuver that reaches an obstacle pre-effect
-acknowledgement and starts capture at
-`maneuver_obstacle_pre_effect_ack_v1`. Prefer an asteroid consequence that
-exercises the genuine damage deck/RNG and recovery chain. The suffix may include:
-
-- obstacle pre-effect acknowledgement;
-- authoritative obstacle resolution;
-- faceup-damage acknowledgement when genuinely produced;
-- any genuinely opened immediate resolution;
-- obstacle completion; and
-- return to the next stable maneuver/activation decision within the command
-  limit.
-
-The workbook does not prescribe which damage card is drawn or synthesize a
-particular consequence.
-
-This family is materially different from Sample A. It exercises maneuver
-identity, purpose-specific recovery, acknowledgement gates, obstacle authority,
-damage/deck state, possible RNG, and return to ship activation. Existing code
-derives these transitions through `ManeuverExecutionEvaluator`, not through the
-attack timing-window path
-([maneuver_execution_evaluator.gd](../../../src/core/movement/maneuver_execution_evaluator.gd#L31)).
-
-### 10.3 Why Easier Examples Are Rejected
-
-A single calculation or one-command mutation would be easier to capture but
-would not test the value hypothesis. Existing unit and command tests already
-diagnose those cases well. The audit concludes that GGS has highest marginal
-value for multi-command interactions, recovery paths and capability composition
-([audit §2](../evidence/GGS-001-adversarial-repository-audit.md#L97)).
-
-## 11. Minimal Bounded Capture
-
-### 11.1 Entry And Exit
-
-Capture is available only in editor/debug mode and only while Debug mode is
-enabled. It adds one small Start/Stop affordance following the existing debug
-shortcut/toast style. `Shift+G` is the proposed binding because the current
-Debug-mode switch handles `Ctrl+S`, `Shift+A`, and `Shift+R`
-([debug_mode.gd](../../../src/autoload/debug_mode.gd#L55)); implementation must
-still check the complete input map before assigning it.
+Capture is editor/debug-only and held by the existing Debug-mode owner. No new
+autoload is added. It may add one lazy-loaded Start/Stop action and existing
+toast/confirmation style to `DebugMode`.
 
 Start must:
 
-1. require a new sample ID, title and one of the two capability families;
-2. evaluate the live state against the two allowlist validators;
-3. require exactly one matching boundary;
-4. run the full canonical and decision proof;
-5. store S0, cursor, history index and the initial RNG digest in memory;
-6. begin listening only to successfully executed authoritative commands; and
-7. show a visible `Candidate capture active` indication.
+1. require explicit Owner-authorized sample metadata;
+2. match exactly the allowlisted boundary;
+3. rerun the Gate 1 canonical decision proof;
+4. store S0, exact cursor, history index and provenance in memory; and
+5. begin observing successfully executed normal commands.
 
 Stop must:
 
-1. require the same live match/session and an active capture;
-2. slice the normal serialized command history from the start index;
-3. require contiguous sequences beginning at the captured cursor;
-4. require 1–12 accepted commands and no observed rejection;
-5. verify the observed per-command digest count matches the command slice;
-6. compute final digest and bounded diagnostic hashes;
-7. present a summary to the Owner; and
-8. create one new `Candidate` artifact only after explicit confirmation.
+1. require the same live session;
+2. slice accepted serialized history from the start index;
+3. verify contiguous sequences from the recorded cursor;
+4. record actual command count and final digest;
+5. show the Owner a summary including retries/manual intervention;
+6. require explicit confirmation; and
+7. create a new Candidate file only if the target does not exist.
 
-Cancel discards only in-memory capture data. It does not undo gameplay.
+Cancel discards in-memory capture state only. Capture never submits, edits,
+reorders, invents or repairs gameplay. Any substantial manual state
+construction, JSON editing, command-history reconstruction or repeated attempt
+is recorded as negative economic evidence and pauses expansion for Owner review.
 
-### 11.2 Capture Safety
+## 11. Economically Falsifiable Gate Sequence
 
-Capture must fail closed if:
+Every gate ends in an explicit evidence review. No later gate starts merely
+because a test passed.
 
-- the state is not allowlisted;
-- canonical roundtrip or actionability proof fails;
-- history/cursor changes between validation and start;
-- a command rejects;
-- the process changes match/session;
-- the command count exceeds 12;
-- the target file exists; or
-- writing or read-back parsing fails.
+### Gate 0 — Baseline And Economic Preparation
 
-The capture service observes commands; it does not submit, edit, reorder, infer,
-or repair them. It must read back its new file through the strict parser and
-compare its S0, commands and expected digest before reporting success.
+No GGS code or artifact is created.
 
-### 11.3 Provenance Rule
+Required work:
 
-The Owner must manually perform or validate all gameplay in each experimental
-sample. Debug commands are permitted only when they are already accepted
-authoritative/canonical mechanisms and the Owner explicitly chooses them; they
-must be recorded in provenance. Synthetic state builders and hand-authored
-command histories are prohibited for Candidate creation.
+1. record the nearest focused-test baseline;
+2. record existing production replay/manual evidence relevant to maneuver
+   obstacle consequences;
+3. define measurement fields in §12;
+4. record the expected file/removability inventory in §15;
+5. define the shared disposable production defect planned for Gate 4;
+6. record the package estimate and remaining Medium budget;
+7. set the Owner thresholds marked `Owner-set before Gate 1` in §12.2; and
+8. create only the measurement evidence document planned in §15.4.
 
-Codex may assist with the capture only after an explicit Owner instruction for
-that Candidate. Codex may not choose the gameplay, regenerate a failing sample,
-or replace an expected digest to satisfy a test.
+Primary focused comparison:
 
-## 12. Implementation Slices And Stop Points
-
-### 12.1 Slice 0 — Technical Baseline And Measurement Harness
-
-Objective: record the current comparison baselines before adding GGS code.
-
-Required outputs:
-
-- focused execution time and diagnostic shape for the nearest test in each
-  family;
-- hot-seat full replay time and diagnostic shape for Sample A's capability;
-- current artifact sizes and current commands exercised;
-- a measurement record template containing every §16 field; and
-- confirmation that the existing focused tests and hot-seat replay pass.
-
-Stop if either selected family's existing evidence already provides the same
-Owner provenance, execution locality and failure localization at lower total
-cost; record that evidence for the gate rather than forcing implementation.
-
-### 12.2 Slice 1 — Envelope, Parser And Diagnostic Hashes
-
-Objective: implement only the Version 1 data contract and pure diagnostic hash
-helper.
-
-Likely change surfaces:
-
-- one new RefCounted GGS artifact/parser near the existing replay artifact;
-- one schema-agnostic diagnostic hash helper; and
-- unit tests for exact parsing, canonicalization and diagnostics.
-
-Checkpoint:
-
-- all malformed/unknown/incompatible inputs fail closed;
-- normal `GameReplay` and save parsing remain unchanged; and
-- no gameplay state is installed or command executed by this slice.
-
-### 12.3 Slice 2 — S0 Allowlist And Boundary Proofs
-
-Objective: implement exactly the two validators in §9.
-
-The implementation should compose existing `GameState`, timing projection,
-`UIProjector`, and `ManeuverExecutionEvaluator` results. It must not reproduce
-their rules in a GGS-specific decision engine.
-
-Checkpoint:
-
-- both allowed boundary families pass all three proof layers;
-- representative neighboring states are rejected;
-- production reconstruction is decision-equivalent; and
-- no sample or fixture exists yet.
-
-This is the first mandatory stop/go gate. If safe reconstruction cannot be
-demonstrated without copying scene state or adding family-specific gameplay
-semantics, outcome A (STOP) is available before capture work.
-
-### 12.4 Slice 3 — Strict One-Sample Headless Runner
-
-Objective: execute an in-memory test artifact, then one explicitly named file,
-through the strict sequence in §8.
-
-Checkpoint:
-
-- cursor, command path, RNG, rejection behavior, digest and diagnostics pass
-  focused tests;
-- negative tests mutate only in-memory test data and never rewrite a fixture;
-- existing save/replay behavior remains unchanged; and
-- no Owner sample has yet been requested.
-
-### 12.5 Slice 4 — Optional Cheap Selection Surface
-
-The required interface is one explicit sample path. Add `--family` and/or
-`--all` only if all of the following are true:
-
-- implementation is a pure directory enumeration plus already-parsed metadata;
-- no registry, catalogue, discovery database, lifecycle service or new CI job is
-  needed;
-- the change is Small;
-- individual-sample diagnostics are unchanged; and
-- it does not delay capture or measurement.
-
-Otherwise defer both filters. Even if added, `--all` is not a Definition-of-Done
-or CI requirement during the prototype.
-
-### 12.6 Slice 5 — Minimal Capture
-
-Objective: implement §11 only after the Slice 2 and 3 gates pass.
-
-Likely change surfaces:
-
-- one bounded capture-session helper;
-- the existing `DebugMode` shortcut/toast integration;
-- a minimal metadata/confirmation surface; and
-- focused capture tests using disposable temporary paths.
-
-Checkpoint:
-
-- capture can write only create-new Candidate artifacts;
-- capture cannot run outside the allowlist;
-- no accepted or existing file can be overwritten; and
-- no fixture is created during automated tests.
-
-### 12.7 Slice 6 — Owner-Recorded Candidates
-
-This slice requires explicit Owner participation and a fresh instruction for
-each Candidate.
-
-1. Owner reaches and validates Sample A's genuine gameplay boundary.
-2. Capture writes a new Sample A Candidate.
-3. Owner reaches and validates Sample B's genuine gameplay boundary.
-4. Capture writes a new Sample B Candidate.
-5. Each new file is reviewed as Candidate and run individually.
-
-Implementation may not manufacture a missing family by calling a test fixture
-builder. If genuine gameplay cannot reach a stable allowlisted boundary at
-reasonable cost, that is negative prototype evidence.
-
-### 12.8 Slice 7 — Measurement And Owner Gate
-
-Objective: collect §16 evidence, perform the bounded maintenance exercise, and
-present outcomes A/B/C without presuming C.
-
-No permanent ADR, catalogue, bulk fixture set, CI mandate, or governance change
-may begin before the Owner selects a gate outcome.
-
-## 13. Verification Matrix
-
-| Concern | Focused verification |
-|---|---|
-| Strict parsing | Exact root/nested fields and types; unknown kind/version/field; missing field; malformed digest; fractional/negative cursor; empty/oversized commands; noncanonical command; noncontiguous sequence |
-| S0 roundtrip | Parse JSON, deserialize S0, reserialize, compare canonical hash and required full-authority identities |
-| S0 reconstruction | `validate_for_live_installation`, timing reconciliation, empty history, exact restored cursor |
-| Command cursor | Zero and non-zero allowed cursors; first command equals cursor; gap/duplicate/stale sequence rejects immediately |
-| Authoritative execution | Every command passes `GameCommand.deserialize` and `CommandProcessor.submit_replay`; direct `execute()` is prohibited in runner tests |
-| RNG preservation | Initial RNG seed/state survives roundtrip; non-RNG branch does not advance it; RNG-consuming branch reaches captured state; final digest includes RNG |
-| Immediate rejection | In-memory bad command/payload/lifecycle causes nonzero exit at that index and no later command executes |
-| Rejection atomicity | State, RNG, history and cursor remain unchanged after the rejected command, following existing production expectations ([test_current_attack_production_resume.gd](../../../tests/integration/test_current_attack_production_resume.gd#L1499)) |
-| Final digest | Exact pass; mismatch fails with expected/actual digest |
-| First divergence | In-memory diagnostic mutation reports earliest differing post-command index/type/sequence |
-| Structural diagnosis | Final mismatch identifies bounded differing canonical paths and identifies `rng` separately when applicable |
-| Allowed boundary A | All §9.1 predicates plus production-board decision equivalence |
-| Allowed boundary B | All §9.2 predicates plus production-board decision equivalence |
-| Rejected boundaries | Neighboring attack/maneuver stages, transient previews, Setup, passive state, missing identities/RNG/deck/binding |
-| Capture | Start/stop/cancel, history slice, same-session guard, rejection abort, max command guard, create-new only, read-back validation |
-| Provenance | Capture emits Candidate only; no promotion/regeneration/update API; runner visibly reports Candidate |
-| Existing replay | Current Version 11 parser/driver tests remain unchanged and passing |
-| Existing save/load | Current Version 9 save/load and cursor/reconstruction tests remain passing |
-
-### 13.1 Nearest Focused Comparisons
-
-Sample A must be compared with:
-
-- `test_real_cf_dial_history_round_trips_json_factory_and_driver`
-  ([test_replay_driver.gd](../../../tests/unit/test_replay_driver.gd#L20)); and
-- the production committed-dial and partially resolved recovery tests
-  ([test_current_attack_production_resume.gd](../../../tests/integration/test_current_attack_production_resume.gd#L1466)).
-
-Sample B must be compared with:
-
-- `test_nonfixture_replay_preserves_obstacle_faceup_and_f1_order`
-  ([test_candidate_obstacle_consequences.gd](../../../tests/unit/test_candidate_obstacle_consequences.gd#L222)); and
-- live/reconstructed maneuver decision equivalence
+- the constructed six-command exact-state test
+  ([test_candidate_obstacle_consequences.gd](../../../tests/unit/test_candidate_obstacle_consequences.gd#L222));
+- plus the boundary/actionability and save-install evidence
   ([test_bug_043_stabilization_projection_recovery.gd](../../../tests/integration/test_bug_043_stabilization_projection_recovery.gd#L66)).
 
-The comparison asks what GGS adds, not whether it can repeat the same assertions.
+Gate 0 stops if comparison criteria cannot be made fair, the expected package
+already appears Large, or the Owner declines the measurement thresholds.
 
-### 13.2 Broader Convergence
+**Owner checkpoint:** approve the recorded thresholds, defect plan and remaining
+Medium budget before Gate 1.
 
-Run broader convergence once after the integrated prototype, not after every
-slice:
+### Gate 1 — S0 Boundary Feasibility
 
-1. all new GGS-focused unit/integration tests;
-2. the existing replay-driver tests;
-3. the relevant current-attack production-resume tests;
-4. the relevant maneuver stabilization/obstacle consequence tests;
-5. focused save/load and cursor restoration tests;
-6. the hot-seat baseline replay; and
-7. the repository's full canonical test suite once before the Owner gate.
+Implement only the focused proof in §6.3. Do not implement a GGS envelope,
+parser, runner, capture service, Candidate file or Candidate directory.
 
-Network replay/resume convergence is conditional. It is required only if
-implementation changes shared command submission, timing/recovery behavior,
-network filtering, result envelopes, or existing replay code. The intended
-prototype should call those seams without modifying them.
+Gate 1 passes only if every §6.3 assertion succeeds using existing production
+authority and the Gate remains within the Medium package. The result is a
+technical feasibility measurement, not a Candidate.
 
-## 14. Compatibility And Regression Posture
+Gate 1 fails under any §6.4 condition.
 
-The GGS parser is strict-current-version only. No migration framework is part of
-the prototype. A future incompatible GGS change would create a new
-`ggs_format_version` only after an explicit compatibility decision.
+**Owner checkpoint:** review proof evidence and actual Gate 0–1 cost. Explicitly
+authorize or reject Gate 2. A passing test alone does not continue the task.
 
-The captured compatibility block allows the runner to explain likely mismatch,
-but it must not silently migrate S0, commands or expected hashes. If current
-`GameState` cannot read a Version 1 sample after an intentional accepted
-serialization change, the Owner decides whether to:
+### Gate 2 — Minimal One-Family Vertical Slice
 
-- retain it only as historical evidence;
-- manually replay and validate a new Candidate;
-- explicitly accept a migration; or
-- stop maintaining GGS.
+Only after Gate 1 and Owner authorization, implement:
 
-The implementation must not bump or change save, replay, app, network, or
-command versions speculatively. Existing replay/save fixtures remain governed
-by their existing policies and scripts.
+- the minimal Version 1 envelope;
+- one allowlisted boundary validator;
+- the strict fresh-process runner;
+- direct production installation and replay submission;
+- final digest and minimal diagnostic output;
+- bounded Start/Stop capture; and
+- machinery tests using only synthetic test specimens.
 
-## 15. Work Packages And Effort
+Do not implement CF, another boundary, structural diagnostics, filters,
+catalogues, migrations, browser/step UI, CI or governance.
 
-| Work package | Estimate | Dominant cost/risk |
-|---|---:|---|
-| WP0 baseline and measurement template | Small | Comparable timing and diagnostic observations |
-| WP1 Version 1 envelope and strict parser | Small–Medium | Exact schema, JSON integer handling, compatibility reporting |
-| WP2 generic digest diagnostics | Medium | Useful paths without storing another expected state model |
-| WP3 two-entry S0 allowlist | Medium–Large | Proving actionability rather than only serializability |
-| WP4 strict one-sample headless runner | Medium | Autoload isolation, immediate rejection, continuation/cursor behavior |
-| WP5 optional family/all filters | Small or deferred | Avoiding catalogue/registry scope |
-| WP6 bounded Debug Start/Stop capture | Medium | Command/digest observation, same-session guard, create-new safety |
-| WP7 Owner recording of two Candidates | Small implementation; variable Owner time | Naturally reaching stable, representative states |
-| WP8 focused and broader convergence | Medium | Shared autoload/reconstruction regression risk |
-| WP9 maintenance exercise and decision evidence | Medium elapsed effort | Requires a genuine Owner-accepted behavior-change context |
+Gate 2 stops before Candidate recording if actual plus forecast work through
+Gate 3 would exceed Medium, capture requires fixture engineering, or any direct
+production reuse seam needs duplication.
 
-Overall estimate: **Large** for the full two-family prototype through the Owner
-gate, composed of bounded work packages. The dominant risk is safe,
-decision-equivalent S0 reconstruction. Command serialization, RNG persistence
-and canonical hashing are not the dominant implementation costs because those
-mechanisms already exist.
+**Owner checkpoint:** review vertical-slice cost, isolation and capture dry-run
+using non-Candidate temporary specimens. Explicitly authorize or reject the
+first genuine recording.
 
-This estimate excludes all out-of-scope permanent governance, Setup, UIC/UIP,
-UIF, broad catalogue and browser work.
+### Gate 3 — First Genuine Owner Candidate
 
-## 16. Measurement Plan
+The Owner explicitly authorizes and performs or personally validates the
+recording described in §10. The first repository-stored Candidate is created
+here, never earlier.
 
-Measurements are recorded per sample and in aggregate. Raw values must be kept;
-do not replace them with only a subjective verdict.
+Record:
 
-### 16.1 Owner Recording Effort
+- Owner preparation and active recording time;
+- attempts, cancellations and manual intervention;
+- actual command count and artifact size;
+- duplicated authoritative information classification;
+- fresh-process execution time; and
+- 10/10 fresh-process reliability, unless Gate 0 approved a better bounded
+  evidence criterion.
+
+Gate 3 stops if Candidate preparation becomes fixture engineering, repeated
+attempts or manual history/JSON repair are needed, execution is not stable, or
+the Medium package cap is threatened.
+
+**Owner checkpoint:** authorize only Gate 4 comparison. Do not add a second
+family.
+
+### Gate 4 — Economic And Diagnostic Evaluation
+
+Use the same controlled disposable defect in shared production behavior for the
+nearest focused test and the GGS Candidate. Never corrupt only the GGS artifact
+to claim a comparative advantage.
+
+Measure:
+
+- first useful failure evidence from each path;
+- whether each path identifies the correct divergence/root-cause class;
+- time to the correct file/function and root-cause class;
+- whether the first diagnosis is correct;
+- whether a fix is identified within the Owner-set cap;
+- focused-test versus GGS setup, rerun and interpretation effort;
+- maintenance/duplicate burden observed so far; and
+- break-even reasoning from measured prototype cost and plausible reuse.
+
+The controlled defect is reverted after measurement, and both baseline paths
+must pass again. GGS may add value by locating the first divergence across a
+real sequence even if the focused test remains better at naming the exact
+assertion/function.
+
+An intentional accepted gameplay-behavior change is not required before an
+earlier STOP or NARROW decision. Maintenance/churn evidence is recorded when it
+naturally exists. A deliberate behavior-change exercise requires separate
+Owner authorization after the first economic gate.
+
+**Owner decision:** STOP, NARROW or PROCEED experimentally under §17.
+
+## 12. Measurement And Economic Decision Design
+
+### 12.1 Evidence Classification
+
+Every recorded value is labelled:
+
+- **Measured:** observed during this experiment;
+- **Estimated:** forecast with basis and uncertainty; or
+- **Owner judgment:** qualitative decision that cannot be reduced honestly to a
+  repository metric.
+
+Do not convert missing history into invented precision.
+
+### 12.2 Predeclared Gate Values
+
+Gate 0 records these before implementation proceeds:
+
+| Decision field | Predeclared rule |
+|---|---|
+| Implementation package | Fixed: no larger than Medium through first Candidate |
+| Scope cap | One boundary, one family, one Candidate, isolated files in §15 |
+| Maximum Owner preparation/recording effort | Owner-set before Gate 1 |
+| Maximum recording attempts/manual interventions | Owner-set before Gate 1 |
+| Diagnostic comparison time cap | Owner-set before Gate 1 |
+| Required comparative benefit | At least one §1 advantage must be observed and judged material by the Owner |
+| Break-even evaluation horizon | Owner-set plausible number/range of future reruns or diagnoses |
+| Reliability | Proposed 10/10 fresh-process executions; change only with recorded evidence and Owner approval |
+
+The unset values are genuine remaining Owner decisions, not implementation
+discretion. Gate 0 cannot close until they are recorded.
+
+### 12.3 Implementation And Tooling Cost
+
+For each gate record, where available:
+
+- active engineering effort;
+- elapsed effort;
+- Codex/credit usage;
+- files added, removed and modified;
+- lines added/removed;
+- review and rework;
+- debugging effort;
+- focused and convergence verification effort;
+- forecast remaining effort to first Candidate; and
+- categorical Small/Medium/Large reassessment.
+
+If actual plus forecast cost becomes Large, stop before further work and return
+to the Owner.
+
+### 12.4 Owner Capture Economics
 
 Record separately:
 
-- time to reach the S0 naturally;
-- time to enter metadata and start capture;
-- time from Start to Stop;
-- review/read-back time;
-- number and reason for cancelled or repeated attempts;
-- any debug assistance used;
-- any manual artifact editing, which should be zero; and
-- total Owner elapsed and active effort.
+- time to prepare/reach the boundary through normal gameplay;
+- metadata/start effort;
+- active recorded gameplay time;
+- stop/review/storage effort;
+- number of attempts, cancellations and retries;
+- every manual intervention or debug action;
+- whether any state, JSON or history was hand-constructed or repaired;
+- total Owner active and elapsed time; and
+- Owner judgment on whether this was a lightweight extension of normal testing.
 
-An unusually difficult-to-reach boundary counts against GGS even if execution is
-fast.
+Substantial manual construction, JSON editing, history reconstruction or
+repeated attempts count strongly against GGS and trigger Owner review.
 
-### 16.2 Execution Cost
-
-For each Candidate, record:
-
-- command count and artifact byte size;
-- runner startup, reconstruction, command execution and total wall time;
-- ten fresh-process runs and their success rate;
-- median and slowest total time; and
-- diagnostic-hash time/size overhead.
-
-Run the nearest focused test under the same environment. For Sample A, also run
-the hot-seat full replay under the same environment because that replay contains
-Concentrate Fire commands. Full replay is not an equivalent Sample B oracle, so
-record it as not applicable unless the current full fixture genuinely exercises
-the selected obstacle chain.
-
-### 16.3 Diagnostic Localization Quality
-
-Use disposable in-memory negative variants, never modified Candidate files:
-
-1. one command rejection at a known index;
-2. one post-command state/digest divergence; and
-3. one malformed S0/boundary mismatch.
+### 12.5 Artifact And Execution Measurements
 
 Record:
 
-- whether the first runner invocation identifies the correct failure class;
-- whether it names command index, sequence, type, player and reason;
-- whether structural paths narrow the affected canonical subsystem;
-- time for a maintainer/Codex to identify the nearest responsible source and
-  focused test; and
-- the equivalent effort using the nearest focused test and full replay where
-  applicable.
+- actual command count against the planned range;
+- total artifact bytes and bytes by S0/commands/metadata;
+- which fields duplicate authoritative information versus reference/provenance;
+- fresh-process success count;
+- startup, reconstruction, command and total wall time where useful;
+- final digest stability;
+- actual per-command digest log size when enabled; and
+- any sensitivity to harmless/non-semantic serialization changes observed
+  during normal work.
 
-### 16.4 Reconstruction Reliability
+No generic churn experiment is required before an earlier STOP/NARROW. If
+non-semantic churn evidence becomes available, record it rather than adapting
+the Candidate automatically.
 
-Each sample must:
+### 12.6 Focused-Test Comparison
 
-- pass 10/10 fresh-process runs;
-- preserve S0 roundtrip digest and initial RNG state every time;
-- derive the same decision signature on every reconstruction;
-- execute from the recorded non-zero cursor where applicable; and
-- produce the same final digest every time.
+For the nearest focused test record:
 
-Any intermittent reconstruction/actionability failure is a prototype failure,
-not a reason to add retries.
+- how its S0 is constructed and how much is synthetic;
+- setup code/fixture complexity;
+- assertions and diagnostic specificity;
+- runtime and rerun effort;
+- maintenance characteristics;
+- whether it can be reused outside its test body; and
+- what, if anything, the Owner-recorded Candidate adds.
 
-### 16.5 Intentional Behavior-Change Maintenance Exercise
+The Candidate succeeds economically only if it demonstrates at least one
+material §1 advantage. Merely reproducing the same pass/fail result is not
+enough.
 
-The prototype must measure one intentional, explicitly Owner-accepted behavior
-change affecting a pilot family. Prefer a real accepted change that occurs
-during the evaluation period.
+### 12.7 Break-Even Reasoning
 
-If none occurs, the Owner may explicitly authorize a disposable evaluation
-branch with one narrowly described intended change. The Owner must exercise and
-validate the changed gameplay and record a new Candidate; Codex must not
-regenerate the old artifact. The disposable branch and Candidate must not be
-presented as accepted production behavior unless separately approved.
+Use ranges, not false precision:
 
-Record:
+```text
+measured prototype cost
++ measured Owner recording cost
++ estimated maintenance/removal cost
+versus
+plausible number of future reruns/diagnoses
+× measured or estimated saving per use
+```
 
-- time to understand the old sample failure;
-- focused-test maintenance time;
-- Owner time to replay and validate the new behavior;
-- time to create and review a replacement Candidate;
-- lines/bytes changed in diagnostic metadata versus genuine gameplay inputs;
-- whether old and new provenance remain clear; and
-- whether any manual expected-state editing was required.
+If per-use saving is not positive or the plausible reuse range cannot amortize
+the measured cost, STOP is the default. NARROW is available when break-even is
+credible only for a recognizable high-risk sequence class. PROCEED
+experimentally requires evidence that a second family could test broader value.
 
-If the Owner does not authorize a real or controlled change, the final gate must
-record this criterion as unresolved; it cannot be silently marked passed.
+## 13. Controlled Defect Comparison
 
-### 16.6 Duplicate-Specification Burden
+Gate 0 must identify one small, reversible defect in shared maneuver/obstacle
+production behavior that both the focused test and Candidate execute. The
+defect must:
 
-For each sample, classify every maintained artifact field as:
+- live outside GGS-specific code and the artifact;
+- affect the same authoritative command/recovery path in both comparisons;
+- be applied only on a disposable measurement branch/worktree;
+- have a predicted root-cause class recorded before running either path;
+- avoid altering either expected test data or Candidate data; and
+- be reverted immediately after measurement.
 
-- genuine captured input;
-- mechanically derived diagnostic data;
-- provenance/reference metadata; or
-- duplicated semantic expectation.
+Permissible examples include a temporary error in obstacle-order admission or
+the shared transition after order commitment. The exact defect is chosen and
+recorded at Gate 0 only after confirming both paths exercise it.
 
-The last category should be empty. Measure artifact churn after the intentional
-change and compare it with the focused test. If maintaining per-command or
-structural hashes causes large unrelated churn, count that against the
-prototype and remove those diagnostics before considering permanent design.
+Compare from the same starting information and with the same time cap. Record
+whether the focused test reaches the exact assertion faster and whether GGS
+more clearly identifies the first command/digest divergence across the genuine
+sequence. Neither result is predetermined.
 
-## 17. Post-Prototype Owner Decision Gate
+Parser rejection specimens remain valid machinery tests, but they are not the
+economic diagnostic comparison.
 
-Before this gate, the evidence package must contain:
+## 14. Verification Plan
 
-- technical proof results for both allowlisted boundaries;
-- two genuine Owner-recorded Candidate reports, or an explicit failure to
-  record one;
-- all §16 measurements;
-- nearest-focused-test comparisons;
-- Sample A full-replay comparison;
-- the intentional-change maintenance result or an explicit unresolved entry;
-- replay/save regression evidence; and
-- documented artifact size/churn and duplicate-burden assessment.
+### 14.1 Gate 1 Boundary Verification
 
-The Project Owner chooses exactly one outcome.
+Verify every item in §6.3, including:
 
-### Outcome A — STOP
+- JSON roundtrip;
+- `GameState.deserialize()`;
+- direct `start_new_game_from_state()` installation;
+- exact non-zero cursor restoration;
+- activation/execution/obstacle identity preservation;
+- deck order and RNG state preservation;
+- identical canonical decision signature;
+- actionable production board reconstruction;
+- no automatically submitted gameplay; and
+- first command accepted through deserialize plus replay submission.
 
-Choose STOP if any of the following is true:
+### 14.2 Gate 2 Machinery Verification
 
-- an allowlisted boundary cannot be made reliably decision-equivalent without
-  copying scene/process state or creating alternate gameplay semantics;
-- fresh-process reconstruction is not deterministic;
-- Owner capture effort is disproportionate to the saved verification effort;
-- diagnostics do not materially improve on focused tests;
-- maintenance requires silent regeneration or manual expected-state editing;
-- duplicate artifact churn is material; or
-- neither family demonstrates net value over existing focused tests.
+Using only tagged synthetic test specimens in memory or temporary storage:
 
-STOP means remove or quarantine experimental tooling as directed by the Owner;
-it does not weaken existing focused tests or full replay.
+- strict own-format parsing;
+- wrong/missing/unknown field/type rejection;
+- malformed state/cursor/sequence/command/digest rejection;
+- Candidate-directory rejection of synthetic specimens;
+- direct installer use;
+- immediate command rejection with index/identity/reason;
+- actual optional per-command digests;
+- final expected/actual digest;
+- capture start/stop/cancel and create-new-only behavior;
+- no overwrite/regenerate/promote path; and
+- pathological resource-ceiling behavior without making it compatibility.
 
-### Outcome B — NARROW
+### 14.3 Gate 3 Candidate Verification
 
-Choose NARROW if the runner is reliable and at least one family demonstrates
-clear value, but value is confined to selected high-risk compositions or the
-other family is too costly. Retain only explicitly approved families/samples and
-keep adoption opportunistic. Do not create general governance or DoD mandates.
+- explicit Owner authorization/provenance;
+- allowlisted boundary only;
+- no manual JSON/history construction;
+- fresh-process execution;
+- 10/10 identical final digest;
+- measured command count/artifact size/runtime; and
+- Candidate remains unchanged after every run.
 
-### Outcome C — PROCEED
+### 14.4 Regression And Convergence
 
-Choose PROCEED only if:
+Run focused checks after the gate that touches them. Before Gate 4 decision,
+run:
 
-- both boundary families reconstruct reliably;
-- short samples are materially faster or more local than full replay where
-  applicable;
-- diagnostics materially improve localization over the nearest focused tests;
-- Owner recording and intentional-change maintenance are acceptable;
-- no second semantic expected-state model is required; and
-- measured total maintenance burden supports further investment.
+1. new experimental focused tests;
+2. nearest maneuver reconstruction/save-install tests;
+3. obstacle consequence/replay tests;
+4. replay-driver focused tests;
+5. relevant save/load/cursor tests;
+6. hot-seat baseline replay if shared replay/command behavior was modified; and
+7. one full canonical repository suite at integrated convergence.
 
-PROCEED authorizes design of permanent GGS architecture/governance only after a
-separate Owner decision. It does not itself accept Version 1 as permanent,
-promote Candidates, mandate GGS in Definition of Done, or authorize broad
-backfill.
+Network convergence remains conditional on touching network filtering,
+submission or result-envelope behavior. The intended prototype should not
+modify those paths.
 
-No numeric score automatically selects C. The evidence must be presented with
-negative and unresolved results visible.
+The disposable defect must first produce comparable failures, then be reverted,
+after which both paths and relevant convergence tests pass cleanly.
 
-## 18. Risks And Mandatory Stops
+## 15. Experimental Removability Inventory
 
-| Risk | Control / stop condition |
+Names are fixed planning boundaries. Implementation may refine a filename only
+at the Gate 2 Owner checkpoint without expanding responsibility.
+
+### 15.1 Expected Prototype-Only Files
+
+| Planned path | Purpose | STOP disposition |
+|---|---|---|
+| `tests/experimental/ggs/test_maneuver_obstacle_order_s0_feasibility.gd` | Gate 1 boundary proof | Delete unless Owner retains it as generally useful production-recovery evidence |
+| `src/ui/debug/experimental_ggs/experimental_ggs_envelope.gd` | Strict experimental envelope | Delete |
+| `src/ui/debug/experimental_ggs/experimental_ggs_boundary.gd` | One allowlisted boundary validator | Delete |
+| `src/ui/debug/experimental_ggs/experimental_ggs_capture.gd` | Debug-held Start/Stop capture | Delete |
+| `tests/experimental/ggs/experimental_ggs_runner.gd` | Thin fresh-process runner | Delete |
+| `tests/experimental/ggs/test_experimental_ggs_envelope.gd` | Parser/specimen tests | Delete |
+| `tests/experimental/ggs/test_experimental_ggs_runner.gd` | Runner/rejection tests | Delete |
+| `tests/experimental/ggs/test_experimental_ggs_capture.gd` | Capture safety tests | Delete |
+| `tests/fixtures/experimental_ggs/owner_candidates/<sample-id>.json` | First genuine Candidate | Delete on STOP unless Owner explicitly retains it as historical evidence; never rewrite |
+
+No synthetic JSON specimen is planned for repository storage. Tests use memory
+or temporary paths.
+
+### 15.2 Minimal Existing-File Modification
+
+The only expected existing runtime-file modification is a small lazy integration
+in [debug_mode.gd](../../../src/autoload/debug_mode.gd#L55) to invoke Start/Stop
+capture while Debug mode is enabled. It must not contain gameplay rules, parser
+logic or persistent state.
+
+No change is expected in:
+
+- `project.godot` autoloads or version;
+- `GameManager`;
+- `CommandProcessor`;
+- `GameCommand`;
+- maneuver/obstacle gameplay code;
+- save/replay/network formats; or
+- existing accepted fixtures.
+
+If another existing production file requires more than a minimal debug-only
+hook, stop and reassess the Medium package and removability before editing.
+
+### 15.3 No New Production Autoload Or Dependency
+
+Prototype classes are lazy-loaded under the experimental Debug namespace or
+invoked by the test runner. Normal gameplay must not load them when capture is
+inactive. No production autoload, service locator registration, startup
+registration or permanent runtime dependency is permitted.
+
+### 15.4 Evidence That Survives STOP
+
+The planned measurement record is:
+
+```text
+docs/architecture/evidence/GGS-001-b-lite-prototype-measurements.md
+```
+
+It survives STOP because it records cost, results, cleanup and the Owner
+decision. The independent audits and this workbook also remain as decision
+provenance. A generally useful Gate 1 recovery test may survive only by explicit
+Owner instruction after removing GGS-specific naming/assumptions if necessary.
+
+### 15.5 STOP Cleanup Checkpoint
+
+On STOP:
+
+1. delete every prototype-only source/test file in §15.1;
+2. remove the DebugMode integration exactly;
+3. delete Candidate artifacts unless the Owner explicitly retains immutable
+   historical evidence;
+4. remove empty experimental directories;
+5. confirm no autoload, input, project/version or runtime dependency remains;
+6. run the focused regression tests affected by cleanup;
+7. preserve the measurement evidence and Owner STOP decision; and
+8. record any explicitly retained generally useful piece and why it is no
+   longer prototype machinery.
+
+Quarantine is allowed only when the Owner explicitly requests it and names the
+destination/purpose. Silent abandoned experimental code is not an acceptable
+STOP result.
+
+## 16. Compatibility And Versioning
+
+The envelope has only its own `ggs_format_version`. Version 1 is strict and has
+no migration framework.
+
+App, save, replay, command and network versions may be captured as diagnostic
+provenance. Inequality alone does not invalidate a Candidate. Failure of the
+GGS format, state reconstruction, command deserialization, production
+installation or execution does.
+
+Do not change `GameReplay.FORMAT_VERSION`, `SaveGameMetadata.CURRENT_VERSION`,
+the app version, network protocol or any command contract speculatively. If the
+prototype actually requires such a change, it has escaped scope and stops.
+
+## 17. Owner Outcomes After Gate 4
+
+### STOP
+
+Select STOP when there is no meaningful marginal value, economics are poor,
+capture becomes fixture engineering, reconstruction is unreliable, special
+infrastructure is disproportionate, or the package threatens Large effort.
+
+Apply §15.5 cleanup. Preserve evidence and the STOP decision.
+
+### NARROW
+
+Select NARROW when the Candidate demonstrates value only for a recognizable
+class of complex/regression-prone sequences. Continue only inside that class
+and only after a new explicit Owner authorization. NARROW does not automatically
+retain all prototype code or authorize another sample.
+
+### PROCEED Experimentally
+
+Select PROCEED experimentally when the first Candidate demonstrates promising
+general value sufficient to consider a second-family experiment. Concentrate
+Fire is the preferred positive control, but it still requires a separate Owner
+authorization and scoped follow-up task.
+
+PROCEED experimentally does not authorize:
+
+- permanent GGS architecture or governance;
+- broad backfill;
+- CI or Definition-of-Done requirements;
+- UIC/UIP/UIF integration;
+- Setup/full-replay work;
+- arbitrary S0; or
+- automatic Candidate acceptance or regeneration.
+
+## 18. Effort Bound And Work-Package Assessment
+
+| Gate/work | Expected size before evidence | Dominant risk |
+|---|---:|---|
+| Gate 0 baseline/economic setup | Small | Fair comparison and Owner thresholds |
+| Gate 1 exact boundary proof | Small–Medium | Production-reached actionability without missing scene facts |
+| Gate 2 minimal vertical slice | Medium | Strict fresh-process runner and lightweight removable capture |
+| Gate 3 Owner recording/reliability | Small implementation; measured Owner effort | Natural reach and no fixture engineering |
+| Gate 4 comparison/economic analysis | Small–Medium | Comparable shared defect and honest attribution |
+
+These are not additive permission for a Large program. Gates 0–3 together must
+remain one Medium package. At each checkpoint, actual cost plus forecast
+remaining cost is reassessed. If it indicates Large, stop before more work and
+return to the Owner.
+
+Gate 4 may complete the bounded evaluation only after the Candidate exists; it
+does not authorize broad tooling. Any second family is a separate estimate and
+decision.
+
+## 19. Independent Audit Refinement Closure
+
+| Required refinement | Revised disposition |
 |---|---|
-| Synthetic sample history | Owner performs/validates gameplay; capture only observes normal history |
-| Arbitrary S0 becomes de facto supported | Exact two-ID allowlist; no fallback validator |
-| Candidate mistaken for accepted behavior | Candidate-only capture, explicit runner warning, Owner-only promotion outside tooling |
-| Silent expected update | Create-new only; no overwrite/regenerate command |
-| Alternate gameplay path | Runner delegates to `GameState` and `CommandProcessor.submit_replay()` |
-| Scene state copied into S0 | Fail boundary proof and stop that family |
-| Diagnostic hashes become second specification | Mechanical hashes only; measure churn; final digest remains normative |
-| Full replay/save regression | No existing version cutover; focused regression plus bounded convergence |
-| Capture UI grows into browser/tooling | One Start/Stop affordance and minimal metadata only |
-| Setup scope leaks into prototype | Reject all Setup S0; keep deferred work separate |
-| UIC/UIP scope leaks into prototype | References only; no catalogue implementation |
-| Controlled change is mistaken for accepted behavior | Requires explicit Owner instruction, disposable branch labeling and separate acceptance |
+| Prove boundary before schema/tooling | Gate 1 precedes all GGS infrastructure |
+| Unsupported acknowledgement boundary | Removed from initial allowlist; documented only as future research |
+| One harder falsification family first | Obstacle-order maneuver family only |
+| Direct production installation | Runner must call `start_new_game_from_state()` directly |
+| Normal command parsing/execution | Runner must call `GameCommand.deserialize()` and `submit_replay()` |
+| Thin dedicated runner | Isolated fresh-process runner; no wholesale `ReplayDriver` reuse |
+| Defer structural tree/diff | Explicitly excluded from initial experiment |
+| Defer CF/second family | Requires favorable Gate 4 result and separate Owner authorization |
+| Defer filters/migrations/browser/CI/governance | Explicitly excluded |
+| Remove synthetic Candidate contradiction | Tagged test specimens are non-Candidates; first stored Candidate is Owner-recorded |
+| Measure tooling cost | Gate-by-gate engineering, credit, diff, review, debugging and convergence ledger |
+| Predeclare economics | Gate 0 cannot close until Owner thresholds are recorded |
+| Same controlled defect | Gate 4 uses one shared production defect for both paths |
+| Define localization | Correct file/function, root-cause class, first-report correctness and capped time |
+| Break-even reasoning | Measured cost compared with plausible reuse savings as ranges |
+| Non-semantic churn | Record when evidence exists; never silently update Candidate |
+| Earlier STOP/NARROW without behavior-change exercise | Explicitly permitted |
+| Remove universal command limit | Per-sample plan/margin plus non-semantic safety ceiling |
+| Advisory compatibility metadata | Proxy versions do not determine validity; no migration framework |
+| Explicit removability | Enumerated files, one minimal existing hook, no new autoload, exact STOP cleanup |
+| Medium to first Candidate | Hard package cap and return-to-Owner condition at every gate |
 
-Implementation stops and returns to the Owner if:
+## 20. Completion Criteria
 
-- either validator needs an unresolved authority decision;
-- exact replay-mode semantics cannot execute a captured normal command stream;
-- a required production recovery path depends on unserialized state;
-- compatibility requires changing an existing version/contract;
-- capture cannot guarantee create-new-only behavior;
-- a proposed fix changes gameplay rules; or
-- the prototype cannot collect the required measurements without expanding into
-  a permanent framework.
+The experiment reaches the Owner decision only when:
 
-## 19. Completion Criteria For This Workbook's Prototype
+1. Gate 0 has recorded baselines, measurement definitions and Owner-set
+   thresholds.
+2. Gate 1 has passed every exact boundary proof without new gameplay authority
+   or substantial production changes.
+3. The Owner has explicitly authorized Gate 2 after reviewing actual cost.
+4. Gate 2 remains isolated/removable and uses only direct production seams.
+5. The Owner has explicitly authorized the first Candidate recording.
+6. The first stored Candidate comes from genuine Owner gameplay.
+7. Gate 3 measurements and fresh-process reliability are complete.
+8. The Owner has explicitly authorized Gate 4.
+9. The same controlled shared production defect has been compared and reverted.
+10. Practical marginal value and break-even reasoning are recorded without
+    false precision.
+11. Actual plus forecast effort through the Candidate never exceeded Medium.
+12. No second family, structural diagnostics, migration, catalogue, CI or
+    permanent governance work was absorbed.
+13. The Owner selects STOP, NARROW or PROCEED experimentally.
 
-The implementation experiment is complete only when:
+Technical success without practical marginal value produces STOP by default.
 
-1. Slices 0–5 pass their checkpoints.
-2. Both allowlisted boundaries have canonical, decision and production-resume
-   proof, or one has failed and that failure is recorded.
-3. The Owner has explicitly instructed and manually performed/validated each
-   Candidate recording attempted.
-4. At least one named Candidate executes successfully through the strict
-   headless runner.
-5. Every verification concern in §13 has a recorded result.
-6. Every measurement in §16 has a value or an explicit unresolved reason.
-7. Existing replay/save behavior has no regression.
-8. No accepted sample has been synthesized, regenerated, replaced or silently
-   updated.
-9. No UIC/UIP/UIF/Setup/DoD work has been absorbed.
-10. The Owner has selected A, B or C.
-
-Passing the technical tests does not by itself prove the cost-saving hypothesis.
-The Owner gate is part of completion.
-
-## 20. Remaining Owner Actions And Deferred Decisions
+## 21. Remaining Owner Decisions
 
 Before implementation:
 
-- review and accept, revise, or reject this Draft, including the two exact S0
-  allowlist entries and the 12-command prototype guardrail.
+1. accept, revise or reject this revised one-family Draft;
+2. at Gate 0, set maximum Owner preparation/recording effort;
+3. set maximum attempts/manual interventions;
+4. set the diagnostic comparison time cap and plausible break-even horizon; and
+5. approve the exact controlled-defect plan and Gate 1 start.
 
 During the experiment:
 
-- explicitly instruct each Candidate capture;
-- manually perform or validate the gameplay;
-- identify/accept the behavior change used for the maintenance exercise, or
-  record that criterion as unresolved; and
-- select STOP, NARROW, or PROCEED from the evidence.
+6. review Gate 1 and explicitly authorize or reject Gate 2;
+7. review Gate 2 and explicitly authorize or reject the first Candidate
+   recording;
+8. explicitly perform or validate the gameplay;
+9. explicitly authorize Gate 4; and
+10. select STOP, NARROW or PROCEED experimentally.
 
-Still deliberately deferred and not blockers for this prototype:
+No Owner decision is needed now for CF, Setup authority, full-replay boundary,
+UIC/UIP/UIF, compatibility migrations, CI/DoD, permanent governance or accepted
+sample lifecycle. Those remain deferred or out of scope.
 
-- pre-board Setup authority; and
-- eventual full-replay start boundary.
+## 22. Recommended Next Task After Acceptance
 
-No other architecture Owner decision is presently required. If implementation
-reveals one, it must stop rather than silently resolve it.
+If the Owner accepts this workbook, the next task is **Gate 0 only**: collect the
+focused-test/replay/manual baseline, measurement ledger, exact
+disposable-defect plan and removability confirmation. Gate 0 cannot close until
+the Owner-set thresholds are recorded.
 
-## 21. Recommended Next Task After Workbook Acceptance
-
-If the Owner accepts this workbook, the next task should implement **Slices 0–3
-only**: baseline measurements, Version 1 parser/diagnostics, the two boundary
-proofs, and the strict one-sample runner. It must stop at the Slice 3 gate before
-adding capture or creating any Candidate.
-
-Only after that technical gate passes should a separate explicitly authorized
-task add minimal capture and schedule the two Owner gameplay sessions.
-
-The UIC/UIP reconciliation pilot and Setup context/evidence work remain separate
-tasks. No ADR or permanent GGS governance artifact should be created until the
-post-prototype Owner gate selects PROCEED.
+Gate 0 must return its evidence to the Owner. It must not begin the Gate 1 test
+automatically. No GGS source, schema, runner, capture code, Candidate directory
+or artifact is created by that task.

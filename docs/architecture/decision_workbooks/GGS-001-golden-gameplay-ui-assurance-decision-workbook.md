@@ -1,9 +1,20 @@
 # GGS-001 — Executable Gameplay and UI Capability Assurance Decision Workbook
 
-**Status:** Draft — Repository Discovery and Adversarial Audit Required
+**Status:** Discovery Complete — Conditional GO; Prototype Decision Pending
 **Owner:** Project Owner
 **Decision class:** Testing / replay / UI architecture / development governance
 **Implementation authorization:** None
+
+## Repository Discovery Outcome
+
+- Completed: 2026-10-06
+- Evidence: [GGS-001 adversarial repository audit](../evidence/GGS-001-adversarial-repository-audit.md)
+- Result: **Conditional GO**
+- GGS: proceed toward a limited B-lite serialized-S0 prototype, subject to Owner authorization
+- UIC: proceed through a bounded bootstrap/reconciliation pilot
+- UIP: proceed only as a narrow semantic-pattern catalogue
+- Setup: retain within the assurance initiative, but execute as a separate coordinated workstream
+- Permanent GGS/UIC/UIP architecture and governance: **not yet accepted**
 
 ---
 

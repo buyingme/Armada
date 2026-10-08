@@ -482,3 +482,23 @@ GGS-001 remains paused after this repair workbook is drafted. Successful
 production repair does not itself authorize Gate 2; the Owner must separately
 review the repaired Gate 1 evidence and explicitly authorize any GGS
 continuation.
+
+## 14. Owner Stop-Gate Resolution — 2026-10-08
+
+The Owner reported that manual Hot-Seat smoke testing passed: a normal Hot-Seat
+save/load was used, a CR90 attack was performed after the save, and repeating
+the same continuation after load produced the exact same dice roll. The check
+was repeated twice with matching results.
+
+The initial GGS Gate 1 verification stopped because its unchanged test still
+asserted the obsolete numeric JSON representation for RNG fields. The Owner
+authorized only the smallest test-only correction in
+`../../../tests/experimental/ggs/test_maneuver_obstacle_order_s0_feasibility.gd`
+so those representation assertions require the authoritative canonical
+decimal-string form. The exact-RNG proof and every substantive Gate 1
+requirement remain required. This resolution does not authorize GGS-001 Gate 2
+and does not broaden this repair.
+
+The Hot-Seat state-hash fixture remains Owner-controlled. Candidate evidence
+may be generated and reviewed, but the fixture must not be promoted or replaced
+without separate explicit Owner authorization.

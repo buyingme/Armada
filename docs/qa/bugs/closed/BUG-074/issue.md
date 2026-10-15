@@ -125,7 +125,7 @@ Diagnosis complete. BUG-074 is a pre-existing adjacent production defect in the 
 
 ## Final acceptance preparation — 2026-10-15
 
-Status: **READY FOR FINAL CLOSURE AUDIT; not yet resolved.**
+Status: **OWNER ACCEPTED AND RESOLVED; BUG-074 closed.**
 
 The Project Owner completed genuine Network gameplay verification and accepted
 the result as **PASS**. The preserved successful session is:
@@ -150,6 +150,5 @@ deferral does not authorize GGS-001 Gate 2 or make GGS an automatic replacement
 for Replay-12 assurance.
 
 Compatibility remains Save 10 / Network 11 / Replay 12 with no adapter or
-migration. Owner evidence and replay fixtures remain unchanged. BUG-074 is
-prepared for resolution but remains open pending the independent final closure
-audit.
+migration. Owner evidence and replay fixtures remain unchanged. The final
+closure audit passed, and BUG-074 is resolved in the closed defect archive.

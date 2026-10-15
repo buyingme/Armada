@@ -1,6 +1,6 @@
 # BUG-074 Final Acceptance Evidence
 
-Status: Ready for final closure audit  
+Status: Owner accepted and resolved — BUG-074 closed
 Owner manual gameplay decision: PASS — 2026-10-15
 
 ## Immutable Owner evidence
@@ -76,5 +76,5 @@ GGS assurance backlog. The deferral does not weaken automated real-ENet
 coverage, authorize GGS-001 Gate 2, or establish GGS as a replacement for
 Replay-12 assurance.
 
-No BUG-074 acceptance obligation remains open before the independent final
-closure audit. BUG-074 has not yet been moved to resolved.
+The independent final closure audit passed. No BUG-074 acceptance obligation
+remains open, and BUG-074 is resolved in the closed defect archive.

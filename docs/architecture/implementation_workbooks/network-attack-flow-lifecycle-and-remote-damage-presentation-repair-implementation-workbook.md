@@ -1,6 +1,6 @@
 # Network Attack-Flow Lifecycle And Remote Damage-Presentation Repair Implementation Workbook
 
-Status: Owner Accepted — 2026-10-08
+Status: Owner Accepted — 2026-10-08; implemented, verified, and closed — 2026-10-15
 
 Purpose: define one coordinated, bounded production repair package for two
 distinct defects:
@@ -18,6 +18,8 @@ Primary evidence:
 - [Counter parent-identity Save-10 round-trip resolution](../evidence/counter-parent-identity-save10-roundtrip-resolution.md)
 - [Preserved independent adversarial audit](../evidence/network-attack-flow-lifecycle-and-remote-damage-presentation-repair-workbook-audit.md)
 - [Preserved targeted closure audit](../evidence/network-attack-flow-lifecycle-and-remote-damage-presentation-repair-workbook-closure-audit.md)
+- [BUG-074 final acceptance evidence](../../qa/bugs/closed/BUG-074/evidence/final-acceptance-evidence.md)
+- [Owner-approved Hot-Seat canonical-state rebaseline](../evidence/hot-seat-baseline-canonical-state-rebaseline-approval-record.md)
 
 The preserved closure record contains the original BLOCKED review and the
 second targeted **PASS WITH REQUIRED REFINEMENTS** result. This narrow third
@@ -98,9 +100,13 @@ attack is active. No new continuation or lifecycle owner is needed. If
 implementation evidence contradicts this conclusion, stop rather than invent
 state.
 
-Entry status: implementation may begin only after a targeted independent
-closure audit and Project Owner acceptance. This revised draft authorizes no
-production, test, fixture, version, or baseline change by itself.
+Historical entry gate: implementation could begin only after a targeted
+independent closure audit and Project Owner acceptance. That gate was
+satisfied. The bounded implementation, automated convergence, Owner manual
+acceptance, fixture verification, and final closure audit subsequently passed;
+BUG-074 is resolved. This workbook remains the accepted implementation record,
+not continuing authorization for unrelated production, fixture, or baseline
+changes.
 
 ### 1.3 Owner resolution of the Counter persistence STOP gate
 
@@ -762,7 +768,7 @@ The Owner decision of 2026-10-15 supersedes only the former requirement for
 three additional Owner-recorded BUG-074 Counter histories: surviving Accept,
 surviving Decline, and destroyed Decline. The successful destroyed-Counter
 Accept history with complete composed return remains required at
-[`replay_20261015_065840.json`](../../qa/bugs/open/BUG-074/replay_20261015_065840.json).
+[`replay_20261015_065840.json`](../../qa/bugs/closed/BUG-074/replay_20261015_065840.json).
 All automated, compatibility, persistence, permanent-fixture, and real-ENet
 requirements remain unchanged.
 
@@ -799,37 +805,26 @@ faceup path whose additional inspection gates accidentally drain the queue.
 - Trace format changes only if its existing schema actually changes; replay
   format advancement alone does not authorize a trace-schema version change.
 
-## 10. Manual Replay Fixture Boundary
+## 10. Manual Replay Fixture Boundary And Closure
 
-Current committed replay inventory contains:
+The Project Owner recorded both required format-12 replacement inputs through
+the normal application/gameplay path:
 
-- `tests/fixtures/baseline_traces/replay_network.json`, which contains affected
-  publication commands and must be manually re-recorded as format 12; and
-- `tests/fixtures/baseline_traces/replay_hot_seat_solo.json`, which must also be
-  manually re-recorded as format 12 because the strict global replay cutover
-  rejects format 11 even though Hot-Seat does not normally publish Network
-  attack-flow commands.
+- `tests/fixtures/baseline_traces/replay_network.json`; and
+- `tests/fixtures/baseline_traces/replay_hot_seat_solo.json`.
 
-The Project Owner must record both replacement replay inputs through the real
-application/gameplay path after implementation reaches the fixture-capture
-gate. The Network recording must use protocol 11 and exercise valid post-Begin
-source-scoped publication plus terminal clearing. Capture provenance, mode,
-versions, scenario, and relevant attack identities must be retained.
+The recordings remained Owner-controlled and were not generated, synthesized,
+transformed, reconstructed, patched, header-edited, or re-signed. The normal
+baseline verifiers passed after integration: the Hot-Seat replay matched its
+command trace and reviewed final-state hash, and the real-ENet Network replay
+reached host/client final-state equality.
 
-Codex must stop at that boundary. Codex may not generate, synthesize,
-transform, reconstruct, patch, header-edit, re-sign, or automatically
-regenerate either replay fixture. No old publication command may be decorated
-with a fabricated source identity.
+The Hot-Seat hash was later promoted only through the separate, explicit
+Owner-approved broader canonical-state rebaseline recorded in the linked
+evidence. That review preserved the uncertainty about historical canonical
+drift and did not relabel the promotion as an exact-RNG-only change.
 
-After Owner recording, Codex may inspect and validate the supplied fixtures and
-run the repository's normal candidate/review workflow for derived evidence.
-Any affected committed Hot-Seat trace or state-hash promotion remains
-Owner-reviewed. The exact-RNG repair's pending baseline/hash promotion is not
-authorized by this workbook and must not be silently combined with replay-12
-fixture integration. If the two workflows cannot be reviewed independently,
-stop for an explicit combined Owner sequencing decision.
-
-The BUG-074 manual acceptance replay is permanent defect evidence separate
+The BUG-074 manual acceptance replay remains permanent defect evidence separate
 from these two baseline fixtures. Its required destroyed-Counter Accept path
 does not authorize replacing or mechanically deriving either baseline fixture.
 The three deferred Counter variations are tracked in the GGS assurance
@@ -1040,32 +1035,33 @@ fixture provenance, and every changed file.
 
 ## 14. Relationship To The Paused Exact-RNG Repair
 
-The exact-RNG serialization repair remains paused before baseline/hash
-promotion. These defects were **EXPOSED**, not caused, by the repaired stream.
+These defects were **EXPOSED**, not caused, by the exact-RNG repair stream.
+The former exact-RNG-only Hot-Seat hash-promotion path was not used: the Owner
+later approved a broader canonical-state rebaseline because historical drift
+beyond the two RNG leaves could not be fully classified. The replay and command
+trace remained unchanged, both baseline verifiers passed, and the evidence
+continues to preserve that uncertainty.
 
 This package may use the current worktree as the known mapping-1 acceptance
 environment, but it must preserve all exact-RNG changes and may not promote or
 replace their baselines/hashes. It must also retain RNG/save-independent stale-
 command evidence.
 
-After this production repair is implemented, independently audited, verified
-under both mappings, and its manual replay-12 boundary is satisfied, the
-exact-RNG task may resume at its bounded cross-boundary verification step.
-Baseline/hash promotion remains separately Owner-controlled. GGS-001 Gate 2
-remains unauthorized.
+This workbook does not resume or expand any remaining exact-RNG work.
+GGS-001 Gate 2 remains unauthorized.
 
-## 15. Remaining Owner Actions, Size, Risk, And Audit Readiness
+## 15. Closure Status, Size, And Risk
 
-No genuinely new gameplay, schema, or architecture decision is presently
-known. Remaining Owner actions are:
+All BUG-074 and workbook acceptance actions are complete: workbook acceptance,
+bounded implementation, both real-ENet mappings, focused/full automated
+convergence, Save/reconnect and replay-12 verification, Owner manual gameplay,
+Owner-controlled fixture integration, the separately reviewed Hot-Seat
+canonical-state rebaseline, and the final closure audit passed. BUG-074 is
+resolved. No new gameplay, schema, or architecture decision was required.
 
-1. accept, revise, or reject this workbook after targeted closure audit;
-2. authorize implementation after acceptance;
-3. manually record the required format-12 Hot-Seat and Network replay fixtures
-   at the implementation capture gate;
-4. separately review any derived replay baseline candidates and the paused
-   exact-RNG baseline/hash promotion; and
-5. separately authorize any later GGS-001 Gate 2 work.
+The three deferred Counter replay variations remain only in the GGS assurance
+backlog. They are not claimed as recorded coverage, do not reopen BUG-074, and
+do not authorize GGS-001 Gate 2.
 
 Estimated production size: **Medium** across the central producer,
 CommandProcessor terminal derivation/admission, Network ordering preservation,
@@ -1084,9 +1080,7 @@ legitimate Ship, Squadron, Counter, terminal, reconstructed, Network-order, or
 replay behavior. Inter-attack projection must remain derived-only. Defect B
 remains Low–Medium risk if normalization stays presentation-only.
 
-Readiness: **ready for final targeted closure audit**. The audit should treat
-the terminal blocker and other preserved findings as closed, and verify only
-the exact-ID authoritative Counter inspection-release sequence plus the real
-post-router `GameBoard` reconstruction entrypoint, along with consistency of
-the unchanged save 10 / protocol 11 / replay 12 cutovers, manual fixture
-boundary, and separation from the paused exact-RNG baseline and GGS-001 Gate 2.
+Closure: **PASS**. Save 10 / Network protocol 11 / replay 12 remain the accepted
+compatibility boundaries. The final evidence preserves the distinction between
+implemented behavior, automated verification, Owner manual acceptance, and
+defect closure.

@@ -83,7 +83,7 @@ the old expected `87c9…` hash. The canonical-state provenance that produced
 `87c9…` cannot be fully reconstructed, and the historical canonical drift is
 therefore not fully classified.
 
-Owner approval would authorize changing only
+The Owner-authorized promotion changed only
 [`baseline_state_hash_hot_seat_solo.txt`](../../../tests/fixtures/baseline_traces/baseline_state_hash_hot_seat_solo.txt)
 from `87c9…` to the reviewed `582100…` digest. The replay and committed command
 trace remain byte-for-byte unchanged. Approval does not authorize replay

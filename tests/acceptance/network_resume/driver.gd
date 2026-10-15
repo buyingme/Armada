@@ -4,6 +4,7 @@ extends Node
 ## APIs and production RPC delivery; it never invokes private RPC handlers.
 const TIMEOUT_MSEC := 20000
 const INITIAL_CURSOR := 8
+const BUG072_INITIAL_CURSOR := 121
 const GAME_BOARD_SCENE: PackedScene = preload(
 		"res://src/scenes/game_board/game_board.tscn")
 const BUG071_CHOICE_RULE: GDScript = preload(
@@ -82,6 +83,42 @@ var _bug071_stale_sent: bool = false
 var _bug071_stale_rejected: bool = false
 var _bug071_stale_state_hash: String = ""
 var _bug071_stale_cursor: int = -1
+var _counter_ack_sent: bool = false
+var _counter_parent_retained: bool = false
+var _counter_delayed_clear_checked: bool = false
+var _counter_projection_written: bool = false
+var _counter_evidence: Dictionary = {}
+var _counter_choice_accept: bool = true
+var _counter_destroyed: bool = false
+var _counter_choice_sent: bool = false
+var _counter_parent_accuracy_sent: bool = false
+var _counter_acknowledged_inspections: Dictionary = {}
+var _counter_resolve_projection_seen: bool = false
+var _counter_choice_projection_seen: bool = false
+var _counter_controller_ui_seen: bool = false
+var _counter_passive_ui_seen: bool = false
+var _counter_child_seen: bool = false
+var _counter_child_controller_ui_seen: bool = false
+var _counter_child_passive_ui_seen: bool = false
+var _counter_child_locked_target_seen: bool = false
+var _counter_child_roll_sent: bool = false
+var _counter_child_confirm_sent: bool = false
+var _counter_child_accuracy_sent: bool = false
+var _counter_child_terminal_seen: bool = false
+var _counter_return_ui_seen: bool = false
+var _counter_return_j_pending: bool = false
+var _counter_move_decline_sent: bool = false
+var _counter_stable_cursor: int = -1
+var _counter_stable_since_msec: int = 0
+var _bug072_step: int = 0
+var _bug072_dice_sent: bool = false
+var _bug072_confirm_sent: bool = false
+var _bug072_accuracy_sent: bool = false
+var _bug072_defense_sent: bool = false
+var _bug072_ack_sent: bool = false
+var _bug072_stale_checked: bool = false
+var _bug072_projection_written: bool = false
+var _bug072_evidence: Dictionary = {}
 
 func _ready() -> void:
 	_args = _parse_args(OS.get_cmdline_user_args())
@@ -89,6 +126,8 @@ func _ready() -> void:
 	_mapping = int(_args.get("mapping", "0"))
 	_shared = str(_args.get("shared", ""))
 	_scenario = str(_args.get("scenario", "fresh"))
+	_counter_choice_accept = str(_args.get("counter-choice", "accept")) == "accept"
+	_counter_destroyed = str(_args.get("counter-destroyed", "false")) == "true"
 	_started = Time.get_ticks_msec()
 	if _role.is_empty() or _shared.is_empty():
 		_finish(false, "invalid_arguments")
@@ -156,6 +195,10 @@ func _process(_delta: float) -> void:
 		_advance_bug043_stabilization()
 	if _scenario in ["bug070_gather", "bug071_cf"] and _host_fresh_live:
 		_advance_bug070_071()
+	if _scenario == "counter_release" and _host_fresh_live:
+		_advance_counter_release()
+	if _scenario == "bug072_attack_flow" and _host_fresh_live:
+		_advance_bug072_attack_flow()
 
 func _on_client_handshake(_player_index: int) -> void:
 	_client_handshook = true
@@ -186,7 +229,11 @@ func _begin_fresh_resume() -> void:
 	if _started_resume:
 		return
 	_started_resume = true
-	var state: GameState = _build_bug070_071_state() \
+	var state: GameState = _build_bug072_attack_flow_state() \
+			if _scenario == "bug072_attack_flow" else ( \
+			_build_counter_release_state() \
+			if _scenario == "counter_release" else ( \
+			_build_bug070_071_state() \
 			if _scenario in ["bug070_gather", "bug071_cf"] else ( \
 		_build_bug043_stabilization_state() \
 			if _scenario == "bug043_stabilization" else ( \
@@ -198,7 +245,7 @@ func _begin_fresh_resume() -> void:
 							"commanded_activation_reject"] else (
 					_build_ship_end_activation_state() \
 					if _scenario == "ship_end_activation" \
-					else _build_learning_resume_state()))))
+					else _build_learning_resume_state()))))))
 	if state == null:
 		_finish(false, "learning_resume_state_failed")
 		return
@@ -206,10 +253,12 @@ func _begin_fresh_resume() -> void:
 	meta.scenario_id = "learning_scenario"
 	meta.game_mode = SaveGameMetadata.MODE_NETWORK
 	meta.display_name = "match003-acceptance"
-	meta.next_command_sequence = INITIAL_CURSOR
-	_saved_evidence = _state_resume_evidence(state, INITIAL_CURSOR)
+	var initial_cursor: int = BUG072_INITIAL_CURSOR \
+			if _scenario == "bug072_attack_flow" else INITIAL_CURSOR
+	meta.next_command_sequence = initial_cursor
+	_saved_evidence = _state_resume_evidence(state, initial_cursor)
 	CommandProcessor.reset()
-	if not CommandProcessor.restore_next_sequence(INITIAL_CURSOR):
+	if not CommandProcessor.restore_next_sequence(initial_cursor):
 		_finish(false, "acceptance_cursor_install_failed")
 		return
 	# The save stays under this host process's isolated acceptance root.  The
@@ -287,6 +336,152 @@ func _build_learning_resume_state() -> GameState:
 	}) or not state.set_current_attack_state(attack):
 		return null
 	return state
+
+
+func _build_bug072_attack_flow_state() -> GameState:
+	var state := GameState.new()
+	state.rng = GameRng.new(23539532)
+	state.initialize()
+	var prepared: Dictionary = LearningScenarioPreparer.prepare_game_state(
+			LearningScenarioSetup.new(), state)
+	if (prepared.get("ships", []) as Array).size() != 3 \
+			or state.stable_ship_identity_error() != "" \
+			or not state.install_match_player_control_binding(
+					MatchPlayerControlBinding.create_two_human()):
+		return null
+	state.current_round = 2
+	state.current_phase = Constants.GamePhase.SHIP
+	state.initiative_player = 1
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	var defender: ShipInstance = state.get_ship(0, 1)
+	var decoy: ShipInstance = state.get_ship(0, 0)
+	if attacker == null or defender == null or decoy == null:
+		return null
+	attacker.pos_x = 0.50
+	attacker.pos_y = 0.42
+	attacker.rotation_deg = 180.0
+	defender.pos_x = 0.50
+	defender.pos_y = 0.58
+	defender.rotation_deg = 0.0
+	decoy.pos_x = 0.95
+	decoy.pos_y = 0.95
+	attacker.command_dial_stack = CommandDialStack.create(
+			attacker.ship_data.command_value)
+	var dials: Array[int] = []
+	for _index: int in range(attacker.command_dial_stack.get_dials_needed()):
+		dials.append(Constants.CommandType.NAVIGATE)
+	if not attacker.command_dial_stack.assign_dials(dials, 1) \
+			or attacker.command_dial_stack.reveal_top().is_empty():
+		return null
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+			1, Constants.Visibility.ALL, {})
+	return state if state.validate_declaration_adjacent_state() else null
+
+
+func _build_counter_release_state() -> GameState:
+	var state := GameState.new()
+	state.rng = GameRng.new(1211)
+	state.initialize()
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.set_rng(state.rng)
+	state.damage_deck.initialize()
+	if not state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human()):
+		return null
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP
+	var ship_key: String = "cr90_corvette_a"
+	var ship := ShipInstance.create_from_data(ship_key,
+			AssetLoader.load_ship_data(ship_key), 2, 0)
+	ship.roster_entry_id = "counter-commanding-ship"
+	ship.pos_x = 0.45
+	ship.pos_y = 0.55
+	ship.command_dial_stack = CommandDialStack.create(1)
+	if not ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.SQUADRON], 1) \
+			or ship.command_dial_stack.reveal_top().is_empty() \
+			or not ship.establish_ship_activation(
+					"ship-activation:counter-live") \
+			or not ship.open_squadron_command_opportunity(
+					ship.ship_activation_identity) \
+			or not ship.commit_squadron_command_activation(
+					ship.ship_activation_identity):
+		return null
+	state.get_player_state(0).ships.append(ship)
+	var parent := SquadronInstance.create_from_data(
+			"x_wing_squadron",
+			AssetLoader.load_squadron_data("x_wing_squadron"), 0)
+	parent.roster_entry_id = "counter-parent-attacker"
+	parent.pos_x = 0.50
+	parent.pos_y = 0.50
+	state.get_player_state(0).squadrons.append(parent)
+	var counter_data: SquadronData = AssetLoader.load_squadron_data(
+			"tie_interceptor_squadron")
+	var child := SquadronInstance.create_from_data(
+			"tie_interceptor_squadron", counter_data, 1)
+	child.roster_entry_id = "counter-child-attacker"
+	child.pos_x = 0.51
+	child.pos_y = 0.50
+	state.get_player_state(1).squadrons.append(child)
+	if not parent.initialize_activation_action_state(
+					"squadron-activation:counter-live",
+					SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+					0, 0) \
+			or not parent.commit_attack_action_begun(parent.activation_id, false):
+		return null
+	var parent_dice_count: int = 3 if _counter_destroyed else 1
+	var parent_dice_results: Array[Dictionary] = []
+	for _index: int in range(parent_dice_count):
+		parent_dice_results.append({
+			"color": int(Constants.DiceColor.BLUE),
+			"face": int(Constants.DiceFace.HIT),
+		})
+	var attack := CurrentAttackState.new()
+	if not attack.configure_active("attack:7", {
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"attacker_index": 0,
+		"attacker_zone": -1,
+		"defender_player": 1,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_index": 0,
+		"defender_zone": -1,
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"range_band": Constants.RANGE_BAND_CLOSE,
+		"obstructed": false,
+		"obstruction_resolved": true,
+		"dice_pool": {"BLUE": parent_dice_count},
+		"cf_dial_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+		"cf_token_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+	}):
+		return null
+	attack = attack.with_patch({
+		"stage": CurrentAttackState.STAGE_ACCURACY,
+		"dice_results": parent_dice_results,
+	})
+	if attack == null or not state.set_current_attack_state(attack):
+		return null
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0, Constants.Visibility.ALL, {
+				"attack_id": "attack:7",
+				"attacker_player": 0,
+				"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+				"attacker_squadron_index": 0,
+				"attacker_name": "X-wing Squadron",
+				"defender_player": 1,
+				"target_kind": CurrentAttackState.KIND_SQUADRON,
+				"target_squadron_index": 0,
+				"defender_name": "TIE Interceptor Squadron",
+				"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+				"range_band": Constants.RANGE_BAND_CLOSE,
+				"dice_pool": {"BLUE": parent_dice_count},
+				"dice_results": attack.dice_results.duplicate(true),
+			})
+	return state if state.validate_declaration_adjacent_state() else null
 
 
 func _build_bug070_071_state() -> GameState:
@@ -551,7 +746,7 @@ func _on_canonical_install() -> void:
 	if _scenario not in ["fresh", "commanded_squadron", "commanded_decline",
 			"commanded_activation_gate", "commanded_activation_reject",
 			"ship_end_activation", "bug043_stabilization", "bug070_gather",
-			"bug071_cf"] \
+			"bug071_cf", "counter_release", "bug072_attack_flow"] \
 			or GameManager.current_game_state == null:
 		return
 	_installed_evidence = _state_resume_evidence(
@@ -619,8 +814,8 @@ func _begin_hot_seat_compatibility() -> void:
 		_finish(false, "hot_seat_checkpoint_install_failed")
 		return
 	_compatibility = {
-		"named_save_v7": loaded_named_meta.save_format_version,
-		"checkpoint_v7": checkpoint_meta.save_format_version,
+		"named_save_version": loaded_named_meta.save_format_version,
+		"checkpoint_version": checkpoint_meta.save_format_version,
 		"binding_before": expected_binding,
 		"binding_after": GameManager.current_game_state.serialize().get(
 				"match_player_control_binding", {}),
@@ -668,7 +863,7 @@ func _begin_network_same_live_named_load() -> void:
 			_compatibility["before"].get("binding", {}):
 		_finish(false, "network_named_compatibility_mismatch")
 		return
-	_compatibility["named_save_v7"] = loaded_meta.save_format_version
+	_compatibility["named_save_version"] = loaded_meta.save_format_version
 	LobbyManager.host_load_save(loaded_state, loaded_meta)
 
 
@@ -700,7 +895,7 @@ func _begin_network_same_live_checkpoint_load() -> void:
 			_compatibility["before"].get("binding", {}):
 		_finish(false, "network_checkpoint_compatibility_mismatch")
 		return
-	_compatibility["checkpoint_v7"] = loaded_meta.save_format_version
+	_compatibility["checkpoint_version"] = loaded_meta.save_format_version
 	_compatibility["checkpoint_persisted"] = true
 	LobbyManager.host_load_save(loaded_state, loaded_meta)
 
@@ -756,11 +951,57 @@ func _enter_game_board() -> void:
 		return
 	add_child(_game_board)
 	_board_entries += 1
+	if _scenario == "counter_release" and not CommandProcessor.command_executed \
+			.is_connected(_capture_counter_presentation_after_route):
+		# Connect after GameBoard readiness so the production ModalRouter has
+		# already projected each result before this acceptance probe observes UI.
+		CommandProcessor.command_executed.connect(
+				_capture_counter_presentation_after_route)
 	if _role == "client" and _scenario == "fresh":
 		# The driver owns all acceptance choices. Keep the real reconstructed
 		# board as a passive projection so its deferred UI helpers cannot race
 		# the deterministic authority sequence with synthetic button actions.
 		GameManager.set_command_submitter(CommandSubmitter.new())
+
+
+func _capture_counter_presentation_after_route(
+		_command: GameCommand, _result: Dictionary) -> void:
+	if _game_board == null:
+		return
+	var state: GameState = GameManager.current_game_state
+	if state == null or state.current_attack_state == null:
+		return
+	var attack: CurrentAttackState = state.current_attack_state
+	var flow: InteractionFlow = state.interaction_flow
+	if not attack.active \
+			or attack.attack_kind \
+					!= SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER \
+			or flow == null \
+			or flow.flow_type != Constants.InteractionFlow.ATTACK \
+			or flow.step_id != Constants.InteractionStep.ATTACK_ROLL \
+			or str(flow.payload.get("attack_id", "")) != attack.attack_id:
+		return
+	var local_player: int = NetworkManager.get_local_player_index()
+	if local_player == attack.attacker_player:
+		var panel: AttackSimPanel = _game_board._target_selector.get_panel()
+		var locked: bool = panel != null and panel.visible \
+				and panel.get_title_text().contains(" → ") \
+				and not panel.get_body_text().contains("Select a target")
+		if locked and _game_board._attack_executor.is_in_exec_mode():
+			_counter_child_controller_ui_seen = true
+			_counter_child_locked_target_seen = true
+	else:
+		var mirror: AttackPanelMirror = _game_board._panel_mgr.attack_panel_mirror
+		var panel: AttackSimPanel = mirror.get_panel() if mirror != null else null
+		var locked: bool = panel != null and panel.visible \
+				and panel.get_title_text().contains(" → ") \
+				and not panel.get_body_text().contains("Select a target")
+		var passive_only: bool = locked \
+				and (panel._roll_button == null or not panel._roll_button.visible) \
+				and not _game_board._attack_executor.is_in_exec_mode()
+		if passive_only:
+			_counter_child_passive_ui_seen = true
+			_counter_child_locked_target_seen = true
 
 
 func _advance_bug070_071() -> void:
@@ -1441,8 +1682,42 @@ func _advance_commanded_host(
 	_finish(true, "commanded_squadron_authority_completed")
 
 
-func _capture_commanded_command(command: GameCommand, _result: Dictionary) -> void:
+func _capture_commanded_command(command: GameCommand, result: Dictionary) -> void:
 	if command == null:
+		return
+	if _scenario == "counter_release":
+		var state: GameState = GameManager.current_game_state
+		if command.command_type == "publish_attack_flow":
+			var source: String = str(command.payload.get("source_attack_id", ""))
+			var step: int = int(command.payload.get("step_id", -1))
+			if source == "attack:7" \
+					and step == Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE:
+				_counter_resolve_projection_seen = true
+			if source == "attack:7" \
+					and step == Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
+					and int(command.payload.get("controller_player", -1)) == 1:
+				_counter_choice_projection_seen = true
+			if bool(command.payload.get("final", false)) \
+					and source != "attack:7":
+				_counter_child_terminal_seen = true
+		elif command.command_type == BeginAttackCommand.TYPE \
+				and str(command.payload.get("attack_kind", "")) \
+						== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+			_counter_child_seen = not str(result.get("attack_id", "")).is_empty()
+		elif command.command_type == CounterChoiceCommand.TYPE:
+			_counter_choice_sent = bool(result.get(
+					CounterChoiceCommand.RESULT_COUNTER_ACCEPTED, false)) \
+					== _counter_choice_accept
+		elif command.command_type == AcknowledgeAttackResultCommand.TYPE:
+			var inspection: CompletedAttackInspection = \
+					state.completed_attack_inspection if state != null else null
+			if inspection != null \
+					and inspection.source_attack_id() == "attack:7" \
+					and inspection.received_principal_ids().size() == 1 \
+					and state.interaction_flow != null \
+					and state.interaction_flow.step_id \
+							== Constants.InteractionStep.ATTACK_COUNTER_CHOICE:
+				_counter_parent_retained = true
 		return
 	if _scenario == "ship_end_activation":
 		if command.command_type == "end_activation":
@@ -2118,6 +2393,562 @@ func _finish_ship_end_activation_host(
 	_finish(true, "authority_end_activation_completed")
 
 
+func _advance_bug072_attack_flow() -> void:
+	if _game_board == null or GameManager.current_game_state == null:
+		return
+	var state: GameState = GameManager.current_game_state
+	var ship: ShipInstance = state.get_ship(1, 0)
+	var defender: ShipInstance = state.get_ship(0, 1)
+	if ship == null or defender == null:
+		_finish(false, "bug072_participant_missing")
+		return
+	var local_player: int = NetworkManager.get_local_player_index()
+	if local_player == 1:
+		_advance_bug072_attacker(state, ship)
+	elif local_player == 0:
+		_advance_bug072_defender(state, defender)
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	if inspection != null and not inspection.is_satisfied():
+		var principal_id: String = state.principal_id_for_player(local_player)
+		var may_ack: bool = local_player == 0 \
+				or inspection.received_principal_ids().size() == 1
+		if may_ack and not _bug072_ack_sent \
+				and inspection.required_principal_ids().has(principal_id) \
+				and not inspection.has_received(principal_id):
+			_bug072_ack_sent = true
+			GameManager.submit_acknowledge_attack_result(
+					local_player, inspection.inspection_id())
+		return
+	var expected_cursor: int = 143 if _mapping == 0 else 144
+	if CommandProcessor.get_next_sequence() != expected_cursor \
+			or state.current_attack_state.active \
+			or state.completed_attack_inspection != null \
+			or state.interaction_flow == null \
+			or state.interaction_flow.flow_type \
+					!= Constants.InteractionFlow.SHIP_ACTIVATION \
+			or state.interaction_flow.step_id \
+					!= Constants.InteractionStep.MANEUVER_STEP \
+			or ship.maneuver_opportunity_disposition \
+					!= ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		return
+	var modal: ActivationModal = _game_board._panel_mgr.activation_modal
+	if modal == null or not modal.is_open() \
+			or _game_board._activation_ctx.ship_activation_state == null \
+			or _game_board._activation_ctx.ship_activation_state.get_current_step() \
+					!= ShipActivationState.Step.MANEUVER:
+		return
+	if _role == "host" and not _bug072_stale_checked:
+		var before_hash: String = CanonicalJson.hash(state.serialize())
+		var before_cursor: int = CommandProcessor.get_next_sequence()
+		var stale := PublishAttackFlowCommand.new(1, {
+			"step_id": int(Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE),
+			"controller_player": 1,
+			"flow_payload": {"attack_id": "attack:124", "final_damage": 2},
+			"final": false,
+			"source_attack_id": "attack:124",
+		})
+		var rejected: Dictionary = GameManager.get_command_submitter() \
+				.submit_authoritative(stale)
+		_bug072_stale_checked = rejected.is_empty() \
+				and before_cursor == CommandProcessor.get_next_sequence() \
+				and before_hash == CanonicalJson.hash(state.serialize())
+		if not _bug072_stale_checked:
+			_finish(false, "bug072_stale_publication_mutated")
+			return
+	_bug072_evidence = _bug072_snapshot(state, ship, modal)
+	if _role == "host" and not _bug072_projection_written:
+		var remote_viewer: int = 1 if _mapping == 0 else 0
+		var filtered: Dictionary = StateFilter.filter_for_player_checked(
+				state.serialize(), remote_viewer)
+		if not bool(filtered.get(StateFilter.KEY_OK, false)):
+			_finish(false, "bug072_filter_failed")
+			return
+		var file := FileAccess.open(_shared.path_join(
+				"bug072-projection-%d.txt" % _mapping), FileAccess.WRITE)
+		if file == null:
+			_finish(false, "bug072_projection_write_failed")
+			return
+		file.store_string(CanonicalJson.hash(
+				filtered.get(StateFilter.KEY_STATE, {}) as Dictionary))
+		_bug072_projection_written = true
+		if FileAccess.file_exists(_peer_evidence_path()):
+			_finish(true, "bug072_authority_and_peer_converged")
+	elif _role == "host" and FileAccess.file_exists(_peer_evidence_path()):
+		_finish(true, "bug072_authority_and_peer_converged")
+	elif _role == "client":
+		var projection_path: String = _shared.path_join(
+				"bug072-projection-%d.txt" % _mapping)
+		if not FileAccess.file_exists(projection_path):
+			return
+		var expected: String = FileAccess.get_file_as_string(
+				projection_path).strip_edges()
+		if CanonicalJson.hash(state.serialize()) != expected:
+			return
+		_bug072_evidence["projection_converged"] = true
+		_finish(true, "bug072_peer_converged")
+
+
+func _advance_bug072_attacker(state: GameState, ship: ShipInstance) -> void:
+	var submitter: CommandSubmitter = GameManager.get_command_submitter()
+	if submitter == null:
+		return
+	match _bug072_step:
+		0:
+			if not ship.has_active_ship_activation():
+				if submitter.submit(ActivateShipCommand.new(1, {
+						"ship_index": 0})).is_empty():
+					_finish(false, "bug072_activate_rejected")
+				_bug072_step = 1
+		1:
+			# The production activation controller owns the two automatic skips
+			# (unavailable repair, then unavailable squadron command).  Waiting
+			# for its accepted projection avoids introducing a second lifecycle
+			# owner in this acceptance driver.
+			if ship.attack_step_active:
+				_bug072_step = 3
+		3:
+			if ship.attack_step_active and not state.current_attack_state.active:
+				var candidate: Dictionary = {}
+				for entry: Dictionary in TargetingListBuilder \
+						.authoritative_ship_target_entries(state, 1, 0):
+					if int(entry.get("target_owner", -1)) == 0 \
+							and int(entry.get("target_index", -1)) == 1 \
+							and str(entry.get("target_kind", "")) \
+									== CurrentAttackState.KIND_SHIP:
+						candidate = entry
+						break
+				if candidate.is_empty():
+					_finish(false, "bug072_target_missing")
+					return
+				var modal: ActivationModal = _game_board._panel_mgr.activation_modal
+				var selector: TargetSelector = _game_board._target_selector
+				var attacker_token: ShipToken = \
+						_game_board._find_ship_token_for_instance(ship)
+				var defender_token: ShipToken = _game_board \
+						._find_ship_token_for_instance(state.get_ship(0, 1))
+				if modal == null or selector == null or attacker_token == null \
+						or defender_token == null:
+					return
+				modal._on_attack_pressed()
+				selector._select_attacker_ship_zone(
+						attacker_token, int(candidate["attacker_zone"]))
+				selector._try_select_target_ship_zone(
+						defender_token, int(candidate["target_zone"]))
+				var panel: AttackSimPanel = selector.get_panel()
+				if panel == null or not selector.has_declaration_candidate() \
+						or not panel._confirm_is_declaration \
+						or panel._confirm_button.disabled:
+					_finish(false, "bug072_declaration_ui_missing")
+					return
+				panel._on_confirm_pressed()
+				_bug072_step = 4
+	var attack: CurrentAttackState = state.current_attack_state
+	if not attack.active:
+		return
+	if attack.stage == CurrentAttackState.STAGE_PRE_ROLL \
+			and not _bug072_dice_sent \
+			and CommandProcessor.get_next_sequence() == 126:
+		_bug072_dice_sent = true
+		_game_board._attack_executor._on_attack_roll_dice()
+	elif attack.stage == CurrentAttackState.STAGE_ATTACK_MODIFY \
+			and not _bug072_confirm_sent \
+			and CommandProcessor.get_next_sequence() == 128:
+		_bug072_confirm_sent = true
+		if GameManager.submit_confirm_attack_dice(1).is_empty():
+			_finish(false, "bug072_confirm_rejected")
+	elif attack.stage == CurrentAttackState.STAGE_ACCURACY \
+			and not _bug072_accuracy_sent \
+			and CommandProcessor.get_next_sequence() == 132:
+		_bug072_accuracy_sent = true
+		if GameManager.submit_commit_accuracy(1, []).is_empty():
+			_finish(false, "bug072_accuracy_rejected")
+
+
+func _advance_bug072_defender(state: GameState,
+		defender: ShipInstance) -> void:
+	var attack: CurrentAttackState = state.current_attack_state
+	if not attack.active or attack.stage != CurrentAttackState.STAGE_DEFENSE \
+			or attack.defense_stage != CurrentAttackState.DEFENSE_PENDING \
+			or _bug072_defense_sent \
+			or CommandProcessor.get_next_sequence() != 135:
+		return
+	_bug072_defense_sent = true
+	if GameManager.submit_commit_defense(defender, [1]).is_empty():
+		_finish(false, "bug072_defense_rejected")
+
+
+func _bug072_snapshot(state: GameState, ship: ShipInstance,
+		modal: ActivationModal) -> Dictionary:
+	var types: Array[String] = []
+	var sequences: Array[int] = []
+	var publication_sources_match: bool = true
+	var terminal_count: int = 0
+	for command: GameCommand in CommandProcessor.get_history():
+		types.append(command.command_type)
+		sequences.append(command.sequence)
+		if command.command_type != "publish_attack_flow":
+			continue
+		if bool(command.payload.get("final", false)):
+			terminal_count += 1
+		else:
+			var payload: Dictionary = command.payload.get("flow_payload", {}) \
+					as Dictionary
+			publication_sources_match = publication_sources_match \
+					and str(command.payload.get("source_attack_id", "")) \
+							== str(payload.get("attack_id", "")) \
+					and str(payload.get("attack_id", "")) == "attack:124"
+	var local_player: int = NetworkManager.get_local_player_index()
+	return {
+		"command_types": types,
+		"sequences": sequences,
+		"cursor": CommandProcessor.get_next_sequence(),
+		"publication_sources_match": publication_sources_match,
+		"resolve_count": _history_count("resolve_damage"),
+		"complete_count": _history_count("complete_attack"),
+		"terminal_count": terminal_count,
+		"ack_count": _history_count(AcknowledgeAttackResultCommand.TYPE),
+		"maneuver_transition_count": _history_count("advance_activation_step") - 2,
+		"attack_retired": state.current_attack_state.is_inactive(),
+		"inspection_consumed": state.completed_attack_inspection == null,
+		"ship_activation_identity": ship.ship_activation_identity,
+		"maneuver_open": ship.maneuver_opportunity_disposition \
+				== ShipInstance.ACTIVATION_DISPOSITION_OPEN,
+		"maneuver_modal_open": modal.is_open(),
+		"maneuver_modal_interactive": modal._is_interactable,
+		"expected_interactivity": local_player == 1,
+		"attack_presentation_retired": not _game_board._attack_executor.is_active(),
+		"stale_publication_rejected": _bug072_stale_checked \
+				if _role == "host" else true,
+	}
+
+
+func _advance_counter_release() -> void:
+	var state: GameState = GameManager.current_game_state
+	if state == null or _game_board == null:
+		return
+	var local_player: int = NetworkManager.get_local_player_index()
+	var live_attack: CurrentAttackState = state.current_attack_state
+	if live_attack != null and live_attack.active \
+			and live_attack.attack_id == "attack:7" \
+			and live_attack.stage == CurrentAttackState.STAGE_ACCURACY \
+			and local_player == live_attack.attacker_player \
+			and not _counter_parent_accuracy_sent:
+		_counter_parent_accuracy_sent = true
+		_game_board._attack_executor._on_attack_accuracy_confirmed()
+		return
+	var flow: InteractionFlow = state.interaction_flow
+	if flow != null and flow.flow_type == Constants.InteractionFlow.ATTACK \
+			and str(flow.payload.get("attack_id", "")) == "attack:7" \
+			and flow.step_id == Constants.InteractionStep.ATTACK_COUNTER_CHOICE:
+		var mirror: AttackPanelMirror = _game_board._panel_mgr.attack_panel_mirror
+		var interactive: bool = mirror != null \
+				and mirror._counter_section_active \
+				and mirror.get_panel() != null \
+				and mirror.get_panel()._counter_container != null \
+				and mirror.get_panel()._counter_container.visible
+		if local_player == 1:
+			if not _counter_choice_sent and not interactive:
+				return
+			if interactive:
+				_counter_controller_ui_seen = true
+			if not _counter_choice_sent:
+				_counter_choice_sent = true
+				var panel: AttackSimPanel = mirror.get_panel()
+				if _counter_choice_accept:
+					panel._counter_attack_button.pressed.emit()
+				else:
+					panel._counter_skip_button.pressed.emit()
+				return
+		else:
+			_counter_passive_ui_seen = not interactive
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	if inspection != null:
+		var principal_id: String = state.principal_id_for_player(local_player)
+		var acknowledgement_key: String = "%s|%s" % [
+				inspection.inspection_id(), principal_id]
+		var received_count: int = inspection.received_principal_ids().size()
+		var acknowledgement_turn: bool = (local_player == 0 \
+				and received_count == 0) or (local_player == 1 \
+				and received_count == 1)
+		if not inspection.is_satisfied() and acknowledgement_turn \
+				and not _counter_acknowledged_inspections.has(acknowledgement_key) \
+				and inspection.required_principal_ids().has(principal_id) \
+				and not inspection.has_received(principal_id):
+			_counter_acknowledged_inspections[acknowledgement_key] = true
+			GameManager.get_command_submitter().submit(
+					AcknowledgeAttackResultCommand.new(local_player, {
+						"inspection_id": inspection.inspection_id(),
+					}))
+		if not inspection.is_satisfied():
+			return
+	var attack: CurrentAttackState = state.current_attack_state
+	if attack != null and attack.active \
+			and attack.attack_kind \
+					== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+		_counter_child_seen = true
+		if _role == "host" and not _counter_delayed_clear_checked:
+			if not _reject_delayed_counter_parent_clear(state):
+				_finish(false, "counter_delayed_parent_clear_mutated")
+				return
+			_counter_delayed_clear_checked = true
+			return
+		if flow == null \
+				or str(flow.payload.get("attack_id", "")) != attack.attack_id:
+			return
+		if local_player == 1:
+			var panel: AttackSimPanel = _game_board._target_selector.get_panel()
+			var locked_target: bool = panel != null and panel.visible \
+					and panel.get_title_text().contains(" → ") \
+					and not panel.get_body_text().contains("Select a target")
+			var interactive_child: bool = locked_target \
+					and _game_board._attack_executor.is_in_exec_mode()
+			if not interactive_child:
+				return
+			_counter_child_controller_ui_seen = true
+			_counter_child_locked_target_seen = true
+			if attack.stage == CurrentAttackState.STAGE_PRE_ROLL \
+					and not _counter_child_roll_sent:
+				if flow.step_id != Constants.InteractionStep.ATTACK_ROLL:
+					return
+				if panel._roll_button == null or not panel._roll_button.visible:
+					return
+				_counter_child_roll_sent = true
+				panel.roll_dice_pressed.emit()
+				return
+			if attack.stage == CurrentAttackState.STAGE_ATTACK_MODIFY \
+					and not _counter_child_confirm_sent:
+				_counter_child_confirm_sent = true
+				panel.confirm_pressed.emit()
+				return
+			if attack.stage == CurrentAttackState.STAGE_ACCURACY \
+					and not _counter_child_accuracy_sent:
+				_counter_child_accuracy_sent = true
+				GameManager.submit_commit_accuracy(1, [])
+				return
+		else:
+			if flow.step_id != Constants.InteractionStep.ATTACK_ROLL:
+				return
+			var mirror: AttackPanelMirror = _game_board._panel_mgr.attack_panel_mirror
+			var passive_panel: AttackSimPanel = mirror.get_panel() \
+					if mirror != null else null
+			var passive_locked: bool = passive_panel != null \
+					and passive_panel.visible \
+					and passive_panel.get_title_text().contains(" → ") \
+					and not passive_panel.get_body_text().contains("Select a target")
+			var passive_only: bool = passive_locked \
+					and (passive_panel._roll_button == null \
+							or not passive_panel._roll_button.visible) \
+					and not _game_board._attack_executor.is_in_exec_mode()
+			if not passive_only:
+				return
+			_counter_child_passive_ui_seen = true
+			_counter_child_locked_target_seen = true
+	var original: SquadronInstance = state.get_squadron(0, 0)
+	if attack != null and not attack.active \
+			and inspection != null and inspection.is_satisfied() \
+			and original != null \
+			and original.attack_action_disposition \
+					== SquadronInstance.ATTACK_ACTION_BEGUN \
+			and state.has_legal_remaining_squadron_move_action(original):
+		if local_player == original.owner_player:
+			_counter_return_j_pending = true
+			var controller: SquadronPhaseController = \
+					_game_board._squadron_phase_controller
+			var modal: SquadronActivationModal = controller.get_modal()
+			if modal == null \
+					or modal.get_state() \
+							!= SquadronActivationModal.State.ACTION_CHOICE \
+					or modal._selected_instance != original:
+				return
+			_counter_return_ui_seen = true
+			if not _counter_move_decline_sent:
+				_counter_move_decline_sent = true
+				modal._on_skip_pressed()
+				return
+	var local_ui_ok: bool = _counter_controller_ui_seen \
+			if local_player == 1 else _counter_passive_ui_seen
+	var completed: bool = _counter_choice_sent \
+			and _counter_resolve_projection_seen \
+			and _counter_choice_projection_seen \
+			and local_ui_ok
+	completed = completed and (
+			(_counter_child_seen and _counter_child_terminal_seen) \
+			if _counter_choice_accept else (
+				not _counter_child_seen \
+				and _history_count(CompleteAttackCommand.TYPE) == 1 \
+				and _history_terminal_publication_count() == 1))
+	var commanding_ship: ShipInstance = state.get_ship(0, 0)
+	var composed_return: bool = state.completed_attack_inspection == null \
+			and original != null and original.activated_this_round \
+			and (not _counter_destroyed \
+					or original.move_action_disposition \
+							== SquadronInstance.MOVE_ACTION_DECLINED) \
+			and _history_count(CompleteSquadronActivationCommand.TYPE) == 1 \
+			and commanding_ship != null \
+			and commanding_ship.has_active_ship_activation() \
+			and state.interaction_flow != null \
+			and state.interaction_flow.flow_type \
+					== Constants.InteractionFlow.SHIP_ACTIVATION \
+			and state.interaction_flow.step_id in [
+				Constants.InteractionStep.ATTACK_STEP,
+				Constants.InteractionStep.MANEUVER_STEP,
+			]
+	completed = completed and composed_return
+	if not completed:
+		_counter_stable_cursor = -1
+		_counter_stable_since_msec = 0
+		return
+	var cursor: int = CommandProcessor.get_next_sequence()
+	if cursor != _counter_stable_cursor:
+		_counter_stable_cursor = cursor
+		_counter_stable_since_msec = Time.get_ticks_msec()
+		return
+	# Enclosing presentation can synchronously derive an existing auto-skip.
+	# Snapshot only after the ordered cursor is unchanged on the stable boundary.
+	if Time.get_ticks_msec() - _counter_stable_since_msec < 150:
+		return
+	if _role == "host" and not _counter_projection_written:
+		var remote_viewer: int = 1 if _mapping == 0 else 0
+		var filtered: Dictionary = StateFilter.filter_for_player_checked(
+				state.serialize(), remote_viewer)
+		if not bool(filtered.get(StateFilter.KEY_OK, false)):
+			_finish(false, "counter_filter_failed")
+			return
+		var file := FileAccess.open(_shared.path_join(
+				"counter-%s-projection-%d.txt" % [
+						_counter_choice_label(), _mapping]), FileAccess.WRITE)
+		if file == null:
+			_finish(false, "counter_projection_write_failed")
+			return
+		file.store_string(CanonicalJson.hash(
+				filtered.get(StateFilter.KEY_STATE, {}) as Dictionary))
+		_counter_projection_written = true
+		_counter_evidence = _counter_release_snapshot(state)
+		if FileAccess.file_exists(_peer_evidence_path()):
+			_finish(true, "counter_authority_and_peer_converged")
+	elif _role == "host" and FileAccess.file_exists(_peer_evidence_path()):
+		_finish(true, "counter_authority_and_peer_converged")
+	elif _role == "client":
+		var projection_path: String = _shared.path_join(
+				"counter-%s-projection-%d.txt" % [
+						_counter_choice_label(), _mapping])
+		if not FileAccess.file_exists(projection_path):
+			return
+		var expected: String = FileAccess.get_file_as_string(
+				projection_path).strip_edges()
+		if CanonicalJson.hash(state.serialize()) != expected:
+			return
+		_counter_evidence = _counter_release_snapshot(state)
+		_counter_evidence["projection_converged"] = true
+		_finish(true, "counter_peer_converged")
+
+
+func _reject_delayed_counter_parent_clear(state: GameState) -> bool:
+	var before_hash: String = CanonicalJson.hash(state.serialize())
+	var before_cursor: int = CommandProcessor.get_next_sequence()
+	var delayed := PublishAttackFlowCommand.new(0, {
+		"step_id": int(Constants.InteractionStep.NONE),
+		"controller_player": -1,
+		"flow_payload": {},
+		"final": true,
+		"source_attack_id": "attack:7",
+	})
+	var rejected: Dictionary = GameManager.get_command_submitter() \
+			.submit_authoritative(delayed)
+	return rejected.is_empty() \
+			and before_cursor == CommandProcessor.get_next_sequence() \
+			and before_hash == CanonicalJson.hash(state.serialize())
+
+
+func _counter_release_snapshot(state: GameState) -> Dictionary:
+	var types: Array[String] = []
+	var sequences: Array[int] = []
+	for command: GameCommand in CommandProcessor.get_history():
+		types.append(command.command_type)
+		sequences.append(command.sequence)
+	var completion_inspection_id: String = ""
+	var decline_inspection_id: String = ""
+	for command: GameCommand in CommandProcessor.get_history():
+		if command.command_type == CompleteSquadronActivationCommand.TYPE:
+			completion_inspection_id = str(command.payload.get(
+					"completed_attack_inspection_id", ""))
+		elif command.command_type == DeclineSquadronMoveCommand.TYPE:
+			decline_inspection_id = str(command.payload.get(
+					"completed_attack_inspection_id", ""))
+	var original: SquadronInstance = state.get_squadron(0, 0)
+	var counter_attacker: SquadronInstance = state.get_squadron(1, 0)
+	return {
+		"variant": "destroyed" if _counter_destroyed else "surviving",
+		"choice": "accept" if _counter_choice_accept else "decline",
+		"counter_attacker_destroyed": counter_attacker != null \
+				and counter_attacker.is_destroyed(),
+		"ack_count": _history_count(AcknowledgeAttackResultCommand.TYPE),
+		"begin_count": _history_count(BeginAttackCommand.TYPE),
+		"publication_count": _history_count("publish_attack_flow"),
+		"command_types": types,
+		"sequences": sequences,
+		"parent_retained": _counter_parent_retained,
+		"inspection_satisfied": state.completed_attack_inspection == null \
+				or state.completed_attack_inspection.is_satisfied(),
+		"child_attack_id": state.current_attack_state.attack_id,
+		"projected_attack_id": str(state.interaction_flow.payload.get(
+				"attack_id", "")) if state.interaction_flow != null else "",
+		"delayed_parent_clear_rejected": _counter_delayed_clear_checked \
+				if _role == "host" and _counter_choice_accept else true,
+		"resolve_projection_seen": _counter_resolve_projection_seen,
+		"counter_projection_seen": _counter_choice_projection_seen,
+		"controller_ui_seen": _counter_controller_ui_seen,
+		"passive_ui_seen": _counter_passive_ui_seen,
+		"choice_sent": _counter_choice_sent,
+		"child_seen": _counter_child_seen,
+		"child_controller_ui_seen": _counter_child_controller_ui_seen,
+		"child_passive_ui_seen": _counter_child_passive_ui_seen,
+		"child_locked_target_seen": _counter_child_locked_target_seen,
+		"child_terminal_seen": _counter_child_terminal_seen,
+		"return_ui_seen": _counter_return_ui_seen,
+		"return_j_pending": _counter_return_j_pending,
+		"move_decline_sent": _counter_move_decline_sent,
+		"move_decline_count": _history_count(
+				DeclineSquadronMoveCommand.TYPE),
+		"completion_count": _history_count(
+				CompleteSquadronActivationCommand.TYPE),
+		"completion_inspection_id": completion_inspection_id,
+		"decline_inspection_id": decline_inspection_id,
+		"composed_return_consumed_inspection":
+				not completion_inspection_id.is_empty() \
+				or not decline_inspection_id.is_empty(),
+		"child_inspection_consumed": not _counter_choice_accept \
+				or ((not completion_inspection_id.is_empty() \
+					and completion_inspection_id != "completed:attack:7") \
+				or (not decline_inspection_id.is_empty() \
+					and decline_inspection_id != "completed:attack:7")),
+		"original_activation_completed": original != null \
+				and original.activated_this_round,
+		"enclosing_flow_type": int(state.interaction_flow.flow_type) \
+				if state.interaction_flow != null else -1,
+		"enclosing_step_id": int(state.interaction_flow.step_id) \
+				if state.interaction_flow != null else -1,
+		"terminal_count": _history_terminal_publication_count(),
+		"cursor": CommandProcessor.get_next_sequence(),
+	}
+
+
+func _history_terminal_publication_count() -> int:
+	var count: int = 0
+	for command: GameCommand in CommandProcessor.get_history():
+		if command.command_type == "publish_attack_flow" \
+				and bool(command.payload.get("final", false)):
+			count += 1
+	return count
+
+
+func _counter_choice_label() -> String:
+	return "%s-%s" % [
+		"destroyed" if _counter_destroyed else "surviving",
+		"accept" if _counter_choice_accept else "decline",
+	]
+
+
 func _history_has(command_type: String) -> bool:
 	for command: GameCommand in CommandProcessor.get_history():
 		if command.command_type == command_type:
@@ -2213,6 +3044,14 @@ func _on_game_starting() -> void:
 			_bug070_071_step = 4 if _scenario == "bug070_gather" else 5
 			call_deferred("_enter_game_board")
 		return
+	if _scenario == "counter_release" and _role in ["host", "client"]:
+		_host_fresh_live = true
+		call_deferred("_enter_game_board")
+		return
+	if _scenario == "bug072_attack_flow" and _role in ["host", "client"]:
+		_host_fresh_live = true
+		call_deferred("_enter_game_board")
+		return
 	_finish(true, "published")
 
 
@@ -2224,6 +3063,10 @@ func _finish(ok: bool, reason: String) -> void:
 	if _finish_started:
 		return
 	_finish_started = true
+	if _scenario == "counter_release" and _counter_evidence.is_empty() \
+			and GameManager.current_game_state != null:
+		_counter_evidence = _counter_release_snapshot(
+				GameManager.current_game_state)
 	var file := FileAccess.open(_shared.path_join(_evidence_file_name() + ".json"), FileAccess.WRITE)
 	if file != null:
 		file.store_string(JSON.stringify({"ok": ok, "reason": reason,
@@ -2246,6 +3089,8 @@ func _finish(ok: bool, reason: String) -> void:
 			"end_activation": _end_activation_evidence,
 			"bug043": _bug043_evidence,
 			"bug070_071": _bug070_071_evidence,
+			"counter_release": _counter_evidence,
+			"bug072": _bug072_evidence,
 			"compatibility": _compatibility}))
 	call_deferred("_shutdown_after_evidence", ok)
 
@@ -2299,6 +3144,11 @@ func _peer_evidence_path() -> String:
 	if _scenario in ["bug070_gather", "bug071_cf"]:
 		return _shared.path_join("%s-reconnect-%d.json" % [
 				_scenario, _mapping])
+	if _scenario == "counter_release":
+		return _shared.path_join("counter-%s-client-%d.json" % [
+				_counter_choice_label(), _mapping])
+	if _scenario == "bug072_attack_flow":
+		return _shared.path_join("bug072-client-%d.json" % _mapping)
 	if _scenario == "compatibility_network":
 		return _shared.path_join("compat-network-client.json")
 	if _scenario == "reconnect":
@@ -2307,6 +3157,11 @@ func _peer_evidence_path() -> String:
 
 
 func _evidence_file_name() -> String:
+	if _scenario == "counter_release":
+		return "counter-%s-%s-%d" % [
+				_counter_choice_label(), _role, _mapping]
+	if _scenario == "bug072_attack_flow":
+		return "bug072-%s-%d" % [_role, _mapping]
 	if _scenario in ["bug070_gather", "bug071_cf"]:
 		return "%s-%s-%d" % [_scenario, _role, _mapping]
 	if _scenario == "reconnect":

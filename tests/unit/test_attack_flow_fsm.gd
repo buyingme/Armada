@@ -186,7 +186,7 @@ func test_critical_to_resolve_is_illegal() -> void:
 # end() behaviour
 # ---------------------------------------------------------------------------
 
-func test_end_clears_interaction_flow() -> void:
+func test_end_leaves_canonical_flow_for_command_owned_clear() -> void:
 	var fsm: AttackFlowFSM = AttackFlowFSM.new()
 	var gs: GameState = _make_state()
 	fsm.begin(gs, 0, 1, {})
@@ -194,10 +194,10 @@ func test_end_clears_interaction_flow() -> void:
 			Constants.InteractionFlow.ATTACK)
 	fsm.end(gs)
 	assert_eq(gs.interaction_flow.flow_type,
-			Constants.InteractionFlow.NONE,
-			"end() must clear interaction_flow back to NONE.")
+			Constants.InteractionFlow.ATTACK,
+			"end() must not preempt the source-scoped terminal command.")
 	assert_eq(gs.interaction_flow.step_id,
-			Constants.InteractionStep.NONE)
+			Constants.InteractionStep.ATTACK_DECLARE)
 
 
 func test_end_from_declare_is_legal() -> void:

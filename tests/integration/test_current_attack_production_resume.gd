@@ -1924,32 +1924,30 @@ func test_real_game_board_schedules_one_deterministic_continuation() -> void:
 
 	await get_tree().process_frame
 	assert_true(state.current_attack_state.is_inactive())
-	assert_eq(_history_types(), ["resolve_damage", "complete_attack"])
+	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
+			"publish_attack_flow"])
 	var panel: AttackSimPanel = board._target_selector.get_panel()
 	assert_true(panel.is_awaiting_result_confirmation(),
 			"Canonical completion should leave the resolved result visible.")
-	assert_eq(CommandProcessor.get_next_sequence(), 35)
+	assert_eq(CommandProcessor.get_next_sequence(), 36)
 
 	panel._on_confirm_pressed()
 	await get_tree().process_frame
 	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
-			"acknowledge_attack_result"])
-	assert_eq(CommandProcessor.get_next_sequence(), 36)
+			"publish_attack_flow", "acknowledge_attack_result"])
+	assert_eq(CommandProcessor.get_next_sequence(), 37)
 	assert_not_null(state.completed_attack_inspection,
 			"A derived second normal declaration retains the satisfied inspection "+
 			"until BeginAttackCommand consumes it.")
 	assert_true(state.completed_attack_inspection.is_satisfied())
-	assert_eq(state.interaction_flow.flow_type, Constants.InteractionFlow.ATTACK)
-	assert_eq(state.interaction_flow.step_id,
-			Constants.InteractionStep.ATTACK_DECLARE,
-			"Acknowledgement must rebuild the derived normal declaration, not "+
-			"leave the retired result flow installed.")
+	assert_eq(state.interaction_flow.flow_type, Constants.InteractionFlow.NONE,
+			"Inter-attack presentation must not install an ATTACK flow.")
 	assert_true(board._attack_executor.is_selecting(),
 			"The stale completed-result presentation must yield to the next legal "+
 			"normal-attack selection.")
 	await get_tree().process_frame
 	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
-			"acknowledge_attack_result"],
+			"publish_attack_flow", "acknowledge_attack_result"],
 			"Acknowledgement must not synthesize an unselected continuation.")
 	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"),
 			1, "Acknowledge Result must not repeat canonical attack completion.")
@@ -2724,8 +2722,8 @@ func test_save_load_reconstructs_inactive_step_six_continuation() -> void:
 	assert_eq(board._attack_executor._state.attacker_zone,
 			Constants.HullZone.FRONT)
 	assert_eq(board._attack_executor._state.attacked_squads.size(), 1)
-	assert_eq(restored.interaction_flow.step_id,
-			Constants.InteractionStep.ATTACK_DECLARE)
+	assert_eq(restored.interaction_flow.flow_type,
+			Constants.InteractionFlow.NONE)
 	assert_eq(CommandProcessor.get_next_sequence(), 41)
 	assert_true(_history_types().is_empty())
 	manager.delete_save(TEST_SAVE)
@@ -2797,7 +2795,7 @@ func test_post_ack_anti_squadron_projection_excludes_history_target() -> void:
 	assert_false(_history_types().has("skip_attack"),
 			"A remaining legal target must not introduce an unrelated continuation command.")
 
-	_resolve_active_unopposed_attack(1)
+	_resolve_active_unopposed_attack(1, board)
 	var second_inspection: CompletedAttackInspection = state.completed_attack_inspection
 	assert_not_null(second_inspection)
 	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(1, {
@@ -2895,8 +2893,8 @@ func test_post_ack_anti_squadron_voluntary_finish_closes_child_and_recovers_ship
 	assert_eq(attacker.committed_attack_count, 1)
 	assert_eq(attacker.used_attack_hull_zones, [int(Constants.HullZone.FRONT)])
 	assert_eq(_history_activation_step_count("maneuver_step"), 0)
-	assert_eq(state.interaction_flow.step_id,
-			Constants.InteractionStep.ATTACK_DECLARE)
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.NONE)
 	assert_true(board._attack_executor.is_selecting(),
 			"The enclosing Ship Attack must recover its remaining declaration.")
 	var selector: TargetSelector = board._target_selector
@@ -2994,8 +2992,8 @@ func test_post_ack_anti_squadron_exhaustion_recovers_normal_ship_attack() -> voi
 	assert_null(state.completed_attack_inspection)
 	assert_eq(state.get_ship(1, 0).anti_squadron_attack_zone, -1)
 	await get_tree().process_frame
-	assert_eq(state.interaction_flow.step_id,
-			Constants.InteractionStep.ATTACK_DECLARE)
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.NONE)
 	assert_true(board._attack_executor.is_selecting(),
 			"The enclosing Ship Attack must recover its legal normal declaration.")
 	assert_false(board._attack_executor.is_target_selecting(),
@@ -3270,8 +3268,8 @@ func test_save_load_reconstructs_inactive_second_normal_attack() -> void:
 	assert_eq(board._attack_executor._state.fired_zones,
 			[Constants.HullZone.FRONT])
 	assert_eq(board._attack_executor._state.current_attack, 1)
-	assert_eq(restored.interaction_flow.step_id,
-			Constants.InteractionStep.ATTACK_DECLARE)
+	assert_eq(restored.interaction_flow.flow_type,
+			Constants.InteractionFlow.NONE)
 	assert_eq(CommandProcessor.get_next_sequence(), 43)
 	assert_true(_history_types().is_empty())
 	manager.delete_save(TEST_SAVE)
@@ -3370,7 +3368,11 @@ func test_reconnect_reconstructs_inactive_step_six_continuation() -> void:
 	assert_eq(board._attack_executor._state.attacker_zone,
 			Constants.HullZone.FRONT)
 	assert_eq(board._attack_executor._state.attacked_squads.size(), 1)
-	assert_eq(client_state.interaction_flow.controller_player, 1)
+	var intent: UIProjector.UIIntent = UIProjector.project(client_state, 1)
+	assert_eq(intent.controller_player, 1)
+	assert_true(intent.is_interactive)
+	assert_eq(client_state.interaction_flow.flow_type,
+			Constants.InteractionFlow.NONE)
 	assert_eq(CommandProcessor.get_next_sequence(), 45)
 	assert_true(_history_types().is_empty())
 
@@ -3398,7 +3400,11 @@ func test_reconnect_reconstructs_inactive_second_normal_attack() -> void:
 	assert_eq(board._attack_executor._state.fired_zones,
 			[Constants.HullZone.FRONT])
 	assert_eq(board._attack_executor._state.current_attack, 1)
-	assert_eq(client_state.interaction_flow.controller_player, 1)
+	var intent: UIProjector.UIIntent = UIProjector.project(client_state, 1)
+	assert_eq(intent.controller_player, 1)
+	assert_true(intent.is_interactive)
+	assert_eq(client_state.interaction_flow.flow_type,
+			Constants.InteractionFlow.NONE)
 	assert_eq(CommandProcessor.get_next_sequence(), 47)
 	assert_true(_history_types().is_empty())
 
@@ -3728,15 +3734,13 @@ func test_live_remaining_attack_skip_projects_same_maneuver_boundary() -> void:
 	assert_true(panel.skip_attack_pressed.is_connected(
 			Callable(board._attack_executor, "_on_attack_skip")),
 			"Reconstructed continuation must wire the usable Skip intent.")
-	var used_zone_candidate: Dictionary = {}
-	for candidate: Dictionary in \
-			TargetingListBuilder.authoritative_ship_target_entries(state, 1, 0):
-		if int(candidate.get("attacker_zone", -1)) \
-				== int(Constants.HullZone.FRONT):
-			used_zone_candidate = candidate
-			break
+	var candidates: Array[Dictionary] = \
+			TargetingListBuilder.authoritative_ship_target_entries(state, 1, 0)
+	var used_zone_candidate: Dictionary = candidates[0].duplicate(true) \
+			if not candidates.is_empty() else {}
+	used_zone_candidate["attacker_zone"] = int(Constants.HullZone.FRONT)
 	assert_false(used_zone_candidate.is_empty(),
-			"The fixture must expose a forged candidate from the used hull zone.")
+			"The fixture must expose a candidate that can be forged to the used zone.")
 	var second_begin: Dictionary = CommandProcessor.submit(
 			BeginAttackCommand.new(1, {
 				"attacker_player": 1,
@@ -4441,6 +4445,36 @@ func test_dial_commanded_attack_acknowledgement_retains_legal_move_interaction()
 	assert_false(board._attack_executor.is_active())
 
 
+func test_counter_child_acknowledgement_exposes_move_with_j_pending() \
+		-> void:
+	var state: GameState = _satisfied_inactive_counter_child_commanded_state()
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	assert_true(state.has_legal_remaining_squadron_move_action(squadron))
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 75))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+
+	assert_eq(_history_types(), [AcknowledgeAttackResultCommand.TYPE])
+	assert_not_null(state.completed_attack_inspection)
+	assert_true(state.completed_attack_inspection.is_satisfied())
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_true(modal.visible)
+	assert_true(modal._move_button.visible)
+	assert_true(modal._skip_button.visible)
+	assert_false(modal._skip_button.disabled)
+	assert_false(squadron.activated_this_round)
+	assert_false(board._attack_executor.is_active())
+
+
 func test_live_commanded_attack_lethal_last_non_heavy_engager_recovers_move() \
 		-> void:
 	var state: GameState = _live_commanded_squadron_attack_state(true)
@@ -4465,7 +4499,7 @@ func test_live_commanded_attack_lethal_last_non_heavy_engager_recovers_move() \
 	assert_true(state.current_attack_state.active)
 	assert_eq(_command_count(CommandProcessor.get_history(), "begin_attack"), 1)
 
-	_resolve_active_unopposed_attack(0)
+	_resolve_active_unopposed_attack(0, board)
 	assert_true(defender.is_destroyed(),
 			"The live attack must destroy the last nearby non-Heavy engager.")
 	var inspection: CompletedAttackInspection = state.completed_attack_inspection
@@ -4510,7 +4544,7 @@ func test_live_commanded_attack_nonlethal_retained_engagement_completes_once() \
 	board._target_selector.get_panel()._on_confirm_pressed()
 	assert_true(state.current_attack_state.active)
 
-	_resolve_active_unopposed_attack(0)
+	_resolve_active_unopposed_attack(0, board)
 	assert_false(defender.is_destroyed())
 	var inspection: CompletedAttackInspection = state.completed_attack_inspection
 	assert_not_null(inspection)
@@ -5098,13 +5132,15 @@ func test_live_authority_resume_drains_one_deterministic_terminal_chain() -> voi
 
 	assert_true(executor.resume_live_progression(plan))
 	assert_true(state.current_attack_state.is_inactive())
-	assert_eq(CommandProcessor.get_next_sequence(), 19)
-	assert_eq(_history_types(), ["resolve_damage", "complete_attack"])
+	assert_eq(CommandProcessor.get_next_sequence(), 20)
+	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
+			"publish_attack_flow"])
 	assert_false(_history_types().has("begin_attack"))
 	assert_false(executor.resume_live_progression(plan),
 			"A repeated resume plan must not submit duplicate terminal commands.")
-	assert_eq(CommandProcessor.get_next_sequence(), 19)
-	assert_eq(_history_types(), ["resolve_damage", "complete_attack"])
+	assert_eq(CommandProcessor.get_next_sequence(), 20)
+	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
+			"publish_attack_flow"])
 
 
 func _network_roll_context(commit_cf_token: bool = false) -> Dictionary:
@@ -5690,6 +5726,39 @@ func _satisfied_inactive_commanded_attack_state(
 	return state
 
 
+func _satisfied_inactive_counter_child_commanded_state() -> GameState:
+	var state: GameState = _satisfied_inactive_commanded_attack_state(true)
+	var previous: CompletedAttackInspection = state.completed_attack_inspection
+	for principal_id: String in previous.required_principal_ids():
+		assert_true(state.acknowledge_completed_attack_inspection(
+				previous.inspection_id(), principal_id))
+	assert_true(state.consume_completed_attack_inspection(
+			previous.inspection_id()))
+	var principals: Array[String] = \
+			state.get_distinct_controlling_principal_ids(
+					MatchPlayerControlBinding.KIND_HUMAN)
+	var inspection: CompletedAttackInspection = \
+			CompletedAttackInspection.deserialize({
+				"inspection_id": "completed:counter-child-commanded",
+				"source_attack_id": "counter-child-commanded",
+				"attacker": {"kind": CurrentAttackState.KIND_SQUADRON,
+						"player": 1, "index": 0, "zone": -1},
+				"defender": {"kind": CurrentAttackState.KIND_SQUADRON,
+						"player": 0, "index": 0, "zone": -1},
+				"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER,
+				"dice_results": [_hit_die()],
+				"outcome": {"target_kind": CurrentAttackState.KIND_SQUADRON,
+						"requested_hull_damage": 1, "actual_hull_damage": 1,
+						"post_resolution_hull": 4, "destroyed": false},
+				"required_principal_ids": principals,
+				"received_principal_ids": [],
+			})
+	assert_not_null(inspection)
+	assert_true(state.install_completed_attack_inspection(inspection))
+	assert_true(state.validate_declaration_adjacent_state())
+	return state
+
+
 ## Starts before Begin and resolves through the ordinary live attack path.  The
 ## lethal variant removes the only nearby non-Heavy engager; the retained
 ## control keeps that engager alive so canonical Move legality diverges only
@@ -5835,6 +5904,10 @@ func _inactive_ship_continuation_state(step_six: bool) -> GameState:
 				CurrentAttackState.KIND_SQUADRON,
 				0)
 	else:
+		# Keep an unused-zone target legal so this fixture represents the
+		# accepted second-hull-zone inter-attack decision.
+		state.get_ship(0, 0).pos_x = 0.65
+		state.get_ship(0, 0).pos_y = 0.42
 		attacker.commit_attack(
 				Constants.HullZone.FRONT,
 				0,
@@ -5955,9 +6028,13 @@ func _history_activation_step_count(step_id: String) -> int:
 	return count
 
 
-func _resolve_active_unopposed_attack(attacker_player: int) -> void:
+func _resolve_active_unopposed_attack(attacker_player: int,
+		board: GameBoard) -> void:
 	var state: GameState = GameManager.current_game_state
 	var attack_id: String = state.current_attack_state.attack_id
+	var executor: AttackExecutor = board._attack_executor
+	if executor._flow_fsm.current_step == AttackFlowFSM.Step.DECLARE:
+		assert_true(executor._flow_fsm.advance(null, AttackFlowFSM.Step.ROLL))
 	assert_false(CommandProcessor.submit(RollDiceCommand.new(attacker_player, {
 		"attack_id": attack_id,
 	})).is_empty())

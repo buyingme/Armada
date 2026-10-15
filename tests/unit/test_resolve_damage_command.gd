@@ -513,21 +513,27 @@ func test_remote_damage_target_resolution_uses_authoritative_result() -> void:
 	var squadron_index: int = _add_squadron(1)
 	var previous_state: GameState = GameManager.current_game_state
 	GameManager.current_game_state = _state
+	var command := ResolveDamageCommand.new(0, {})
 
-	assert_same(GameManager._find_ship_from_damage_result({
+	var resolved_ship: Dictionary = GameManager \
+			._resolve_remote_ship_damage_presentation(command, {
 		"owner_player": 1,
 		"ship_index": ship_index,
-	}), _state.get_ship(1, ship_index),
+	})
+	assert_same(resolved_ship.get("ship"), _state.get_ship(1, ship_index),
 			"Remote ship identity must come from the authoritative result")
 	assert_same(GameManager._find_squadron_from_damage_result({
 		"owner_player": 1,
 		"squadron_index": squadron_index,
 	}), _state.get_squadron(1, squadron_index),
 			"Remote squadron identity must come from the authoritative result")
-	assert_null(GameManager._find_ship_from_damage_result({
+	var wrong_ship: Dictionary = GameManager \
+			._resolve_remote_ship_damage_presentation(command, {
 		"owner_player": 0,
 		"ship_index": ship_index,
-	}), "A result cannot resolve a target under the wrong authoritative owner")
+	})
+	assert_true(wrong_ship.is_empty(),
+			"A result cannot resolve a target under the wrong authoritative owner")
 
 	GameManager.current_game_state = previous_state
 

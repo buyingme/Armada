@@ -957,6 +957,46 @@ func test_inactive_individual_attack_preserves_authoritative_ship_continuation()
 	assert_eq(mirror.close_calls, 1)
 
 
+func test_accepted_counter_parent_blocks_early_enclosing_action_recovery() -> void:
+	var router := MODAL_ROUTER_SCRIPT.new() as ModalRouter
+	add_child_autofree(router)
+	var state := GameState.new()
+	state.initialize()
+	var inspection := CompletedAttackInspection.deserialize({
+		"inspection_id": "completed:attack:parent",
+		"source_attack_id": "attack:parent",
+		"attacker": {"kind": CurrentAttackState.KIND_SQUADRON,
+			"player": 0, "index": 0, "zone": -1},
+		"defender": {"kind": CurrentAttackState.KIND_SQUADRON,
+			"player": 1, "index": 0, "zone": -1},
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"dice_results": [],
+		"outcome": {"target_kind": CurrentAttackState.KIND_SQUADRON,
+			"requested_hull_damage": 3, "actual_hull_damage": 3,
+			"post_resolution_hull": 0, "destroyed": true},
+		"required_principal_ids": ["principal:0", "principal:1"],
+		"received_principal_ids": ["principal:0", "principal:1"],
+	})
+	assert_not_null(inspection)
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
+			1, Constants.Visibility.ALL, {
+				"attack_id": "attack:parent",
+				CounterKeyword.PAYLOAD_AVAILABLE: true,
+				"counter_choice_accepted": true,
+				"counter_attacker_player": 1,
+				"counter_attacker_squadron_index": 0,
+				"counter_target_player": 0,
+				"counter_target_squadron_index": 0,
+			})
+
+	assert_true(router._has_pending_accepted_counter_child(state, inspection))
+	state.interaction_flow.payload["counter_target_player"] = 0.0
+	assert_false(router._has_pending_accepted_counter_child(state, inspection),
+			"Malformed parent identity must not create a presentation fallback.")
+
+
 func _create_router(command_reaction_fn: Callable,
 		ship_activation_controller: ShipActivationController = null,
 		displacement_controller: DisplacementController = null,

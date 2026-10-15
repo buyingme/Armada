@@ -129,22 +129,65 @@ func test_counter_trigger_rejects_counter_attack() -> void:
 
 func test_counter_roll_validator_allows_locked_counter_pool() -> void:
 	var state: GameState = _state_with_counter_roll({"BLUE": 2})
-	var command := RollDiceCommand.new(1, _counter_roll_payload({"blue": 2}))
+	var command := RollDiceCommand.new(1, {"attack_id": "attack:12"})
 	var result: Dictionary = CounterKeyword.new().validate_counter_roll(
 			state, command)
 	assert_true(bool(result.get("allowed", false)),
-			"Counter 2 should allow exactly two blue dice.")
+			"Counter 2 should derive exactly two blue dice from canonical state.")
 
 
 func test_counter_roll_validator_rejects_normal_interceptor_pool() -> void:
 	var state: GameState = _state_with_counter_roll({"BLUE": 2})
-	var command := RollDiceCommand.new(1, _counter_roll_payload({"BLUE": 4}))
+	var attack: CurrentAttackState = state.current_attack_state.with_patch({
+		"dice_pool": {"BLUE": 4},
+	})
+	assert_not_null(attack)
+	assert_true(state.set_current_attack_state(attack))
+	var command := RollDiceCommand.new(1, {"attack_id": "attack:12"})
 	var result: Dictionary = CounterKeyword.new().validate_counter_roll(
 			state, command)
 	assert_false(bool(result.get("allowed", true)),
 			"Counter should reject the Interceptor's normal four-blue pool.")
 	assert_eq(str(result.get("reason", "")), CounterKeyword.REJECTION_REASON,
 			"Counter rejection should explain the locked dice-pool rule.")
+
+
+func test_counter_roll_validator_rejects_stale_attack_identity() -> void:
+	var state: GameState = _state_with_counter_roll({"BLUE": 2})
+	var command := RollDiceCommand.new(1, {"attack_id": "attack:stale"})
+	var result: Dictionary = CounterKeyword.new().validate_counter_roll(
+			state, command)
+	assert_false(bool(result.get("allowed", true)),
+			"Counter Roll should reject a stale child attack identity.")
+
+
+func test_counter_roll_validator_rejects_non_controller() -> void:
+	var state: GameState = _state_with_counter_roll({"BLUE": 2})
+	var command := RollDiceCommand.new(0, {"attack_id": "attack:12"})
+	var result: Dictionary = CounterKeyword.new().validate_counter_roll(
+			state, command)
+	assert_false(bool(result.get("allowed", true)),
+			"Counter Roll should belong only to its canonical attacker.")
+
+
+func test_counter_roll_validator_rejects_projection_source_mismatch() -> void:
+	var state: GameState = _state_with_counter_roll({"BLUE": 2})
+	state.interaction_flow.payload["attack_id"] = "attack:stale"
+	var command := RollDiceCommand.new(1, {"attack_id": "attack:12"})
+	var result: Dictionary = CounterKeyword.new().validate_counter_roll(
+			state, command)
+	assert_false(bool(result.get("allowed", true)),
+			"Counter Roll should require a source-scoped child projection.")
+
+
+func test_counter_roll_validator_rejects_projection_participant_mismatch() -> void:
+	var state: GameState = _state_with_counter_roll({"BLUE": 2})
+	state.interaction_flow.payload["target_squadron_index"] = 1
+	var command := RollDiceCommand.new(1, {"attack_id": "attack:12"})
+	var result: Dictionary = CounterKeyword.new().validate_counter_roll(
+			state, command)
+	assert_false(bool(result.get("allowed", true)),
+			"Counter Roll should preserve its locked canonical participants.")
 
 
 func test_swarm_reroll_command_updates_flow_payload() -> void:
@@ -260,6 +303,17 @@ func _state_with_counter_roll(dice_pool: Dictionary) -> GameState:
 	state.current_phase = Constants.GamePhase.SQUADRON
 	_add_counter_squadron(state, 1, 2)
 	_add_squadron(state, 0, [], 0.55, 0.50)
+	assert_not_null(CurrentAttackFixture.install(state, {
+		"attack_id": "attack:12",
+		"attacker_player": 1,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"attacker_index": 0,
+		"defender_player": 0,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_index": 0,
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER,
+		"dice_pool": dice_pool,
+	}), "Fixture should install the canonical Counter child")
 	state.interaction_flow = _counter_roll_flow(dice_pool)
 	return state
 
@@ -395,6 +449,7 @@ func _counter_roll_flow(dice_pool: Dictionary) -> InteractionFlow:
 
 func _counter_roll_payload(dice_pool: Dictionary) -> Dictionary:
 	return {
+		"attack_id": "attack:12",
 		"attacker_kind": "squadron",
 		"target_kind": "squadron",
 		"attacker_player": 1,

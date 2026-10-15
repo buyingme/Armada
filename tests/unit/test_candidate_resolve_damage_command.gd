@@ -307,6 +307,11 @@ func test_v2_ship_damage_projects_canonical_shield_loss_and_feedback_event() -> 
 			"Presentation must not widen the accepted v2 result schema")
 	var executor := PresentationAttackExecutor.new()
 	add_child_autofree(executor)
+	executor._flow_fsm.begin(null, 0, 1, {"attack_id": "attack:70"})
+	assert_true(executor._flow_fsm.advance(null, AttackFlowFSM.Step.ROLL))
+	assert_true(executor._flow_fsm.advance(null, AttackFlowFSM.Step.MODIFY))
+	assert_true(executor._flow_fsm.advance(
+			null, AttackFlowFSM.Step.DEFENSE_TOKENS))
 	watch_signals(EventBus)
 
 	executor.apply_damage_result(result)

@@ -325,14 +325,35 @@ func test_filter_hides_player_0_secrets_from_player_1() -> void:
 
 func test_canary_rng_seed_never_appears_in_filtered_output() -> void:
 	var state: Dictionary = _make_game_state()
-	state["rng"]["initial_seed"] = 123456789
-	state["rng"]["state"] = 987654321
-	var filtered: Dictionary = StateFilter.filter_for_player(state, 0)
+	state["rng"]["initial_seed"] = "5975857563556095516"
+	state["rng"]["state"] = "-7473184280779029157"
+	var result: Dictionary = StateFilter.filter_for_player_checked(state, 0)
+	assert_true(bool(result.get(StateFilter.KEY_OK, false)))
+	var filtered: Dictionary = result.get(
+			StateFilter.KEY_STATE, {}) as Dictionary
+	assert_false(filtered.is_empty(),
+			"The canary must exercise a successful non-empty filtered state.")
+	assert_false(filtered.has("rng"),
+			"The complete RNG member must be absent from passive state.")
 	var json: String = JSON.stringify(filtered)
-	assert_false(json.contains("123456789"),
+	assert_false(json.contains("5975857563556095516"),
 			"RNG seed canary must not appear in filtered JSON")
-	assert_false(json.contains("987654321"),
+	assert_false(json.contains("-7473184280779029157"),
 			"RNG state canary must not appear in filtered JSON")
+
+
+func test_passive_deserialization_rejects_any_rng_member() -> void:
+	var result: Dictionary = StateFilter.filter_for_player_checked(
+			_make_game_state(), 0)
+	assert_true(bool(result.get(StateFilter.KEY_OK, false)))
+	var filtered: Dictionary = (result.get(
+			StateFilter.KEY_STATE, {}) as Dictionary).duplicate(true)
+	assert_false(filtered.is_empty())
+	filtered["rng"] = {
+		"initial_seed": "5975857563556095516",
+		"state": "-7473184280779029157",
+	}
+	assert_null(GameState.deserialize_passive_network(filtered))
 
 
 func test_canary_draw_pile_card_never_in_filtered_output() -> void:

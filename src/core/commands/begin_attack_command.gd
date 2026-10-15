@@ -441,6 +441,17 @@ func _validate_counter_identity(game_state: GameState,
 			or flow.step_id != Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
 			or not bool(flow.payload.get("counter_choice_accepted", false)):
 		return "No accepted Counter attack is pending."
+	var inspection_id: String = str(payload.get(
+			"completed_attack_inspection_id", ""))
+	var inspection: CompletedAttackInspection = \
+			game_state.completed_attack_inspection
+	if inspection == null or inspection_id.is_empty() \
+			or inspection.inspection_id() != inspection_id \
+			or not inspection.is_satisfied() \
+			or typeof(flow.payload.get("attack_id")) != TYPE_STRING \
+			or inspection.source_attack_id() \
+					!= str(flow.payload.get("attack_id", "")):
+		return "Counter parent inspection does not match the accepted choice."
 	var expected: Dictionary = {
 		"counter_attacker_player": int(payload.get("attacker_player", -1)),
 		"counter_attacker_squadron_index": int(payload.get("attacker_index", -1)),

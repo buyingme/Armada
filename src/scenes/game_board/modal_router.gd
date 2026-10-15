@@ -180,6 +180,8 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 		return
 	if _recover_commanded_squadron_remaining_action(game_state):
 		return
+	if _drive_inter_attack_continuation(intent):
+		return
 	_drive_tarkin_choice_modal(intent)
 	_drive_ecm_ready_cost_modal(intent)
 	_drive_displacement_modal(intent, command)
@@ -189,6 +191,15 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 	_drive_current_attack_dice(intent.attack_dice_results)
 	_drive_timing_window_panel(intent.timing_window)
 	_apply_activation_affordances(intent)
+
+
+func _drive_inter_attack_continuation(intent: UIProjector.UIIntent) -> bool:
+	if intent.inter_attack_continuation.is_empty() \
+			or _attack_panel_controller == null:
+		return false
+	_attack_panel_controller.sync_inactive_ship_attack_continuation(
+			intent.inter_attack_continuation)
+	return true
 
 
 func _drive_faceup_damage_inspection(intent: UIProjector.UIIntent,
@@ -237,6 +248,12 @@ func _recover_commanded_squadron_remaining_action(game_state: GameState) -> bool
 			game_state.completed_attack_inspection
 	if inspection == null or not inspection.is_satisfied():
 		return false
+	# An accepted Counter parent inspection releases the authoritative child
+	# Begin; it does not release the enclosing Squadron activation.  Network
+	# mirrors can observe the ordered interval between the final parent
+	# acknowledgement and child Begin, so keep that parent projection dominant.
+	if _has_pending_accepted_counter_child(game_state, inspection):
+		return false
 	var attack: CurrentAttackState = game_state.current_attack_state
 	if attack != null and attack.active:
 		return false
@@ -248,6 +265,33 @@ func _recover_commanded_squadron_remaining_action(game_state: GameState) -> bool
 		return false
 	return _ship_activation_controller.restore_command_squadron_activation(
 			squadron, false)
+
+
+func _has_pending_accepted_counter_child(game_state: GameState,
+		inspection: CompletedAttackInspection) -> bool:
+	if game_state == null or inspection == null or not inspection.is_satisfied():
+		return false
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK \
+			or flow.step_id != Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
+			or not bool(flow.payload.get("counter_choice_accepted", false)) \
+			or not bool(flow.payload.get(
+					CounterKeyword.PAYLOAD_AVAILABLE, false)):
+		return false
+	var source_attack_id: Variant = flow.payload.get("attack_id")
+	if typeof(source_attack_id) != TYPE_STRING \
+			or str(source_attack_id).is_empty() \
+			or inspection.source_attack_id() != str(source_attack_id):
+		return false
+	for key: String in [
+		"counter_attacker_player",
+		"counter_attacker_squadron_index",
+		"counter_target_player",
+		"counter_target_squadron_index",
+	]:
+		if typeof(flow.payload.get(key)) != TYPE_INT:
+			return false
+	return true
 
 
 ## A pending canonical result is presentation precedence over any stale Attack

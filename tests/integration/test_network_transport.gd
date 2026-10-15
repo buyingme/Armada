@@ -271,8 +271,8 @@ func test_harness_make_handshake_uses_defaults() -> void:
 			"Default client_id should be 'test-uuid'.")
 	assert_eq(hs["display_name"], "TestPlayer",
 			"Default display name should be 'TestPlayer'.")
-	assert_eq(hs["protocol_version"], 10,
-			"BUG-070 / BUG-071 cut over transport negotiation to protocol 10.")
+	assert_eq(hs["protocol_version"], 11,
+			"Attack lifecycle and damage presentation cut over transport negotiation to protocol 11.")
 
 
 func test_protocol_three_handshake_is_not_compatible_with_cutover() -> void:
@@ -291,7 +291,7 @@ func test_protocol_three_handshake_is_not_compatible_with_cutover() -> void:
 	var previous_protocol: Dictionary = harness.make_handshake(9)
 	assert_ne(previous_protocol["protocol_version"],
 			NetworkManager.PROTOCOL_VERSION,
-			"Protocol 9 peers must be rejected by the protocol-10 cutover.")
+			"Older peers must be rejected by the protocol-11 cutover.")
 
 
 func test_harness_make_handshake_custom_values() -> void:

@@ -856,6 +856,23 @@ Backfill according to:
 
 When an existing capability is materially changed, appropriate GGS coverage should normally be added.
 
+### Deferred assurance backlog — BUG-074 Counter variations
+
+By Owner decision on 2026-10-15, three additional Owner-recorded Counter
+histories formerly required by the Network attack-flow implementation workbook
+are deferred for future GGS assurance consideration:
+
+- surviving Counter attacker — Accept through composed return;
+- surviving Counter attacker — Decline through enclosing return; and
+- triggering-attack-destroyed Counter attacker — Decline through enclosing
+  return.
+
+The destroyed-attacker Accept path remains preserved as an Owner-recorded
+Replay-12 history under BUG-074. This backlog entry does not authorize
+GGS-001 Gate 2, does not make these histories GGS Candidates, and does not
+establish that GGS replaces Replay-12 assurance. Any future coverage mechanism
+and artifact still requires its applicable Owner gate and authority.
+
 ## Stage 8 — UI Flow pilot
 
 Choose a small number of high-value UICs.

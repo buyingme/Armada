@@ -15,6 +15,7 @@ distinct defects:
 Primary evidence:
 
 - [Network mapping-1 stale attack-flow diagnosis](../evidence/network-mapping-1-stale-attack-flow-diagnosis.md)
+- [Counter parent-identity Save-10 round-trip resolution](../evidence/counter-parent-identity-save10-roundtrip-resolution.md)
 - [Preserved independent adversarial audit](../evidence/network-attack-flow-lifecycle-and-remote-damage-presentation-repair-workbook-audit.md)
 - [Preserved targeted closure audit](../evidence/network-attack-flow-lifecycle-and-remote-damage-presentation-repair-workbook-closure-audit.md)
 
@@ -38,10 +39,15 @@ Binding authority, in precedence order:
    rejection, atomic failure, derived flow, replay, and Network mirroring;
 2. accepted [CON-007](../contracts/CON-007-post-attack-continuation-release-contract.md)
    for completed-result inspection release into existing enclosing owners;
-3. accepted [ADR-011](../adr/ADR-011-network-match-resume-and-principal-entitlement.md)
+3. accepted [Counter Attack gameplay-interaction requirements](../../requirements/gameplay_interactions/counter_attack_interaction.md)
+   for locked child entry and composed return to the original activated
+   Squadron, and accepted [ADR-010](../adr/ADR-010-gameplay-interaction-decision-equivalent-recovery.md)
+   for equivalent recoverable decision semantics with transient,
+   non-authoritative presentation;
+4. accepted [ADR-011](../adr/ADR-011-network-match-resume-and-principal-entitlement.md)
    for endpoint/principal/player-side separation during resume and
    reassociation; and
-4. accepted [ADR-012](../adr/ADR-012-live-network-rng-authority-and-result-application.md)
+5. accepted [ADR-012](../adr/ADR-012-live-network-rng-authority-and-result-application.md)
    for command-owned result application and the prohibition on presentation
    or transport becoming a canonical mutation owner.
 
@@ -95,6 +101,27 @@ state.
 Entry status: implementation may begin only after a targeted independent
 closure audit and Project Owner acceptance. This revised draft authorizes no
 production, test, fixture, version, or baseline change by itself.
+
+### 1.3 Owner resolution of the Counter persistence STOP gate
+
+On 2026-10-09, the Project Owner retained the canonical invariant that Counter
+participant identity fields are integers and authorized one bounded correction
+at the existing `InteractionFlow.deserialize()` reconstruction boundary. For
+the four parent `ATTACK_COUNTER_CHOICE` payload fields
+`counter_attacker_player`, `counter_attacker_squadron_index`,
+`counter_target_player`, and `counter_target_squadron_index`, an integral,
+finite JSON number may be restored to the canonical integer type only when it
+is in range for that field. Missing, partial, fractional, boolean,
+non-numeric, non-finite, and out-of-range identity fails closed.
+
+This is canonical type restoration after the existing Save-10 JSON round trip,
+not a compatibility adapter, migration, missing-value default, or relaxation
+of command-time or continuation validation. Save remains format 10. Repository
+evidence confirms that the plain JSON-number serializer cannot retain the
+integer/float distinction without a broader schema change and that all save
+and passive-network reconstruction already pass through this existing
+deserialization boundary. The linked resolution evidence records the stopped
+failure and seam verification.
 
 ## 2. Fixed Defect Boundaries And Required Outcomes
 
@@ -239,9 +266,11 @@ required refinement is deferred.
 | --- | --- |
 | `src/autoload/game_manager.gd` central `submit_publish_attack_flow()` producer | Create protocol-11/replay-12 command payloads with required `source_attack_id`. For an applicable non-final post-Begin publication, snapshot the currently active canonical `CurrentAttackState.attack_id` once when constructing the command; copy it into the outgoing flow payload. Accept an explicitly preserved terminal source only for final clearing. Refuse/suppress no-active non-final publication. |
 | `src/autoload/game_manager.gd` reconstructed inspection release | When the existing reconstructed release evaluator returns the automatic accepted-Counter child Begin, submit it through the existing `submit_authoritative()` route, as with other authority-derived attack continuations, so host principal ownership of the child attacker is irrelevant. Do not broaden authoritative submission for player choices or ordinary inspection consumers. |
-| `src/autoload/command_processor.gd` | Add a narrow terminal-publication derivation to the existing post-success/observer-follow-up queue. It may derive only from an accepted attack-retiring command and its pre-execution ATTACK `flow_snapshot`; it copies that matching source into a final command, does not look up a later attack, and is independent of presentation callbacks. Add the exact completed-inspection and terminal-cleanup preflight exception in Section 6.4. Omit the terminal follow-up when an accepted parent `ATTACK_COUNTER_CHOICE` must survive for child Counter Begin. After the exact final acknowledgement satisfies that inspection, invoke the existing `CurrentAttackContinuation` evaluation and enqueue its child Begin through the same authoritative post-success queue. Live authority alone derives it; Network mirrors and replay do not. This is use of the existing ordered follow-up seam, not a new queue or lifecycle owner. |
-| `src/core/state/current_attack_continuation.gd` | Extend the existing completed-inspection release branch narrowly for an accepted Counter handoff. Require a satisfied inspection whose `source_attack_id` matches the installed parent-source `ATTACK_COUNTER_CHOICE`, require `counter_choice_accepted == true`, validate the recorded child participant identities against canonical Squadron state/targeting, and return exactly one `BeginAttackCommand` carrying the exact `completed_attack_inspection_id` plus the existing Counter declaration fields. It remains a stateless evaluator and submits nothing. Replay/passive modes retain the existing no-synthesis rule. |
-| `src/scenes/game_board/attack_executor.gd` | Route fresh Ship, Squadron, Counter, and reconstructed post-Begin publications through the central producer. Preserve the parent-source `ATTACK_COUNTER_CHOICE` through accepted choice, parent retirement, and inspection satisfaction. Suppress only the child Counter's premature pre-Begin live ATTACK write/publication. Remove semantic reliance on `apply_complete_attack_result()`/`command_executed` reentrantly submitting the child Begin. The accepted authoritative child Begin result may only rebuild/rebind child presentation from canonical state and trigger the already-authorized post-Begin source-scoped projection path; it must not submit a second Begin or publish before the Begin result's required Network ordering. Remove/suppress direct live-`GameState` ATTACK-flow restart/patch publication between attacks. Do not submit terminal publication from `command_executed`; scene/FSM cleanup observes command-owned clearing and performs no second canonical clear. Make inactive ship-continuation reconstruction render from canonical activation facts without assigning `GameState.interaction_flow`. |
+| `src/autoload/command_processor.gd` | Add a narrow terminal-publication derivation to the existing post-success/observer-follow-up queue. It may derive only from an accepted attack-retiring command and its pre-execution ATTACK `flow_snapshot`; it copies that matching source into a final command, does not look up a later attack, and is independent of presentation callbacks. Add the exact completed-inspection and terminal-cleanup preflight exception in Section 6.4. Omit the terminal follow-up when an accepted parent `ATTACK_COUNTER_CHOICE` must survive for child Counter Begin. After the exact final acknowledgement satisfies that inspection, invoke the existing `CurrentAttackContinuation` evaluation and enqueue its child Begin through the same authoritative post-success queue. For satisfied Counter-child inspection **J**, use the same CON-007 release seam and the bounded mapping in Section 6.7: expose a derived Move without consuming **J**, later admit the player-submitted authoritative Move or Move-decline as its atomic consumer, or queue the existing Squadron-completion consumer only when the activation is exhausted. Live authority alone derives automatic follow-ups; Network mirrors and replay do not. This is use of the existing ordered follow-up seam, not a new queue or lifecycle owner. |
+| `src/core/state/current_attack_continuation.gd` | Extend the existing completed-inspection release branch narrowly for an accepted Counter handoff. Require a satisfied inspection whose `source_attack_id` matches the installed parent-source `ATTACK_COUNTER_CHOICE`, require `counter_choice_accepted == true`, and validate the recorded child participant identities, Counter keyword, authoritative dice pool, and surviving Counter target against canonical Squadron state/targeting. Admit a destroyed Counter attacker only for that exact legally established child; do not relax generic destroyed-attacker validation. Return exactly one `BeginAttackCommand` carrying the exact `completed_attack_inspection_id` plus the existing Counter declaration fields. Also implement only the Section 6.7 Counter-child **J** mapping through the existing CON-007 continuation consumer and derived-decision mechanisms. It remains a stateless evaluator and submits nothing. Replay/passive modes retain the existing no-synthesis rule. |
+| `src/core/commands/begin_attack_command.gd` | For Counter child Begin only, extend the existing completed-inspection consumer and Counter-identity validation so the supplied exact satisfied parent inspection's `source_attack_id()` must equal the installed accepted parent `ATTACK_COUNTER_CHOICE.payload.attack_id`. Preserve the existing payload schema, exact participant/choice/rule validation, and fail-closed behavior. The same validation applies to an authority-derived live command and an explicit recorded replay command; neither path may trust derivation history as a substitute for command validation. Generic Begin and destroyed-unit validation remain unchanged. |
+| `src/core/state/interaction_flow.gd` | At the existing authoritative deserialization/reconstruction boundary only, restore the four parent `ATTACK_COUNTER_CHOICE` participant identity fields from exact, finite, in-range JSON numeric values to canonical integers. Reject missing, partial, fractional, boolean, non-numeric, non-finite, and out-of-range identity. Do not alter command-time or continuation exact-integer validation and do not add an adapter, migration, default, state field, or owner. |
+| `src/scenes/game_board/attack_executor.gd` | Route fresh Ship, Squadron, Counter, and reconstructed post-Begin publications through the central producer. Preserve the parent-source `ATTACK_COUNTER_CHOICE` through accepted choice, parent retirement, and inspection satisfaction. Suppress only the child Counter's premature pre-Begin live ATTACK write/publication. Remove semantic reliance on `apply_complete_attack_result()`/`command_executed` reentrantly submitting the child Begin. The accepted authoritative child Begin result may only rebuild/rebind child presentation from canonical state and trigger the already-authorized post-Begin source-scoped projection path; it must not submit a second Begin or publish before the Begin result's required Network ordering. For the exact active destroyed Counter child, uninterrupted gameplay may reuse its existing detached Squadron token. Save/load or reconnect must instead be able to construct a transient instance of the existing Squadron token type from exact canonical child identity and presentation facts. Either token remains detached from ordinary board lookup/selection, conveys no gameplay eligibility or authority, and is cleaned up deterministically when Counter presentation terminates or is reconstructed again; repeated reconstruction/reconnect leaves no duplicate or orphaned token. Remove/suppress direct live-`GameState` ATTACK-flow restart/patch publication between attacks. Do not submit terminal publication from `command_executed`; scene/FSM cleanup observes command-owned clearing and performs no second canonical clear. Make inactive ship-continuation reconstruction render from canonical activation facts without assigning `GameState.interaction_flow`. |
 | `src/core/commands/publish_attack_flow_command.gd` | Require exact new payload schema and source identity. Validate non-final source against active canonical attack. Validate final source against the currently installed ATTACK projection's source and absence of active replacement. Reject before mutation on every mismatch. Accepted execution remains projection-only. |
 | `src/core/combat/attack_flow_fsm.gd` | Narrow cleanup choreography is authorized so scene/FSM reset can occur after command-owned authoritative clearing without `end()` first clearing live `GameState`. It must not own, derive, validate, or queue lifecycle identity. |
 | `src/core/combat/attack_flow_executor.gd` | Verification only. Presentation identity patches need not become an authority source; the central producer supplies canonical source identity. |
@@ -249,7 +278,7 @@ required refinement is deferred.
 | `src/core/network/ui_projector.gd` | Before the current NONE-flow early return, derive a transient inter-attack selection/waiting intent from the unique active Ship activation and its existing attack-progress facts. The intent may identify the existing continuation kind/controller for rendering, but is not persisted, serialized, validated as gameplay, or exposed as ATTACK flow. |
 | `src/scenes/game_board/modal_router.gd` | Route the derived inter-attack intent on ordinary live reprojection and `reconstruct_presentation()`: local controller goes to the established attack-panel reconstruction seam; a noncontroller receives passive waiting presentation. Do not synthesize or submit a command. |
 | `src/scenes/game_board/attack_panel_controller.gd` | Consume the derived intent through the existing inactive ship-attack reconstruction methods. Render local next-squadron/next-hull-zone selection or remote waiting/closed controls without installing ATTACK flow and without selecting gameplay progression. |
-| `src/scenes/game_board/game_board.gd` | Restrict `_resume_active_attack_from_state()` and its early ready-sequence branch to a genuinely active `CurrentAttackState`. Do not call inactive direct attack reconstruction before the command router exists. After `_create_command_router_adapter()`, signal/viewer setup, phase/active-player projection, and declaration-adjacent restoration, include inactive canonical inter-attack decisions in the existing `_command_router_adapter.reconstruct_presentation()` pass. Preserve result/inspection precedence and invoke reconstructed authoritative continuation release only after presentation reconstruction. |
+| `src/scenes/game_board/game_board.gd` | Restrict `_resume_active_attack_from_state()` and its early ready-sequence branch to a genuinely active `CurrentAttackState`. Do not call inactive direct attack reconstruction before the command router exists. After `_create_command_router_adapter()`, signal/viewer setup, phase/active-player projection, and declaration-adjacent restoration, include inactive canonical inter-attack decisions in the existing `_command_router_adapter.reconstruct_presentation()` pass. Preserve result/inspection precedence and invoke reconstructed authoritative continuation release only after presentation reconstruction. At the existing presentation-node boundary, support creation and deterministic disposal/replacement of the transient existing-type detached Squadron token required to present an exact active destroyed Counter child after save/load or reconnect; never register it with ordinary board Squadron lookup/selection. |
 | `src/autoload/network_manager.gd` | Advance `PROTOCOL_VERSION` 10 → 11 and retain strict handshake mismatch rejection. Preserve the existing `submit_deferred_followups()` → trigger distribution → `_drain_server_observer_followups()` order for both remote-authored and host-authored commands; terminal publication must use that order. No protocol-10 adapter. |
 | `src/core/commands/game_replay.gd` | Advance `FORMAT_VERSION` and `SIGNED_FORMAT_VERSION` 11 → 12 and retain strict current-format loading. No replay-11 publication backfill or migration. |
 
@@ -316,7 +345,21 @@ Counter has this exact lifecycle:
    rebuild the child panel but cannot resubmit Begin; and
 12. any delayed or manually delivered terminal clear for **P** now rejects
    unchanged because child **C** is active and/or the installed ATTACK source
-   is **C**.
+   is **C**;
+13. after child **C** completes and exact-ID acknowledgements satisfy its
+   completed-result inspection **J**, the existing CON-007 release seam
+   re-evaluates the unique live original Squadron activation identified by
+   **J**'s defender, not the Counter child attacker;
+14. if Move remains legal, **J** stays pending while the derived Move decision
+   is live and is consumed atomically only by the authoritative Move or
+   explicit Move-decline transaction. If no legal action remains, the existing
+   authoritative Squadron-completion transaction consumes **J** atomically;
+   and
+15. verification continues through that Squadron activation and any existing
+   Squadron Phase or Squadron Command/Ship Activation owners until the next
+   canonical stable state or live legal decision. Child completion, terminal
+   publication, or a satisfied **J** without the correctly derived live Move
+   decision is not a successful Counter-acceptance endpoint.
 
 Declined Counter follows ordinary parent completion/terminal behavior after the
 choice result removes the pending child handoff. This distinction adds no
@@ -526,9 +569,10 @@ when all of the following hold simultaneously:
    `payload.attack_id`;
 4. that projection is exactly `ATTACK_COUNTER_CHOICE` with
    `counter_choice_accepted == true`;
-5. its four recorded Counter participant fields identify two existing,
-   non-destroyed canonical Squadrons in the accepted reversed attacker/target
-   roles; and
+5. its four recorded Counter participant fields identify two existing
+   canonical Squadrons in the accepted reversed attacker/target roles; the
+   exact legally established Counter child may use its destroyed Counter
+   attacker, but its Counter target must remain non-destroyed; and
 6. the existing authoritative Counter target/range/rule checks can produce the
    ordinary `BeginAttackCommand` payload without scene state.
 
@@ -538,10 +582,37 @@ invokes this evaluator after the successful acknowledgement, queues the result,
 and `NetworkManager` distributes the acknowledgement before draining the Begin.
 The client controlling that child attacker neither authors nor resubmits it.
 
-An unsatisfied, stale-ID, wrong-source, unaccepted, malformed, destroyed, or
-illegal participant state returns no continuation and consumes nothing. The
+`BeginAttackCommand.validate()` must independently enforce the handoff at its
+application boundary. For a Counter child, the supplied exact satisfied
+`completed_attack_inspection_id` must resolve to a parent inspection whose
+`source_attack_id()` equals the installed accepted
+`ATTACK_COUNTER_CHOICE.payload.attack_id`; the accepted choice and exact child
+identity/rule checks must also pass. This uses only existing canonical state
+and command identity and does not add payload fields. Authority-derived live
+Begin and explicit replayed Begin receive identical validation and fail closed
+before inspection consumption or child installation on any mismatch.
+
+An unsatisfied, stale-ID, wrong-source, unaccepted, malformed, destroyed
+Counter target, or otherwise illegal participant state returns no continuation
+and consumes nothing. A destroyed attacker is admitted only by this exact
+Counter-child branch after its source, accepted choice, four participant
+identities, Counter keyword, authoritative dice pool, and inspection have all
+validated. Generic destroyed-attacker validation remains unchanged. The
 evaluator remains stateless and returns at most one existing command type. It
 does not store a continuation, mutate authority, or submit work.
+
+Because an eligible destroyed Counter attacker is no longer available through
+ordinary live-token selection, child presentation supports exactly two
+non-authoritative paths. Uninterrupted gameplay may reuse the existing detached
+Squadron token for the exact active Counter child. Save/load or reconnect may
+construct a transient instance of the existing Squadron token type from that
+child's exact canonical attacker identity and existing presentation facts.
+The transient token remains detached from ordinary board Squadron lookup and
+selection, cannot restore gameplay eligibility, and creates no UI authority.
+Counter termination and every subsequent reconstruction deterministically
+dispose of any prior retained or reconstructed presentation token before its
+replacement is installed, so repeated reconstruction/reconnect leaves no
+duplicate or orphaned tokens.
 
 Replay execution mode derives no child command. Format-12 history records the
 explicit `BeginAttackCommand` with the exact inspection ID after the final
@@ -551,6 +622,49 @@ the existing reconstructed-inspection-release entrypoint to evaluate the same
 durable facts once. If it returns this automatic Counter Begin, that entrypoint
 uses the existing authoritative submitter rather than host-principal
 submission; passive reconnect peers synthesize nothing.
+
+### 6.7 Counter-child inspection J composed-return mapping
+
+Satisfaction of the Counter child's completed-result inspection **J** makes
+release evaluation eligible; it does not consume **J**. The existing CON-007
+continuation consumer must resolve the original activated Squadron only from
+existing canonical context and must validate all of the following together:
+
+1. **J** is the exact satisfied completed-result inspection for Counter child
+   source **C**;
+2. **J**'s defender resolves to and matches the unique live original
+   `SquadronInstance` activation;
+3. that Squadron's canonical Attack disposition is `begun`; and
+4. that activation has a valid existing enclosing context: either the current
+   Squadron Phase activation or one live commanding Ship activation identity
+   with the matching open Squadron-command context.
+
+The authoritative Counter-child Begin transition already validated and
+established the parent-to-child relationship. Terminal canonical state retains
+no historical parent attack identity in Squadron action history or inspection
+**J**, so release evaluation must neither reconstruct nor revalidate one.
+
+If the exact satisfied **J**, its defender-to-live-Squadron match, the `begun`
+Attack disposition, or a valid unique enclosing activation context cannot be
+established, evaluation fails closed, consumes nothing, submits nothing, and
+publishes no replacement flow.
+
+For a valid mapping, reuse only the existing CON-007 outcomes:
+
+- while Move remains legal, expose the canonical derived Move decision and
+  leave **J** pending; the authoritative Move or explicit Move-decline
+  transaction validates and consumes **J** atomically with its mutation; or
+- when no legal Squadron action remains, select the existing authoritative
+  `CompleteSquadronActivationCommand`, which validates and consumes **J**
+  atomically with completion.
+
+After an accepted mutating consumer, bounded evaluation continues through the
+existing Squadron Phase or Squadron Command/Ship Activation owners until the
+next canonical stable state or live legal decision. This mapping adds no
+continuation owner, fallback, FSM, recovery mechanism, durable descriptor, or
+synthetic replay behavior. Replay-12 applies only its recorded command history,
+including whichever existing consumer commits the outcome; it derives no
+continuation command.
 
 ## 7. Remote Ship-Damage Presentation Normalization
 
@@ -613,9 +727,11 @@ command result.
 | Fresh Ship publication | No pre-Begin publication; accepted Begin produces first source-scoped Declare publication; representative Roll, Modify, Defense, Resolve Damage, and valid terminal paths retain the same id. |
 | Fresh Squadron publication | Same post-Begin identity proof for Squadron attack; pre-Begin target selection remains transient. |
 | Counter parent publication | Parent source **P** publishes `ATTACK_COUNTER_CHOICE`; accepted choice remains source-scoped to **P**; parent completion installs inspection **I**; retirement preserves the accepted projection, queues no parent terminal clear, and derives no child Begin while **I** is unsatisfied. |
-| Counter inspection release and child replacement | Run the exact sequence **P** → `ATTACK_COUNTER_CHOICE` → accepted choice → parent completion/retirement → unsatisfied inspection **I** → exact-ID acknowledgements → **I** satisfied → `CurrentAttackContinuation` returns child Begin carrying **I** → authoritative queue orders final acknowledgement distribution before Begin → Begin consumes **I** and installs **C** → after Begin result ordering, first child publication replaces **P** → delayed parent clear rejects without mutation. Prove wrong/stale inspection ID, premature derivation, duplicate derivation, scene reentrant Begin submission, and publication-before-Begin-result do not occur. |
-| Counter Network role mappings | Run the full inspection-release sequence with host controlling the child Counter attacker and with client controlling it. In both cases the server-side live-authority evaluator authors/queues Begin, command `player_index` remains the canonical child attacker, broadcast order is identical, and passive peers synthesize nothing. |
-| Counter replay | Owner-recorded format-12 history contains final exact-ID acknowledgement followed by explicit child `BeginAttackCommand`; replay derives no continuation, validates/consumes **I**, installs **C**, applies child replacement, and rejects delayed parent clear. |
+| Counter inspection release, Begin validation, and child replacement | For both a surviving and a triggering-attack-destroyed Counter attacker, run the exact sequence **P** → `ATTACK_COUNTER_CHOICE` → accepted choice → parent completion/retirement → unsatisfied inspection **I** → exact-ID acknowledgements → **I** satisfied → `CurrentAttackContinuation` returns child Begin carrying **I** → authoritative queue orders final acknowledgement distribution before Begin → Begin independently validates that **I**'s source equals accepted parent source **P** → Begin consumes **I** and installs **C** → after Begin result ordering, first child publication replaces **P** → delayed parent clear rejects without mutation. Exercise both authority-derived live Begin and explicit replayed Begin. Prove exact source, accepted choice, participant identities, Counter keyword, authoritative dice pool, and inspection are required; a source-mismatched inspection/accepted projection, destroyed Counter target, ordinary destroyed attacker, wrong/stale inspection ID, premature or duplicate derivation, scene reentrant Begin submission, and publication-before-Begin-result all fail without mutation. |
+| Counter Save-10 identity and destroyed-attacker restoration | Prove all four parent Counter participant identities survive the real signed Save-10 JSON round trip as canonical integers; the exact surviving and destroyed-attacker parent states survive save/load and reconnect; satisfied inspection derives the exact eligible child Begin. Uninterrupted gameplay may reuse the exact detached token. Save/load and reconnect must each reconstruct a presentation-only transient instance of the existing Squadron token type from exact canonical active-child state, keep it outside ordinary board lookup/selection, and clean it up at Counter termination. Repeated reconstruction and repeated reconnect must replace/clean prior transient instances deterministically with no duplicate or orphaned tokens. Malformed, fractional, boolean, non-numeric, non-finite, partial, and out-of-range identity fails closed; command/runtime validation remains exact-integer; and no compatibility adapter or migration behavior exists. |
+| Counter Network role mappings | In both role mappings, begin before the production no-defense `commit_accuracy` → `resolve_damage` boundary and exercise the real presentation/command path through Counter availability and choice. Run accept and decline for both surviving and triggering-attack-destroyed Counter attackers. Accept must continue through parent completion, exact-ID acknowledgements, child Begin, reconstruction/rebind, child interaction, child completion/acknowledgements, cleanup, and composed return. Uninterrupted destroyed-Counter presentation may use the existing detached token; reconnect uses a transient reconstructed token and proves repeated reconstruction and deterministic cleanup. Decline must create no child and return through the existing parent/enclosing path. The server-side live-authority evaluator remains the sole author of automatic follow-ups, command `player_index` remains canonical, broadcast order is identical, passive peers synthesize nothing, and neither peer exposes ordinary selection for a destroyed token. Preconstructed Counter state is prohibited. |
+| Counter child J mapping and composed return | After child completion and both exact-ID acknowledgements, prove Section 6.7 validates exact satisfied **J**, matches **J**'s defender to the unique live original Squadron activation, requires that Squadron's Attack disposition to be `begun`, and validates its existing Squadron Phase or commanding-Ship activation context. Do not reconstruct a historical parent attack identity. If Move remains legal, both peers expose that decision to the correct controller while satisfied **J** remains pending until authoritative Move or Move-decline consumes it atomically. If no legal action remains, existing Squadron completion consumes **J** atomically and enclosing owners advance to the next stable state. Ambiguous/mismatched context fails closed. Child terminal publication or cursor milestone alone fails this row. |
+| Counter replay | The Owner-recorded format-12 BUG-074 acceptance history covers the triggering-attack-destroyed Counter attacker through accepted choice and complete composed return. It contains final parent exact-ID acknowledgement followed by explicit child `BeginAttackCommand`, the explicit child lifecycle, exact-ID acknowledgements, and the recorded existing consumer that commits the enclosing return. Replay derives no continuation, consumes **I** and **J** only through recorded commands, installs **C**, applies child replacement, and rejects delayed parent clear. The additional Owner-recorded histories for surviving Accept, surviving Decline, and destroyed Decline are deferred to the GGS assurance backlog by Owner decision on 2026-10-15. That deferral does not reduce the eight real-ENet combinations required above, authorize GGS-001 Gate 2, or allow GGS to replace Replay-12 assurance automatically. No fixture may be synthesized or modified to satisfy this row. |
 | Reconstructed attack | Save/load and reconnect reconstruct active canonical identity; newly created publications carry it; a conflicting scene/projection identity rejects rather than being repaired. |
 | Inter-attack next-squadron | After retirement, clear-target/restart publication and direct ATTACK write are suppressed; `UIProjector` derives controller/waiting from canonical Ship attack progress; `ModalRouter`/`AttackPanelController` render local selection versus remote waiting; no command/history/cursor change occurs; next Begin creates a new id. Prove live play plus save/load and reconnect through the actual `GameBoard._ready()`/`_finalize_ready_sequence()` path. Assert the early active-resume branch does not call direct inactive reconstruction and the post-router `reconstruct_presentation()` call does. |
 | Inter-attack second hull zone | Same no-ATTACK-write, real-GameBoard-entrypoint, and local-selection/remote-waiting proof for the two-hull-zone path in live play, save/load, and reconnect. Assert `interaction_flow` remains the legitimate enclosing non-ATTACK flow or NONE throughout. |
@@ -642,6 +758,14 @@ command result.
 | Replay format 12 | Format-12 source-scoped publications replay in order; format 11 rejects under existing strict boundary; format-12 missing-source publication rejects; no migration/backfill. |
 | Manual fixtures | Owner-recorded format-12 committed replay inputs pass signature/schema checks and applicable baseline verification; provenance and capture conditions are recorded. |
 
+The Owner decision of 2026-10-15 supersedes only the former requirement for
+three additional Owner-recorded BUG-074 Counter histories: surviving Accept,
+surviving Decline, and destroyed Decline. The successful destroyed-Counter
+Accept history with complete composed return remains required at
+[`replay_20261015_065840.json`](../../qa/bugs/open/BUG-074/replay_20261015_065840.json).
+All automated, compatibility, persistence, permanent-fixture, and real-ENet
+requirements remain unchanged.
+
 The mapping-1 facedown-only case is mandatory and cannot be replaced by a
 faceup path whose additional inspection gates accidentally drain the queue.
 
@@ -651,7 +775,7 @@ faceup path whose additional inspection gates accidentally drain the queue.
 
 | Boundary | Required result |
 | --- | --- |
-| Save | **Remain at format 10.** No new save field, decoder, migration, or reinterpretation. |
+| Save | **Remain at format 10.** No new save field, version migration, or compatibility reinterpretation. The existing canonical reconstruction boundary performs only the exact Counter identity type restoration authorized in Section 1.3. |
 | Network | **Advance protocol 10 → 11.** The required `source_attack_id` changes publication command wire semantics. Strict handshake mismatch rejection remains the compatibility boundary. |
 | Replay | **Advance format 11 → 12.** `SIGNED_FORMAT_VERSION` advances with `FORMAT_VERSION`. Format 12 records the required source identity; format 11 is not backfilled. |
 
@@ -665,8 +789,10 @@ faceup path whose additional inspection gates accidentally drain the queue.
 - Counter inspection release reuses the existing
   `completed_attack_inspection_id` field on `BeginAttackCommand`; it adds no
   command field or serialized continuation record.
-- `GameBoard` reconstruction changes call order only and adds no persisted or
-  transported presentation state.
+- `GameBoard` reconstruction changes presentation call order and may create the
+  bounded transient existing-type detached Squadron token for an exact active
+  destroyed Counter child; it adds no persisted or transported presentation
+  state and the token is deterministically disposed/replaced.
 - No protocol-10 command adapter, replay-11 migration, missing-id fallback, or
   best-effort inference is authorized.
 - Valid protocol-11/replay-12 commands missing source identity fail closed.
@@ -702,6 +828,13 @@ Owner-reviewed. The exact-RNG repair's pending baseline/hash promotion is not
 authorized by this workbook and must not be silently combined with replay-12
 fixture integration. If the two workflows cannot be reviewed independently,
 stop for an explicit combined Owner sequencing decision.
+
+The BUG-074 manual acceptance replay is permanent defect evidence separate
+from these two baseline fixtures. Its required destroyed-Counter Accept path
+does not authorize replacing or mechanically deriving either baseline fixture.
+The three deferred Counter variations are tracked in the GGS assurance
+backlog; no GGS gate or replacement of Replay-12 assurance is authorized by
+that tracking entry.
 
 ## 11. Implementation Sequence And Gates
 
@@ -740,6 +873,10 @@ valid post-Begin publications accept; missing/mismatched source rejects.
 Gate: inter-attack decisions remain usable/reconstructable with no invented
 attack; the parent Counter projection survives unsatisfied inspection; exact-ID
 satisfaction authoritatively queues one child Begin in both Network mappings;
+accepted Counter completion re-evaluates the original activated Squadron and
+either exposes its live Move decision while the satisfied child inspection
+remains pending or consumes that inspection atomically through the applicable
+existing transaction before reaching the next stable enclosing state;
 replay synthesizes none; real `GameBoard` save/load/reconnect reconstruction
 uses the router path; valid terminal publication remains admissible and ordered
 after trigger distribution; a delayed parent/ordinary clear cannot affect
@@ -757,6 +894,23 @@ ship identity and no `-1` lookup.
 ### Slice 4 — distributed and persistence verification
 
 - Run both mapping scenarios and the facedown-only timing canary.
+- Begin each real-ENet Counter scenario before the production no-defense
+  `commit_accuracy` → `resolve_damage` boundary. In both role mappings, use the
+  actual Counter-choice presentation and command path for accept and decline
+  with both surviving and triggering-attack-destroyed Counter attackers; do
+  not install a prepared Counter state. The destroyed accepted case must prove
+  exact child derivation, detached-token reuse during uninterrupted play,
+  transient existing-token-type reconstruction after Save-10 load and
+  reconnect, controller-only interaction, passive remote presentation, no
+  ordinary destroyed-unit selection, deterministic terminal cleanup, and no
+  duplicate/orphan after repeated reconstruction or reconnect. A destroyed
+  Counter target and an ordinary destroyed attacker must remain ineligible.
+- Require each driver's completion predicate to observe on both peers either
+  the correctly controlled live Move decision with satisfied **J** still
+  pending, or atomic **J** consumption by Move, explicit Move-decline, or
+  Squadron completion followed by the next stable enclosing state. Child
+  completion, terminal publication, or an ordered-result cursor milestone is
+  insufficient.
 - Run save-10, reconnect/reassociation, protocol-11, replay-12, command
   serialization, filtering, and existing attack/damage protocol suites.
 - Confirm no RNG, save schema, principal, damage-result, or StateFilter change.
@@ -811,6 +965,15 @@ terminal clearing source-scoped and post-distribution without a new mechanism;
 if `CurrentAttackContinuation` cannot derive child Counter Begin with the
 existing Begin payload and inspection ID; if real `GameBoard` reconstruction
 cannot use the existing router after setup;
+if the exact destroyed Counter child cannot use the existing detached token in
+uninterrupted play and reconstruct a transient existing-type detached token
+after save/load or reconnect—with deterministic replacement/cleanup and no
+ordinary destroyed-unit selection—without adding canonical state, ownership,
+or fallback behavior;
+if Counter-child inspection **J** cannot match its defender to one unique live
+original Squadron activation with Attack disposition `begun` and a valid
+existing Squadron Phase or commanding-Ship activation context without new
+state or ownership;
 if canonical ship identity or outcome fields are unavailable at the
 presentation seam; if a save-schema or damage-result change becomes necessary;
 or if fixture integration would require combining unauthorized exact-RNG
@@ -829,11 +992,23 @@ The package is complete only when:
    existing reconstruction route gives the controller selection and the other
    viewer waiting in live play, save/load, and reconnect through the real
    post-router `GameBoard` entrypoint;
-5. parent Counter-choice projection survives accepted choice and retirement
-   plus unsatisfied inspection; exact-ID satisfaction causes the existing
+5. for surviving and triggering-attack-destroyed Counter attackers, parent
+   Counter-choice projection survives accepted choice and retirement plus
+   unsatisfied inspection; exact-ID satisfaction causes the existing
    authoritative continuation evaluator to queue one child Begin in both
-   Network mappings; child-source publication replaces it; replay uses only its
-   explicit recorded Begin;
+   Network mappings; a destroyed Counter target and ordinary destroyed
+   attacker remain ineligible; child-source publication replaces the parent;
+   uninterrupted presentation may reuse the exact detached token, while
+   Save-10 load and reconnect reconstruct a transient existing-type token from
+   exact canonical active-child state without ordinary destroyed-unit
+   selection; repeated reconstruction and termination clean up deterministically
+   with no duplicate/orphaned token; replay uses only its explicit recorded
+   Begin and validates its parent inspection/source match equivalently to live
+   Begin; after child completion and acknowledgements, exact
+   Counter-child context mapping re-evaluates the original activated Squadron
+   and reaches either its live Move decision with the satisfied inspection
+   still pending, or atomic inspection consumption through an existing
+   transaction followed by the next canonical stable state on both peers;
 6. ordinary terminal clear is exact-source scoped, passes only its narrow
    completed-inspection/terminal admission, executes/broadcasts after the
    triggering result distribution, and cannot clear a newer attack;
@@ -843,7 +1018,11 @@ The package is complete only when:
    filtering, and continuation converge;
 9. save 10, protocol 11, and replay 12 are verified with no unauthorized
    compatibility path;
-10. Owner-recorded format-12 replay fixtures pass the required verification;
+10. the Owner-recorded format-12 Hot-Seat and Network baseline fixtures pass
+    the required verification, and the separate BUG-074 destroyed-Counter
+    Accept replay passes through complete composed return; the three additional
+    Counter histories deferred by the 2026-10-15 Owner decision remain tracked
+    in the GGS assurance backlog without authorizing Gate 2;
 11. production/test/evidence changes contain no broad validator, queue-owned
     correctness, new owner, RNG change, or unauthorized baseline promotion;
 12. instrumentation is removed and `git diff --check`, applicable static

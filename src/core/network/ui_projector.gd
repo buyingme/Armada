@@ -119,6 +119,10 @@ class UIIntent extends RefCounted:
 	var completed_attack_inspection: Dictionary = {}
 	var faceup_damage_inspection: Dictionary = {}
 
+	## Transient viewer-specific declaration continuation between canonical
+	## attacks. It never represents or installs an ATTACK InteractionFlow.
+	var inter_attack_continuation: Dictionary = {}
+
 
 ## Computes a [UIIntent] for [param viewer_player] from [param state].
 ##
@@ -139,8 +143,11 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 			state, viewer_player, intent)
 	intent.faceup_damage_inspection = _project_faceup_damage_inspection(
 			state, viewer_player, intent)
+	intent.inter_attack_continuation = _project_inter_attack_continuation(
+			state, viewer_player)
 	var flow: InteractionFlow = state.interaction_flow
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
+		_apply_inter_attack_status(intent, state, viewer_player)
 		return intent
 	var spec: Dictionary = FLOW_SPEC_SCRIPT.get_spec(
 			int(flow.flow_type), int(flow.step_id))
@@ -157,6 +164,70 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 			else {}
 	intent.affordances.merge(_affordances_for(state, flow, viewer_player), true)
 	return intent
+
+
+static func _project_inter_attack_continuation(state: GameState,
+		viewer_player: int) -> Dictionary:
+	var attack: CurrentAttackState = state.current_attack_state
+	if attack != null and attack.active:
+		return {}
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	if inspection != null and not inspection.is_satisfied():
+		return {}
+	var ship: ShipInstance = state.get_active_ship_activation()
+	if ship == null or not ship.attack_step_active \
+			or ship.committed_attack_count <= 0:
+		return {}
+	var ship_index: int = state.find_ship_index(ship)
+	if ship_index < 0:
+		return {}
+	var continuation: String = ""
+	for candidate: Dictionary in \
+			TargetingListBuilder.authoritative_ship_target_entries(
+					state, ship.owner_player, ship_index):
+		var attacker_zone: int = int(candidate.get("attacker_zone", -1))
+		if ship.anti_squadron_attack_zone >= 0:
+			if attacker_zone != ship.anti_squadron_attack_zone \
+					or str(candidate.get("target_kind", "")) \
+							!= CurrentAttackState.KIND_SQUADRON:
+				continue
+			var target_owner: int = int(candidate.get("target_owner", -1))
+			var target_index: int = int(candidate.get("target_index", -1))
+			if ship.has_anti_squadron_target(target_owner, target_index):
+				continue
+			continuation = CompleteAttackCommand.CONTINUATION_SQUADRON
+			break
+		if ship.committed_attack_count < 2 \
+				and attacker_zone not in ship.used_attack_hull_zones:
+			continuation = CompleteAttackCommand.CONTINUATION_NORMAL_ATTACK
+			break
+	if continuation.is_empty():
+		return {}
+	return {
+		"continuation": continuation,
+		"controller_player": ship.owner_player,
+		"owner_player": ship.owner_player,
+		"ship_index": ship_index,
+		"is_interactive": viewer_player < 0 or viewer_player == ship.owner_player,
+		"waiting": viewer_player >= 0 and viewer_player != ship.owner_player,
+	}
+
+
+static func _apply_inter_attack_status(intent: UIIntent, state: GameState,
+		viewer_player: int) -> void:
+	if intent.inter_attack_continuation.is_empty():
+		return
+	var controller: int = int(intent.inter_attack_continuation.get(
+			"controller_player", -1))
+	intent.controller_player = controller
+	intent.controller_player_label = player_display_label(state, controller)
+	intent.controller_player_faction = player_faction(state, controller)
+	intent.is_interactive = bool(intent.inter_attack_continuation.get(
+			"is_interactive", false))
+	intent.hud_status_text = "make your choices" if intent.is_interactive \
+			else "waiting for opponent's choice"
+	intent.needs_waiting_overlay = viewer_player >= 0 \
+			and viewer_player != controller
 
 
 static func _project_faceup_damage_inspection(state: GameState,

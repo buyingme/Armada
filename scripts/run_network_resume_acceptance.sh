@@ -29,6 +29,8 @@ RUN_COMMANDED_ONLY=false
 RUN_BUG043_ONLY=false
 RUN_FRESH_ONLY=false
 RUN_BUG070071_ONLY=false
+RUN_COUNTER_ONLY=false
+RUN_BUG072_ONLY=false
 if [[ "${1:-}" == "--section-d-only" ]]; then
   RUN_SECTION_D_ONLY=true
 elif [[ "${1:-}" == "--bug-031-only" ]]; then
@@ -41,8 +43,12 @@ elif [[ "${1:-}" == "--fresh-only" ]]; then
   RUN_FRESH_ONLY=true
 elif [[ "${1:-}" == "--bug-070-071-only" ]]; then
   RUN_BUG070071_ONLY=true
+elif [[ "${1:-}" == "--counter-only" ]]; then
+  RUN_COUNTER_ONLY=true
+elif [[ "${1:-}" == "--bug-072-only" ]]; then
+  RUN_BUG072_ONLY=true
 elif [[ $# -ne 0 ]]; then
-  echo "Usage: $0 [--section-d-only|--bug-031-only|--commanded-squadron-only|--bug-043-only|--fresh-only|--bug-070-071-only]" >&2
+  echo "Usage: $0 [--section-d-only|--bug-031-only|--commanded-squadron-only|--bug-043-only|--fresh-only|--bug-070-071-only|--counter-only|--bug-072-only]" >&2
   exit 2
 fi
 wait_for_child() {
@@ -133,6 +139,58 @@ run_mapping() {
   CHILD_PIDS+=("$client")
   wait_for_child "$client" "client mapping $mapping"
   wait_for_child "$host" "host mapping $mapping"
+}
+run_counter_mapping() {
+  local mapping="$1" choice="$2" destroyed="$3" port="$4"
+  local variant="surviving"
+  if [[ "$destroyed" == true ]]; then
+    variant="destroyed"
+  fi
+  local host_home="$RUN_ROOT/home-counter-$variant-$choice-host-$mapping"
+  local client_home="$RUN_ROOT/home-counter-$variant-$choice-client-$mapping"
+  mkdir -p "$host_home" "$client_home"
+  HOME="$host_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=host --scenario=counter_release --mapping="$mapping" \
+    --counter-choice="$choice" --counter-destroyed="$destroyed" \
+    --port="$port" --shared="$SHARED" \
+    >"$LOGS/counter-$variant-$choice-host-$mapping.log" 2>&1 &
+  local host=$!
+  CHILD_PIDS+=("$host")
+  sleep 1
+  HOME="$client_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=client --scenario=counter_release --mapping="$mapping" \
+    --counter-choice="$choice" --counter-destroyed="$destroyed" \
+    --port="$port" --shared="$SHARED" \
+    >"$LOGS/counter-$variant-$choice-client-$mapping.log" 2>&1 &
+  local client=$!
+  CHILD_PIDS+=("$client")
+  wait_for_child "$client" "Counter $choice client mapping $mapping"
+  wait_for_child "$host" "Counter $choice host mapping $mapping"
+}
+run_bug072_mapping() {
+  local mapping="$1" port="$2"
+  local host_home="$RUN_ROOT/home-bug072-host-$mapping"
+  local client_home="$RUN_ROOT/home-bug072-client-$mapping"
+  mkdir -p "$host_home" "$client_home"
+  HOME="$host_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=host --scenario=bug072_attack_flow --mapping="$mapping" \
+    --port="$port" --shared="$SHARED" \
+    >"$LOGS/bug072-host-$mapping.log" 2>&1 &
+  local host=$!
+  CHILD_PIDS+=("$host")
+  sleep 1
+  HOME="$client_home" "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+    res://tests/acceptance/network_resume/driver.tscn -- \
+    --role=client --scenario=bug072_attack_flow --mapping="$mapping" \
+    --port="$port" --shared="$SHARED" \
+    >"$LOGS/bug072-client-$mapping.log" 2>&1 &
+  local client=$!
+  CHILD_PIDS+=("$client")
+  wait_for_child "$client" "BUG-072 client mapping $mapping"
+  wait_for_child "$host" "BUG-072 host mapping $mapping"
 }
 run_commanded_squadron() {
   local port="$1"
@@ -302,6 +360,32 @@ if [[ "$RUN_BUG070071_ONLY" == true ]]; then
     res://tests/acceptance/network_resume/assertions.gd -- --shared="$SHARED" \
     --bug-070-071-only=true
   echo "PASS: BUG-070 / BUG-071 real ENet command chains completed."
+  RESULT="passed"
+  exit 0
+fi
+if [[ "$RUN_COUNTER_ONLY" == true ]]; then
+  run_counter_mapping 0 accept false $((29500 + ($$ % 25)))
+  run_counter_mapping 1 accept false $((29525 + ($$ % 25)))
+  run_counter_mapping 0 decline false $((29550 + ($$ % 25)))
+  run_counter_mapping 1 decline false $((29575 + ($$ % 25)))
+  run_counter_mapping 0 accept true $((29600 + ($$ % 25)))
+  run_counter_mapping 1 accept true $((29625 + ($$ % 25)))
+  run_counter_mapping 0 decline true $((29650 + ($$ % 25)))
+  run_counter_mapping 1 decline true $((29675 + ($$ % 25)))
+  "$GODOT_BIN" --headless --path "$PROJECT_DIR" --script \
+    res://tests/acceptance/network_resume/assertions.gd -- --shared="$SHARED" \
+    --counter-only=true
+  echo "PASS: Counter accept/decline production paths completed in both real ENet mappings."
+  RESULT="passed"
+  exit 0
+fi
+if [[ "$RUN_BUG072_ONLY" == true ]]; then
+  run_bug072_mapping 0 $((29700 + ($$ % 100)))
+  run_bug072_mapping 1 $((29800 + ($$ % 100)))
+  "$GODOT_BIN" --headless --path "$PROJECT_DIR" --script \
+    res://tests/acceptance/network_resume/assertions.gd -- --shared="$SHARED" \
+    --bug-072-only=true
+  echo "PASS: BUG-072 real ENet attack-flow mappings completed."
   RESULT="passed"
   exit 0
 fi

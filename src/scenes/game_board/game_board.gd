@@ -1341,8 +1341,7 @@ func _finalize_ready_sequence() -> bool:
 			if game_state != null else null
 	var has_active_attack: bool = attack != null and attack.active
 	var attack_resume: Dictionary = _resume_active_attack_from_state()
-	var has_attack_reconstruction: bool = has_active_attack \
-			or not attack_resume.is_empty()
+	var has_attack_reconstruction: bool = has_active_attack
 	if has_attack_reconstruction \
 			and not bool(attack_resume.get(AttackExecutor.RESUME_KEY_OK, false)):
 		_block_after_active_attack_reconstruction_failure(attack_resume)
@@ -1388,6 +1387,9 @@ func _finalize_ready_sequence() -> bool:
 			and game_state.interaction_flow != null \
 			and game_state.interaction_flow.flow_type \
 					== Constants.InteractionFlow.SQUADRON_DISPLACEMENT
+	var pending_inter_attack: bool = game_state != null \
+			and not UIProjector.project(
+					game_state, _local_viewer()).inter_attack_continuation.is_empty()
 	if _command_router_adapter != null and (
 			(game_state != null \
 				and game_state.faceup_damage_inspection != null) \
@@ -1395,7 +1397,7 @@ func _finalize_ready_sequence() -> bool:
 			(pending_inspection != null and not pending_inspection.is_satisfied()) \
 			or (pending_maneuver != null \
 				and pending_maneuver.has_active_maneuver_execution()) \
-			or pending_displacement):
+			or pending_displacement or pending_inter_attack):
 		_command_router_adapter.reconstruct_presentation()
 	if _damage_card_immediate_effect_controller != null:
 		_damage_card_immediate_effect_controller.reconstruct_from_state(
@@ -1447,14 +1449,11 @@ func _resume_active_attack_from_state() -> Dictionary:
 	if game_state == null:
 		return {}
 	var attack: CurrentAttackState = game_state.current_attack_state
-	var result: Dictionary = {}
-	if attack != null and attack.active:
-		result = _attack_executor.resume_current_attack(
-				_find_ship_token_for_instance,
-				_find_squadron_token_for_instance)
-	else:
-		result = _attack_executor.resume_inactive_ship_attack_continuation(
-				_find_ship_token_for_instance)
+	if attack == null or not attack.active:
+		return {}
+	var result: Dictionary = _attack_executor.resume_current_attack(
+			_find_ship_token_for_instance,
+			_find_squadron_token_for_instance)
 	if not bool(result.get(AttackExecutor.RESUME_KEY_OK, false)):
 		if not result.is_empty():
 			push_error("Attack reconstruction failed: %s" % str(result.get(

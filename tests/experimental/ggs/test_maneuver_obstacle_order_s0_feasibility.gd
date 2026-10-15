@@ -89,10 +89,14 @@ func test_exact_obstacle_order_boundary_roundtrips_and_replays_first_command() \
 
 	var parsed_state: Variant = JSON.parse_string(JSON.stringify(source_state))
 	assert_true(parsed_state is Dictionary)
-	assert_eq(typeof(source_rng["state"]), TYPE_INT)
+	assert_eq(typeof(source_rng["initial_seed"]), TYPE_STRING)
+	assert_eq(typeof(source_rng["state"]), TYPE_STRING)
+	assert_eq(typeof((parsed_state as Dictionary)["rng"]["initial_seed"]),
+			TYPE_STRING)
 	assert_eq(typeof((parsed_state as Dictionary)["rng"]["state"]),
-			TYPE_FLOAT,
-			"Godot JSON parsing exposes the precision-loss seam explicitly.")
+			TYPE_STRING)
+	assert_eq((parsed_state as Dictionary)["rng"], source_rng,
+			"Canonical JSON roundtrip must preserve both exact RNG decimal strings.")
 	var reconstructed: GameState = GameState.deserialize(
 			parsed_state as Dictionary)
 	assert_not_null(reconstructed)
@@ -106,8 +110,8 @@ func test_exact_obstacle_order_boundary_roundtrips_and_replays_first_command() \
 			"maneuver_execution_id"), source_ship \
 			.active_maneuver_execution_snapshot().get("maneuver_execution_id"))
 	assert_eq(reconstructed.damage_deck.serialize(), source_deck)
-	assert_eq(reconstructed.rng.initial_seed, source_rng["initial_seed"])
-	assert_eq(reconstructed.rng.get_state(), source_rng["state"],
+	assert_eq(str(reconstructed.rng.initial_seed), source_rng["initial_seed"])
+	assert_eq(str(reconstructed.rng.get_state()), source_rng["state"],
 			"Canonical JSON roundtrip must preserve the exact RNG state.")
 	assert_eq(_decision_signature(reconstructed), source_signature)
 

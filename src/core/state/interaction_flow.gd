@@ -15,6 +15,15 @@ class_name InteractionFlow
 extends RefCounted
 
 
+const _COUNTER_PLAYER_IDENTITY_FIELDS: Array[String] = [
+	"counter_attacker_player", "counter_target_player",
+]
+const _COUNTER_SQUADRON_IDENTITY_FIELDS: Array[String] = [
+	"counter_attacker_squadron_index", "counter_target_squadron_index",
+]
+const _MAX_COUNTER_SQUADRON_INDEX: int = 2147483647
+
+
 # ---------------------------------------------------------------------------
 # Fields
 # ---------------------------------------------------------------------------
@@ -88,6 +97,11 @@ static func deserialize(data: Dictionary) -> InteractionFlow:
 	var raw_payload: Variant = data.get("payload", {})
 	if raw_payload is Dictionary:
 		f.payload = (raw_payload as Dictionary).duplicate(true)
+		if f.flow_type == Constants.InteractionFlow.ATTACK \
+				and f.step_id \
+						== Constants.InteractionStep.ATTACK_COUNTER_CHOICE:
+			if not _normalize_counter_participant_identity(f.payload):
+				return null
 		if f.flow_type == Constants.InteractionFlow.SQUADRON_DISPLACEMENT \
 				and not f.payload.is_empty():
 			for key: String in ["owner_player", "ship_index"]:
@@ -104,8 +118,47 @@ static func deserialize(data: Dictionary) -> InteractionFlow:
 							raw_entry as Dictionary, key):
 						return null
 	else:
+		if f.flow_type == Constants.InteractionFlow.ATTACK \
+				and f.step_id \
+						== Constants.InteractionStep.ATTACK_COUNTER_CHOICE:
+			return null
 		f.payload = {}
 	return f
+
+
+static func _normalize_counter_participant_identity(
+		data: Dictionary) -> bool:
+	for key: String in _COUNTER_PLAYER_IDENTITY_FIELDS:
+		if not _normalize_counter_identity_field(
+				data, key, Constants.PLAYER_COUNT - 1):
+			return false
+	for key: String in _COUNTER_SQUADRON_IDENTITY_FIELDS:
+		if not _normalize_counter_identity_field(
+				data, key, _MAX_COUNTER_SQUADRON_INDEX):
+			return false
+	return true
+
+
+static func _normalize_counter_identity_field(data: Dictionary,
+		key: String, maximum: int) -> bool:
+	if not data.has(key):
+		return false
+	var raw: Variant = data[key]
+	var value: int
+	if typeof(raw) == TYPE_INT:
+		value = int(raw)
+	elif typeof(raw) == TYPE_FLOAT:
+		var decoded: float = float(raw)
+		if not is_finite(decoded) or decoded != floor(decoded) \
+				or decoded < 0.0 or decoded > float(maximum):
+			return false
+		value = int(decoded)
+	else:
+		return false
+	if value < 0 or value > maximum:
+		return false
+	data[key] = value
+	return true
 
 
 static func _normalize_displacement_identity(data: Dictionary,

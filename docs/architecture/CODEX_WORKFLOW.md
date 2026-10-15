@@ -107,6 +107,12 @@ Activities:
 - Verify code evidence.
 - Search for missing paths.
 - Challenge assumptions.
+- For a nested feature, trace its acceptance boundary to the applicable
+  composed-return authority and record the enclosing stable outcome or live
+  legal decision that verification must assert. For post-Attack work, use
+  [ODR-001](decision_workbooks/ODR-001-composed-return-convergence-principle.md)
+  and [CON-007](contracts/CON-007-post-attack-continuation-release-contract.md)
+  rather than defining a parallel completion rule.
 
 ### 3. Evidence Patch
 
@@ -186,6 +192,16 @@ After checking the roadmap and authority rules, classify the work:
 | Needs context pack | Gather current implementation and documentation evidence first. |
 | Needs architecture task | Add a proposed `AT-xxx` only when requested, or report the need. |
 | Tolerate temporarily | Keep changes local; do not spread the tolerated pattern. |
+
+Choose **Needs owner decision** and stop for a compact Owner decision whenever
+repository authority is insufficient and two or more materially different
+user-visible or architectural behaviors remain plausible. Existing
+implementation behavior is not itself the decision merely because it exists;
+treat it as normative only when repository authority establishes it as such.
+This gate does not apply to ordinary implementation mechanics, established
+conventions, or behavior already determined by authoritative rules,
+requirements, or architecture. It applies when proceeding would effectively
+create a new user-visible or architectural requirement.
 
 ## Replay Fixture Renewal
 

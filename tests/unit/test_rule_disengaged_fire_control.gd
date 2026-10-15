@@ -10,6 +10,8 @@ const SHIP_KEY_CR90: String = "cr90_corvette_a"
 const ATTACKER_PLAYER: int = 0
 const DEFENDER_PLAYER: int = 1
 const SHIP_INDEX: int = 0
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 var _processor: Node = null
 var _state: GameState = null
@@ -140,6 +142,8 @@ func _make_state() -> GameState:
 			_make_ship(ATTACKER_PLAYER))
 	state.get_player_state(DEFENDER_PLAYER).ships.append(
 			_make_ship(DEFENDER_PLAYER))
+	CURRENT_ATTACK_FIXTURE.install(state, {"attack_id": "attack:0"})
+	state.interaction_flow.payload["attack_id"] = "attack:0"
 	return state
 
 
@@ -165,11 +169,15 @@ func _make_ship_token(instance: ShipInstance) -> ShipToken:
 
 
 func _make_publish_command(obstructed: bool) -> PublishAttackFlowCommand:
+	var attack_id: String = _state.current_attack_state.attack_id
+	var flow_payload: Dictionary = _attack_payload(obstructed)
+	flow_payload["attack_id"] = attack_id
 	return PublishAttackFlowCommand.new(ATTACKER_PLAYER, {
 		"step_id": int(Constants.InteractionStep.ATTACK_ROLL),
 		"controller_player": ATTACKER_PLAYER,
-		"flow_payload": _attack_payload(obstructed),
+		"flow_payload": flow_payload,
 		"final": false,
+		"source_attack_id": attack_id,
 	})
 
 

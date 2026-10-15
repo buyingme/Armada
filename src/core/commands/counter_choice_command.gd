@@ -10,6 +10,7 @@ extends GameCommand
 
 
 const TYPE: String = "counter_choice"
+const RESULT_COUNTER_ACCEPTED: String = "counter_accepted"
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -44,10 +45,11 @@ func validate(game_state: GameState) -> String:
 ## lifecycle decision so BeginAttackCommand can validate attack kind/identity.
 func execute(game_state: GameState) -> Dictionary:
 	var result: Dictionary = payload.duplicate(true)
-	result["accepted"] = bool(payload.get("accepted", false))
+	result.erase("accepted")
+	result[RESULT_COUNTER_ACCEPTED] = bool(payload.get("accepted", false))
 	if game_state != null and game_state.interaction_flow != null:
 		game_state.interaction_flow.payload["counter_choice_accepted"] = \
-				bool(result["accepted"])
+				bool(result[RESULT_COUNTER_ACCEPTED])
 	return result
 
 

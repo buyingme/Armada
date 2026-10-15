@@ -44,7 +44,7 @@
             ]
         },
         {
-            "key": "tie_fighter_squadron",
+            "key": "tie_interceptor_squadron",
             "pos_x": 0.47,
             "pos_y": 0.25,
             "rotation_deg": 180.0,

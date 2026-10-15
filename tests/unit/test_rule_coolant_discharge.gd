@@ -179,6 +179,8 @@ func _make_state() -> GameState:
 			_make_ship(ATTACKER_PLAYER))
 	state.get_player_state(DEFENDER_PLAYER).ships.append(
 			_make_ship(DEFENDER_PLAYER))
+	CURRENT_ATTACK_FIXTURE.install(state, {"attack_id": "attack:0"})
+	state.interaction_flow.payload["attack_id"] = "attack:0"
 	return state
 
 
@@ -220,11 +222,15 @@ func _make_roll_command(target_kind: String) -> RollDiceCommand:
 
 
 func _make_publish_command(target_kind: String) -> PublishAttackFlowCommand:
+	var attack_id: String = _state.current_attack_state.attack_id
+	var flow_payload: Dictionary = _attack_payload(target_kind)
+	flow_payload["attack_id"] = attack_id
 	return PublishAttackFlowCommand.new(ATTACKER_PLAYER, {
 		"step_id": int(Constants.InteractionStep.ATTACK_ROLL),
 		"controller_player": ATTACKER_PLAYER,
-		"flow_payload": _attack_payload(target_kind),
+		"flow_payload": flow_payload,
 		"final": false,
+		"source_attack_id": attack_id,
 	})
 
 

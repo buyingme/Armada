@@ -61,6 +61,10 @@ func initialize(
 func react_to_command(command: GameCommand, result: Dictionary) -> void:
 	if command == null:
 		return
+	if command.command_type == "publish_attack_flow" \
+			and bool(command.payload.get("final", false)):
+		_attack_executor.apply_terminal_attack_flow_result(command, result)
+		return
 	if command.command_type == AcknowledgeAttackResultCommand.TYPE:
 		# Once the final acknowledgement is accepted, the result surface is no
 		# longer the pending canonical decision.  Clear it before the existing
@@ -71,7 +75,6 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 		if inspection == null or inspection.is_satisfied():
 			_attack_executor.deactivate_primary_presentation()
 			close_mirror()
-		_recover_satisfied_ship_attack_presentation()
 		return
 	if _is_post_attack_presentation_recovery_command(command):
 		if not _owns_active_canonical_attack():
@@ -84,10 +87,6 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 			]:
 		if not _owns_active_canonical_attack():
 			_attack_executor.deactivate_primary_presentation()
-		# Let the command processor finish its bounded enclosing-owner
-		# re-evaluation first.  If that derives no command, the canonical normal
-		# declaration is recoverable through the existing projection seam.
-		call_deferred("_recover_post_anti_squadron_child_finish_presentation")
 		return
 	if not _is_attack_pipeline_command(command):
 		return
@@ -98,10 +97,13 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 			and not _owns_terminal_attack_reaction(command):
 		_attack_executor.deactivate_primary_presentation()
 		return
-	if not _attack_executor.is_in_exec_mode():
-		return
+	# An authoritative Counter child Begin must be able to rebuild the
+	# controller's executor after the parent acknowledgement deliberately
+	# retired its presentation state.
 	if command.command_type == "begin_attack":
 		_attack_executor.apply_begin_attack_result(result)
+		return
+	if not _attack_executor.is_in_exec_mode():
 		return
 	if command.command_type == "resolve_attack_pool_choice":
 		if str(result.get("choice_kind", "")) \
@@ -414,6 +416,18 @@ func close_mirror() -> void:
 	if _panel_mgr == null or _panel_mgr.attack_panel_mirror == null:
 		return
 	_panel_mgr.attack_panel_mirror.close()
+
+
+func sync_inactive_ship_attack_continuation(intent: Dictionary) -> void:
+	if _attack_executor == null or _target_selector == null \
+			or intent.is_empty():
+		return
+	if not bool(intent.get("is_interactive", false)):
+		_attack_executor.deactivate_primary_presentation()
+		close_mirror()
+		return
+	_attack_executor.resume_inactive_ship_attack_continuation(
+			Callable(_target_selector, "ship_token_for_instance"))
 
 
 ## Applies one fresh viewer-specific timing-window projection to the existing

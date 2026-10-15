@@ -9,7 +9,7 @@
 
 Accepted by: Project Owner
 Accepted date: 2026-08-21
-Accepted update date: 2026-09-09
+Accepted update date: 2026-10-12
 
 ## 1. Purpose and authority
 
@@ -28,6 +28,8 @@ Applicable authority remains:
   [CON-006](../../architecture/contracts/CON-006-attack-declaration-lifecycle-contract.md),
   and [CON-007](../../architecture/contracts/CON-007-post-attack-continuation-release-contract.md)
   for attack declaration, result inspection, and continuation; and
+- [Counter Attack gameplay-interaction requirements](counter_attack_interaction.md)
+  for locked Counter-child entry and its composed return; and
 - applicable Armada rules and accepted rule-capability authority for detailed
   command, repair, maneuver, overlap, and eligibility logic.
 
@@ -155,6 +157,18 @@ Activation contexts. The initiation context may change legal capabilities, but
 does not justify independent fundamental implementations. Detailed shared
 Squadron Activation lifecycle, capabilities, and completion behavior are
 deferred to a child requirements specification.
+
+A Counter child nested in a commanded Shared Squadron Activation does not
+replace the original activated Squadron as activation owner. The Counter
+attacker/controller owns only the applicable child-attack decisions. After the
+child inspection is satisfied, composed return re-evaluates the original
+activated Squadron. A remaining legal Move is derived while that inspection
+stays pending until the authoritative Move or Move-decline transaction
+consumes it atomically; otherwise the existing Squadron-completion transaction
+consumes it atomically. Return then proceeds through the existing Squadron
+Command and Ship Activation owners until the next canonical stable state or
+live legal decision. The detailed Counter-child interaction is defined by the
+accepted [Counter Attack gameplay-interaction requirements](counter_attack_interaction.md).
 
 ### SAI-040 — Repair
 
@@ -331,8 +345,11 @@ interpretation of an RRG ambiguity, not an explicit RRG rule.
 
 ## 5. Explicitly deferred work
 
-- **Shared Squadron Activation:** its detailed lifecycle, initiation-context
-  capabilities, and completion semantics require a child specification.
+- **Shared Squadron Activation:** its broader lifecycle, initiation-context
+  capabilities, and completion semantics require a child specification. The
+  Counter-child entry and composed-return boundary are no longer deferred and
+  are governed by the accepted
+  [Counter Attack gameplay-interaction requirements](counter_attack_interaction.md).
 - **Repair rules:** individual actions, costs, and rule-specific legality stay
   with their applicable rules/child specification.
 - **Attack-capacity ownership:** whether attack allowances are stored or
@@ -361,7 +378,7 @@ remediation here.
 | --- | --- | --- |
 | SAI-001 | ADR-010 | AT-002 interaction maps |
 | SAI-010–SAI-020 | Owner decisions D-SA-010–020; ADR-006 | AT-002 interaction maps |
-| SAI-030–SAI-035 | Owner decisions D-SA-030–035; ADR-006 | AT-002 Ship Activation map |
+| SAI-030–SAI-035 | Owner decisions D-SA-030–035; ADR-006; CON-007; Counter Attack gameplay-interaction requirements | AT-002 Ship Activation map |
 | SAI-040 | Owner decisions D-SA-040–044; applicable repair authority | AT-002 Ship Activation map |
 | SAI-050 | Owner decisions D-SA-050–052; ADR-001; CON-006; CON-007 | AT-002 Ship Activation map |
 | SAI-060–SAI-065 | Owner decisions D-SA-060–067; ADR-006; applicable maneuver/overlap authority | AT-002 Ship Activation map |

@@ -1,8 +1,9 @@
 ## Derives deterministic current-attack follow-ups from authoritative state.
 ##
 ## This stateless helper is invoked only from CommandProcessor's existing
-## post-success/deferred-follow-up seam. It never reads scene state,
-## InteractionFlow, network ownership, or presentation-local references.
+## post-success/deferred-follow-up seam. It reads only canonical GameState
+## facts, including the accepted Counter-choice projection; it never reads
+## scene state, network ownership, or presentation-local references.
 class_name CurrentAttackContinuation
 extends RefCounted
 
@@ -217,7 +218,15 @@ static func _derive_inspection_release(game_state: GameState) -> GameCommand:
 	var inspection: CompletedAttackInspection = game_state.completed_attack_inspection
 	if inspection == null or not inspection.is_satisfied():
 		return null
+	var counter_begin: GameCommand = _derive_counter_inspection_release(
+			game_state, inspection)
+	if counter_begin != null:
+		return counter_begin
 	var data: Dictionary = inspection.serialize()
+	if str(data.get("attack_kind", "")) \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+		return _derive_counter_child_inspection_release(
+				game_state, inspection, data)
 	var attacker: Dictionary = data.get("attacker", {}) as Dictionary
 	var attacker_kind: String = str(attacker.get("kind", ""))
 	var attacker_player: int = int(attacker.get("player", -1))
@@ -229,6 +238,131 @@ static func _derive_inspection_release(game_state: GameState) -> GameCommand:
 		return _derive_squadron_inspection_release(
 				game_state, inspection, attacker_player, attacker_index)
 	return null
+
+
+## A completed Counter child returns through the child defender's retained
+## Squadron activation. The parent/child relationship was already validated by
+## the authoritative Counter Begin; terminal state intentionally retains no
+## historical parent attack identity.
+static func _derive_counter_child_inspection_release(game_state: GameState,
+		inspection: CompletedAttackInspection,
+		data: Dictionary) -> GameCommand:
+	if inspection == null or not inspection.is_satisfied() \
+			or str(data.get("source_attack_id", "")) \
+					!= inspection.source_attack_id():
+		return null
+	var defender: Dictionary = data.get("defender", {}) as Dictionary
+	if str(defender.get("kind", "")) != CurrentAttackState.KIND_SQUADRON:
+		return null
+	var player: int = int(defender.get("player", -1))
+	var squadron_index: int = int(defender.get("index", -1))
+	var squadron: SquadronInstance = game_state.get_squadron(
+			player, squadron_index)
+	var active_squadron: SquadronInstance = \
+			game_state.get_active_squadron_activation()
+	if squadron == null or squadron.is_destroyed() \
+			or squadron.activated_this_round \
+			or squadron != active_squadron \
+			or squadron.attack_action_disposition \
+					!= SquadronInstance.ATTACK_ACTION_BEGUN \
+			or not game_state.validate_declaration_adjacent_state() \
+			or not _counter_child_activation_context_is_valid(
+					game_state, squadron):
+		return null
+	if game_state.has_legal_remaining_squadron_move_action(squadron):
+		# The decision is derived from canonical state. Its authoritative Move or
+		# Move-decline command consumes J atomically.
+		return null
+	if not game_state.is_squadron_activation_action_complete(squadron):
+		return null
+	return _build_complete_squadron_activation_with_inspection(
+			game_state, squadron, squadron_index, inspection.inspection_id())
+
+
+static func _counter_child_activation_context_is_valid(game_state: GameState,
+		squadron: SquadronInstance) -> bool:
+	if squadron.activation_id.is_empty():
+		return false
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		return game_state.current_phase == Constants.GamePhase.SQUADRON \
+				and squadron.owner_player \
+						== game_state.squadron_phase_controller_player
+	if squadron.activation_context \
+			!= SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
+			or game_state.current_phase != Constants.GamePhase.SHIP:
+		return false
+	var ship: ShipInstance = game_state.get_ship(
+			squadron.commanding_ship_player, squadron.commanding_ship_index)
+	return ship != null \
+			and ship == game_state.get_active_ship_activation() \
+			and ship.owner_player == squadron.owner_player \
+			and not ship.ship_activation_identity.is_empty() \
+			and ship.squadron_command_opportunity_disposition \
+					== ShipInstance.ACTIVATION_DISPOSITION_OPEN
+
+
+static func _derive_counter_inspection_release(game_state: GameState,
+		inspection: CompletedAttackInspection) -> GameCommand:
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK \
+			or flow.step_id != Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
+			or inspection.source_attack_id() \
+					!= str(flow.payload.get("attack_id", "")) \
+			or not bool(flow.payload.get("counter_choice_accepted", false)):
+		return null
+	var keys: Array[String] = [
+		"counter_attacker_player", "counter_attacker_squadron_index",
+		"counter_target_player", "counter_target_squadron_index",
+	]
+	for key: String in keys:
+		if typeof(flow.payload.get(key)) != TYPE_INT:
+			return null
+	var attacker_player: int = int(flow.payload["counter_attacker_player"])
+	var attacker_index: int = int(
+			flow.payload["counter_attacker_squadron_index"])
+	var defender_player: int = int(flow.payload["counter_target_player"])
+	var defender_index: int = int(flow.payload["counter_target_squadron_index"])
+	var attacker: SquadronInstance = game_state.get_squadron(
+			attacker_player, attacker_index)
+	var defender: SquadronInstance = game_state.get_squadron(
+			defender_player, defender_index)
+	if attacker == null or defender == null or defender.is_destroyed():
+		return null
+	var inspection_data: Dictionary = inspection.serialize()
+	var parent_attacker: Dictionary = inspection_data.get(
+			"attacker", {}) as Dictionary
+	var parent_defender: Dictionary = inspection_data.get(
+			"defender", {}) as Dictionary
+	if str(parent_attacker.get("kind", "")) \
+			!= CurrentAttackState.KIND_SQUADRON \
+			or int(parent_attacker.get("player", -1)) != defender_player \
+			or int(parent_attacker.get("index", -1)) != defender_index \
+			or str(parent_defender.get("kind", "")) \
+					!= CurrentAttackState.KIND_SQUADRON \
+			or int(parent_defender.get("player", -1)) != attacker_player \
+			or int(parent_defender.get("index", -1)) != attacker_index:
+		return null
+	var entry: Dictionary = TargetingListBuilder.authoritative_attack_entry(
+			game_state,
+			attacker_player, CurrentAttackState.KIND_SQUADRON, attacker_index, -1,
+			defender_player, CurrentAttackState.KIND_SQUADRON, defender_index, -1)
+	if entry.is_empty():
+		return null
+	return BeginAttackCommand.new(attacker_player, {
+		"attacker_player": attacker_player,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"attacker_index": attacker_index,
+		"attacker_zone": -1,
+		"defender_player": defender_player,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_index": defender_index,
+		"defender_zone": -1,
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER,
+		"range_band": str(entry.get("range_band", "")),
+		"obstructed": bool(entry.get("obstructed", false)),
+		"completed_attack_inspection_id": inspection.inspection_id(),
+	})
 
 
 static func _derive_ship_inspection_release(game_state: GameState,
@@ -309,11 +443,18 @@ static func _derive_squadron_inspection_release(game_state: GameState,
 	if squadron == null or squadron.activated_this_round \
 			or not game_state.is_squadron_activation_action_complete(squadron):
 		return null
+	return _build_complete_squadron_activation_with_inspection(
+			game_state, squadron, squadron_index, inspection.inspection_id())
+
+
+static func _build_complete_squadron_activation_with_inspection(
+		game_state: GameState, squadron: SquadronInstance,
+		squadron_index: int, inspection_id: String) -> GameCommand:
 	var payload: Dictionary = {
 		"squadron_index": squadron_index,
 		"activation_id": squadron.activation_id,
 		"activation_context": squadron.activation_context,
-		"completed_attack_inspection_id": inspection.inspection_id(),
+		"completed_attack_inspection_id": inspection_id,
 	}
 	if squadron.activation_context \
 			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
@@ -324,7 +465,7 @@ static func _derive_squadron_inspection_release(game_state: GameState,
 		payload["commanding_ship_player"] = squadron.commanding_ship_player
 		payload["commanding_ship_index"] = squadron.commanding_ship_index
 		payload["ship_activation_identity"] = ship.ship_activation_identity
-	return CompleteSquadronActivationCommand.new(player, payload)
+	return CompleteSquadronActivationCommand.new(squadron.owner_player, payload)
 
 
 static func _has_remaining_anti_squadron_target(game_state: GameState,

@@ -570,16 +570,18 @@ channel for network/replay parity.
 | controller_role | Counter squadron owner, encoded by `counter_controller_player` / `controller_player` payload. |
 | modal_kind | `ATTACK_COUNTER_CHOICE` |
 | allowed_commands | `counter_choice`, `publish_attack_flow` |
-| transitions | `counter_choice(accepted=true)` starts a Counter attack at `ATTACK_DECLARE`/`ATTACK_ROLL` with the Counter squadron as attacker; `accepted=false` clears to `NONE` or resumes the parent activation/squadron flow. |
+| transitions | `counter_choice(accepted=true)` starts a Counter child attack at `ATTACK_DECLARE` with the Counter squadron as attacker; its locked declaration automatically proceeds to `ATTACK_ROLL`. `accepted=false` clears to `NONE` or resumes the parent activation/squadron flow. |
 | producer | `AttackFlowFSM.advance(Step.COUNTER_CHOICE)` after damage resolution when `CounterKeyword.is_counter_trigger_available()` is true. |
 | rule citation | RRG "Squadron Keywords", Counter. |
 
 Notes: Counter is the canonical off-turn attack example. The original attack
 executor owns the pipeline, but the choice and accepted Counter attack are
-controlled by the defending squadron's owner. Presentation must project the
-choice, roll, optional Swarm modifier, and dice confirm from
-`interaction_flow.payload`; it must not show scene-local buttons on the
-triggering attacker's panel without a command-backed flow surface.
+controlled by the defending squadron's owner. The authoritative locked
+Declare, automatic Roll entry, controller/passive presentation, and composed-
+return requirements are defined in
+[Counter Attack — Gameplay-Interaction Requirements](requirements/gameplay_interactions/counter_attack_interaction.md).
+This legacy flow row is descriptive only and does not independently establish
+those requirements.
 
 ### `ATTACK / ATTACK_CRITICAL_CHOICE`
 

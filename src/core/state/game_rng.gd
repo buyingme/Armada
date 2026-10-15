@@ -11,9 +11,10 @@
 ## rng.shuffle(my_array)
 ## [/codeblock]
 ##
-## The seed is stored in [member GameState] and persisted across
-## save/load.  For multiplayer the host generates the seed and
-## transmits it to all clients at game start.
+## The seed is stored in [member GameState] and persisted across save/load.
+## In multiplayer the authoritative host owns the live RNG; passive Network
+## snapshots omit it.  The existing replay bootstrap may distribute its
+## recorded initial seed through game configuration before play begins.
 class_name GameRng
 extends RefCounted
 
@@ -70,15 +71,32 @@ func set_state(p_state: int) -> void:
 ## Serializes the RNG to a dictionary for save/load.
 func serialize() -> Dictionary:
 	return {
-		"initial_seed": initial_seed,
-		"state": _rng.state,
+		"initial_seed": str(initial_seed),
+		"state": str(_rng.state),
 	}
 
 
 ## Deserializes a [GameRng] from a previously serialized dictionary.
 static func deserialize(data: Dictionary) -> GameRng:
-	var rng := GameRng.new(data.get("initial_seed", 0))
-	var saved_state: int = data.get("state", 0)
-	if saved_state != 0:
-		rng.set_state(saved_state)
+	if data.size() != 2 or not data.has("initial_seed") \
+			or not data.has("state"):
+		return null
+	var decoded_seed: Variant = _decode_exact_int64(data.get("initial_seed"))
+	var decoded_state: Variant = _decode_exact_int64(data.get("state"))
+	if decoded_seed == null or decoded_state == null or int(decoded_seed) == 0:
+		return null
+	var rng := GameRng.new(int(decoded_seed))
+	rng.set_state(int(decoded_state))
 	return rng
+
+
+static func _decode_exact_int64(raw: Variant) -> Variant:
+	if typeof(raw) != TYPE_STRING:
+		return null
+	var encoded: String = raw as String
+	if encoded.is_empty() or not encoded.is_valid_int():
+		return null
+	var value: int = encoded.to_int()
+	if str(value) != encoded:
+		return null
+	return value

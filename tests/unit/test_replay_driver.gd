@@ -52,7 +52,7 @@ func test_real_cf_dial_history_round_trips_json_factory_and_driver() -> void:
 	var loaded: GameReplay = GameReplay.deserialize(
 			JSON.parse_string(JSON.stringify(replay.serialize())))
 	assert_not_null(loaded)
-	assert_eq(loaded.header.get("format_version"), 11)
+	assert_eq(loaded.header.get("format_version"), 12)
 	assert_eq(loaded.commands.size(), authoritative_history.size())
 	for index: int in range(loaded.commands.size()):
 		assert_eq(loaded.commands[index].get("type"),

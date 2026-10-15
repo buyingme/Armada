@@ -190,10 +190,9 @@ func advance(game_state: GameState, next_step: Step) -> bool:
 
 ## Convenience: terminate the flow.
 func end(game_state: GameState) -> void:
-	advance(game_state, Step.END)
-	# After END, clear interaction_flow so the next non-attack flow can own it.
-	if game_state != null:
-		game_state.interaction_flow = InteractionFlow.empty()
+	# Authoritative clearing is command-owned. Scene cleanup advances only this
+	# transient FSM and never clears a live GameState projection directly.
+	advance(null, Step.END)
 
 
 ## Restarts the flow for the next attack of the same activation

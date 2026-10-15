@@ -59,31 +59,38 @@ static func is_counter_trigger_available(attack_kind: String,
 			defender, SquadronKeywordRuleHelper.KEYWORD_COUNTER) > 0
 
 
-## Validates Counter roll commands against the locked attack-flow payload.
+## Validates Counter roll commands against the canonical active attack and its
+## source-scoped attack-flow projection.  The command intentionally carries
+## only attack_id; locked participants and dice are never accepted from UI.
 ## Rules Reference: RRG "Squadron Keywords" — Counter rolls blue dice
 ## equal to the keyword value against the triggering squadron.
 func validate_counter_roll(game_state: GameState,
 		command: GameCommand) -> Dictionary:
 	if game_state == null or command == null:
 		return _allow()
+	var attack: CurrentAttackState = game_state.current_attack_state
 	var flow_payload: Dictionary = _flow_payload(game_state)
-	var command_counter: bool = \
-			SquadronKeywordRuleHelper.is_counter_attack_payload(command.payload)
 	var flow_counter: bool = \
 			SquadronKeywordRuleHelper.is_counter_attack_payload(flow_payload)
-	if not command_counter and not flow_counter:
+	var attack_counter: bool = attack != null and attack.active \
+			and _is_counter_attack_kind(attack.attack_kind)
+	if not attack_counter and not flow_counter:
 		return _allow()
-	if not command_counter or not flow_counter:
+	if not attack_counter or not flow_counter:
 		return _deny(REJECTION_REASON)
-	if command.player_index != int(flow_payload.get("attacker_player", -1)):
+	if typeof(command.payload.get("attack_id")) != TYPE_STRING \
+			or str(command.payload.get("attack_id", "")) != attack.attack_id \
+			or attack.stage != CurrentAttackState.STAGE_PRE_ROLL \
+			or command.player_index != attack.attacker_player:
 		return _deny(REJECTION_REASON)
-	if not _matching_roll_identity(flow_payload, command.payload):
+	if not _flow_matches_counter_attack(game_state, attack, flow_payload):
 		return _deny(REJECTION_REASON)
 	var expected_pool: Dictionary = _expected_counter_pool(
-			_counter_attacker(game_state, flow_payload))
+			game_state.get_squadron(
+					attack.attacker_player, attack.attacker_index))
 	if expected_pool.is_empty():
 		return _deny(REJECTION_REASON)
-	if not _pool_matches(command.payload.get("dice_pool", {}), expected_pool):
+	if not _pool_matches(attack.dice_pool, expected_pool):
 		return _deny(REJECTION_REASON)
 	if not _pool_matches(flow_payload.get("dice_pool", {}), expected_pool):
 		return _deny(REJECTION_REASON)
@@ -128,31 +135,36 @@ func _flow_payload(game_state: GameState) -> Dictionary:
 	return game_state.interaction_flow.payload
 
 
-func _matching_roll_identity(flow_payload: Dictionary,
-		command_payload: Dictionary) -> bool:
+func _flow_matches_counter_attack(game_state: GameState,
+		attack: CurrentAttackState, flow_payload: Dictionary) -> bool:
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null \
+			or flow.flow_type != Constants.InteractionFlow.ATTACK \
+			or flow.step_id != Constants.InteractionStep.ATTACK_ROLL \
+			or flow.controller_player != attack.attacker_player \
+			or str(flow_payload.get("attack_id", "")) != attack.attack_id:
+		return false
+	if attack.attacker_kind != CurrentAttackState.KIND_SQUADRON \
+			or attack.defender_kind != CurrentAttackState.KIND_SQUADRON:
+		return false
 	if str(flow_payload.get("attacker_kind", "")) != "squadron":
 		return false
 	if str(flow_payload.get("target_kind", "")) != "squadron":
 		return false
-	if str(command_payload.get("attacker_kind", "")) != "squadron":
-		return false
-	if str(command_payload.get("target_kind", "")) != "squadron":
-		return false
-	var keys: Array[String] = ["attacker_player", "attacker_squadron_index",
-			"defender_player", "target_squadron_index"]
-	for key: String in keys:
-		if int(command_payload.get(key, -999)) \
-				!= int(flow_payload.get(key, -999)):
+	var identities: Dictionary = {
+		"attacker_player": attack.attacker_player,
+		"attacker_squadron_index": attack.attacker_index,
+		"defender_player": attack.defender_player,
+		"target_squadron_index": attack.defender_index,
+	}
+	for key: String in identities:
+		if typeof(flow_payload.get(key)) != TYPE_INT \
+				or int(flow_payload.get(key)) != int(identities[key]):
 			return false
-	return true
-
-
-func _counter_attacker(game_state: GameState,
-		flow_payload: Dictionary) -> SquadronInstance:
-	var owner: int = int(flow_payload.get("attacker_player", -1))
-	var squadron_index: int = int(
-			flow_payload.get("attacker_squadron_index", -1))
-	return game_state.get_squadron(owner, squadron_index)
+	return game_state.get_squadron(
+			attack.attacker_player, attack.attacker_index) != null \
+			and game_state.get_squadron(
+					attack.defender_player, attack.defender_index) != null
 
 
 func _counter_choice_attacker(game_state: GameState,

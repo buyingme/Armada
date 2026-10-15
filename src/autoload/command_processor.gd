@@ -291,6 +291,8 @@ func _check_terminal_admission(command: GameCommand,
 		return "The match result is terminal."
 	if game_state.detected_terminal_reason().is_empty():
 		return ""
+	if _is_matching_final_attack_publication(command, game_state):
+		return ""
 	if command.command_type in [
 		AcknowledgeFaceupDamageCommand.TYPE,
 		AcknowledgeAttackResultCommand.TYPE,
@@ -342,6 +344,8 @@ func _check_completed_attack_inspection(command: GameCommand,
 		return ""
 	if command.command_type == AcknowledgeAttackResultCommand.TYPE:
 		return ""
+	if _is_matching_final_attack_publication(command, game_state):
+		return ""
 	if not inspection.is_satisfied():
 		return "Completed attack result acknowledgement is outstanding."
 	if command.command_type == CompleteMatchCommand.TYPE \
@@ -355,6 +359,16 @@ func _check_completed_attack_inspection(command: GameCommand,
 		return "Completed attack inspection blocks unrelated progression."
 	return game_state.validate_completed_attack_inspection_consumer(
 			str(command.payload.get("completed_attack_inspection_id", "")))
+
+
+func _is_matching_final_attack_publication(command: GameCommand,
+		game_state: GameState) -> bool:
+	if command == null or game_state == null \
+			or command.command_type != "publish_attack_flow" \
+			or typeof(command.payload.get("final")) != TYPE_BOOL \
+			or not bool(command.payload.get("final", false)):
+		return false
+	return command.validate(game_state).is_empty()
 
 
 ## Drains observer follow-up commands in FIFO order.
@@ -435,17 +449,131 @@ func _submit(command: GameCommand,
 	if collect_observers \
 			and execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
 			and not is_replaying:
-			_collect_observer_followups(
+		_enqueue_terminal_attack_publication(
+				command, result, game_state, flow_snapshot)
+		_collect_observer_followups(
 					command, result, game_state, flow_snapshot)
 	_enqueue_post_success_continuation(
 			game_state, command, result, execution_mode)
 	if not is_replaying:
 		command_executed.emit(command, result)
+		if collect_observers \
+				and execution_mode \
+						== TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY:
+			_enqueue_counter_begin_publication(command, game_state)
 		if drain_followups \
 				and execution_mode \
 						== TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY:
 			drain_observer_followups()
 	return result
+
+
+func _enqueue_terminal_attack_publication(command: GameCommand,
+		result: Dictionary, game_state: GameState,
+		flow_snapshot: InteractionFlow) -> void:
+	if command == null or game_state == null or flow_snapshot == null \
+			or flow_snapshot.flow_type != Constants.InteractionFlow.ATTACK:
+		return
+	var source_attack_id: Variant = flow_snapshot.payload.get("attack_id")
+	if typeof(source_attack_id) != TYPE_STRING \
+			or str(source_attack_id).is_empty() \
+			or str(result.get("attack_id", "")) != str(source_attack_id):
+		return
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack != null and attack.active:
+		return
+	var installed: InteractionFlow = game_state.interaction_flow
+	if installed == null \
+			or installed.flow_type != Constants.InteractionFlow.ATTACK \
+			or str(installed.payload.get("attack_id", "")) \
+					!= str(source_attack_id):
+		return
+	if flow_snapshot.step_id \
+			== Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
+			and bool(flow_snapshot.payload.get(
+					"counter_choice_accepted", false)):
+		return
+	var attacker_player: Variant = flow_snapshot.payload.get("attacker_player")
+	if typeof(attacker_player) != TYPE_INT \
+			or int(attacker_player) != command.player_index:
+		return
+	var publication: PublishAttackFlowCommand = GameManager \
+			.build_publish_attack_flow_command(
+					game_state, InteractionFlow.empty(), int(attacker_player),
+					str(source_attack_id))
+	if publication != null:
+		_observer_followups.append(publication)
+
+
+func _enqueue_counter_begin_publication(command: GameCommand,
+		game_state: GameState) -> void:
+	if command == null or game_state == null \
+			or not PlayMode.is_network() \
+			or command.command_type != BeginAttackCommand.TYPE \
+			or str(command.payload.get("attack_kind", "")) \
+					!= SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+		return
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var flow: InteractionFlow = game_state.interaction_flow
+	if attack == null or not attack.active \
+			or attack.attack_kind \
+					!= SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER \
+			or flow == null \
+			or flow.flow_type != Constants.InteractionFlow.ATTACK \
+			or flow.step_id \
+					!= Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
+			or not bool(flow.payload.get("counter_choice_accepted", false)) \
+			or int(flow.payload.get("counter_attacker_player", -1)) \
+					!= attack.attacker_player \
+			or int(flow.payload.get("counter_attacker_squadron_index", -1)) \
+					!= attack.attacker_index \
+			or int(flow.payload.get("counter_target_player", -1)) \
+					!= attack.defender_player \
+			or int(flow.payload.get("counter_target_squadron_index", -1)) \
+					!= attack.defender_index:
+		return
+	var flow_payload: Dictionary = {
+		"attack_id": attack.attack_id,
+		"attacker_kind": attack.attacker_kind,
+		"attacker_player": attack.attacker_player,
+		"attacker_squadron_index": attack.attacker_index,
+		"attacker_zone": attack.attacker_zone,
+		"target_kind": attack.defender_kind,
+		"defender_player": attack.defender_player,
+		"target_squadron_index": attack.defender_index,
+		"defender_zone": attack.defender_zone,
+		"attack_kind": attack.attack_kind,
+		"range_band": attack.range_band,
+		"obstructed": attack.obstructed,
+		"dice_pool": attack.dice_pool.duplicate(true),
+		"dice_results": attack.dice_results.duplicate(true),
+	}
+	var attacker: SquadronInstance = game_state.get_squadron(
+			attack.attacker_player, attack.attacker_index)
+	var defender: SquadronInstance = game_state.get_squadron(
+			attack.defender_player, attack.defender_index)
+	if attacker == null or attacker.squadron_data == null \
+			or defender == null or defender.squadron_data == null:
+		return
+	flow_payload["attacker_name"] = attacker.squadron_data.squadron_name
+	flow_payload["defender_name"] = defender.squadron_data.squadron_name
+	flow_payload["attacker_zone_name"] = ""
+	var publications: Array[PublishAttackFlowCommand] = []
+	for step: Constants.InteractionStep in [
+			Constants.InteractionStep.ATTACK_DECLARE,
+			Constants.InteractionStep.ATTACK_ROLL,
+	]:
+		var child_flow: InteractionFlow = InteractionFlow.make(
+				Constants.InteractionFlow.ATTACK, step,
+				attack.attacker_player, Constants.Visibility.ALL, flow_payload)
+		var publication: PublishAttackFlowCommand = GameManager \
+				.build_publish_attack_flow_command(
+						game_state, child_flow, attack.attacker_player)
+		if publication == null:
+			return
+		publications.append(publication)
+	for publication: PublishAttackFlowCommand in publications:
+		_observer_followups.append(publication)
 
 
 func _enqueue_post_success_continuation(game_state: GameState,

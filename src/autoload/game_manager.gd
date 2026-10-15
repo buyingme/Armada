@@ -1997,6 +1997,8 @@ func release_reconstructed_completed_attack_inspection() -> Dictionary:
 				current_game_state)
 	if followup == null:
 		return {}
+	if followup.command_type == BeginAttackCommand.TYPE:
+		return _submitter.submit_authoritative(followup)
 	return _submitter.submit(followup)
 
 
@@ -2028,7 +2030,8 @@ func _next_unresolved_defense_token(attack: CurrentAttackState,
 ## [param submitting_player] — the player attribute on the command
 ##     (defaults to the active player).
 func submit_publish_attack_flow(flow: InteractionFlow,
-		submitting_player: int = -1) -> Dictionary:
+		submitting_player: int = -1,
+		terminal_source_attack_id: String = "") -> Dictionary:
 	if not current_game_state or flow == null:
 		return {}
 	if ReplayDriver.enabled:
@@ -2038,15 +2041,47 @@ func submit_publish_attack_flow(flow: InteractionFlow,
 	var player: int = submitting_player
 	if player < 0:
 		player = get_active_player()
+	var cmd: PublishAttackFlowCommand = build_publish_attack_flow_command(
+			current_game_state, flow, player, terminal_source_attack_id)
+	if cmd == null:
+		return {}
+	return _submitter.submit(cmd)
+
+
+## Builds one source-scoped attack-flow publication from canonical state.
+## Submission and ordering remain with the caller's existing command route.
+func build_publish_attack_flow_command(game_state: GameState,
+		flow: InteractionFlow, submitting_player: int,
+		terminal_source_attack_id: String = "") -> PublishAttackFlowCommand:
+	if game_state == null or flow == null:
+		return null
 	var is_final: bool = (flow.flow_type
 			== Constants.InteractionFlow.NONE)
-	var cmd := PublishAttackFlowCommand.new(player, {
+	var source_attack_id: String = terminal_source_attack_id
+	var flow_payload: Dictionary = {}
+	if is_final:
+		if source_attack_id.is_empty():
+			return null
+	else:
+		var attack: CurrentAttackState = game_state.current_attack_state
+		if flow.flow_type != Constants.InteractionFlow.ATTACK \
+				or attack == null or not attack.active:
+			return null
+		source_attack_id = attack.attack_id
+		var projected_source: Variant = flow.payload.get("attack_id")
+		if projected_source != null \
+				and (typeof(projected_source) != TYPE_STRING \
+				or str(projected_source) != source_attack_id):
+			return null
+		flow.payload["attack_id"] = source_attack_id
+		flow_payload = flow.payload.duplicate(true)
+	return PublishAttackFlowCommand.new(submitting_player, {
 		"step_id": int(flow.step_id),
 		"controller_player": flow.controller_player,
-		"flow_payload": flow.payload.duplicate(true),
+		"flow_payload": flow_payload,
 		"final": is_final,
+		"source_attack_id": source_attack_id,
 	})
-	return _submitter.submit(cmd)
 
 
 ## Submits an [AdvanceActivationStepCommand] to record a ship-activation
@@ -3409,9 +3444,12 @@ func _handle_remote_resolve_damage(
 			# executor-local defender token.
 			EventBus.squadron_hull_changed.emit(sq, sq.current_hull)
 		return
-	var ship: ShipInstance = _find_ship_from_damage_result(result)
+	var ship_resolution: Dictionary = _resolve_remote_ship_damage_presentation(
+			cmd, result)
+	var ship: ShipInstance = ship_resolution.get("ship") as ShipInstance
 	if ship == null:
 		return
+	result = (ship_resolution.get("result", {}) as Dictionary).duplicate(true)
 	EventBus.ship_defense_token_changed.emit(ship)
 	var application: Dictionary = result.get("damage_application", {}) \
 			as Dictionary
@@ -3468,16 +3506,82 @@ func _handle_remote_resolve_damage(
 ## Resolves the target from the authoritative ResolveDamage result. The command
 ## payload intentionally contains only current-attack intent and is not a
 ## second target-identity authority.
-func _find_ship_from_damage_result(result: Dictionary) -> ShipInstance:
-	if not current_game_state:
-		return null
-	var owner: int = int(result.get("owner_player", -1))
-	var ship_index: int = int(result.get("ship_index", -1))
-	var player_state: PlayerState = current_game_state.get_player_state(owner)
-	if player_state == null or ship_index < 0 \
-			or ship_index >= player_state.ships.size():
-		return null
-	return player_state.ships[ship_index] as ShipInstance
+func _resolve_remote_ship_damage_presentation(cmd: GameCommand,
+		result: Dictionary) -> Dictionary:
+	if current_game_state == null or cmd == null:
+		return {}
+	var has_owner: bool = result.has("owner_player")
+	var has_ship_index: bool = result.has("ship_index")
+	if has_owner != has_ship_index:
+		return {}
+	if has_owner:
+		if typeof(result.get("owner_player")) != TYPE_INT \
+				or typeof(result.get("ship_index")) != TYPE_INT:
+			return {}
+		var owner: int = int(result["owner_player"])
+		var ship_index: int = int(result["ship_index"])
+		if owner < 0 or owner >= Constants.PLAYER_COUNT or ship_index < 0:
+			return {}
+		var explicit_ship: ShipInstance = current_game_state.get_ship(
+				owner, ship_index)
+		if explicit_ship == null:
+			return {}
+		return {"ship": explicit_ship, "result": result.duplicate(true)}
+	var normalized: Dictionary = _normalize_identity_free_ship_outcome(
+			cmd, result)
+	if normalized.is_empty():
+		return {}
+	return normalized
+
+
+func _normalize_identity_free_ship_outcome(cmd: GameCommand,
+		result: Dictionary) -> Dictionary:
+	const OUTCOME_KEYS: Array[String] = [
+		"target_kind", "affected_zone", "post_resolution_shields",
+		"hull_damage", "shield_absorbed", "final_damage", "destroyed",
+	]
+	if cmd.command_type != "resolve_damage" \
+			or result.size() != OUTCOME_KEYS.size():
+		return {}
+	for key: String in OUTCOME_KEYS:
+		if not result.has(key):
+			return {}
+	if typeof(result.get("target_kind")) != TYPE_STRING \
+			or str(result.get("target_kind")) != CurrentAttackState.KIND_SHIP \
+			or typeof(result.get("destroyed")) != TYPE_BOOL:
+		return {}
+	for key: String in ["affected_zone", "post_resolution_shields",
+			"hull_damage", "shield_absorbed", "final_damage"]:
+		if typeof(result.get(key)) != TYPE_INT or int(result.get(key)) < 0:
+			return {}
+	var affected_zone: int = int(result["affected_zone"])
+	if affected_zone < int(Constants.HullZone.FRONT) \
+			or affected_zone > int(Constants.HullZone.REAR):
+		return {}
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.attack_id != str(cmd.payload.get("attack_id", "")) \
+			or attack.defender_kind != CurrentAttackState.KIND_SHIP:
+		return {}
+	var ship: ShipInstance = current_game_state.get_ship(
+			attack.defender_player, attack.defender_index)
+	if ship == null or ship.ship_data == null:
+		return {}
+	var zone_name: String = Constants.hull_zone_to_string(
+			affected_zone as Constants.HullZone)
+	var canonical_shields: int = int(ship.current_shields.get(zone_name, -1))
+	var hull_damage: int = int(result["hull_damage"])
+	var canonical_damage: int = ship.get_total_damage()
+	if canonical_shields != int(result["post_resolution_shields"]) \
+			or hull_damage > canonical_damage \
+			or bool(result["destroyed"]) != ship.is_destroyed():
+		return {}
+	var projected: Dictionary = result.duplicate(true)
+	projected["target_type"] = CurrentAttackState.KIND_SHIP
+	projected["hull_zone"] = zone_name
+	projected["new_shields"] = canonical_shields
+	projected["cards_added"] = hull_damage
+	return {"ship": ship, "result": projected}
 
 
 func _find_squadron_from_damage_result(result: Dictionary) -> SquadronInstance:

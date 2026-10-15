@@ -35,6 +35,27 @@ func test_counter_choice_validate_rejects_missing_identity() -> void:
 			"Counter choice must carry the exact pending attack identity.")
 
 
+func test_counter_choice_result_separates_domain_decline_from_failure() -> void:
+	var state: GameState = _counter_choice_state()
+	var command := CounterChoiceCommand.new(1, _counter_choice_payload(false))
+	var result: Dictionary = command.execute(state)
+
+	assert_false(result.has("accepted"),
+			"A Counter outcome must not reuse the generic failure sentinel.")
+	assert_eq(result.get(CounterChoiceCommand.RESULT_COUNTER_ACCEPTED), false)
+	assert_eq(state.interaction_flow.payload.get("counter_choice_accepted"), false)
+
+
+func test_counter_choice_result_preserves_domain_acceptance() -> void:
+	var state: GameState = _counter_choice_state()
+	var command := CounterChoiceCommand.new(1, _counter_choice_payload(true))
+	var result: Dictionary = command.execute(state)
+
+	assert_false(result.has("accepted"))
+	assert_eq(result.get(CounterChoiceCommand.RESULT_COUNTER_ACCEPTED), true)
+	assert_eq(state.interaction_flow.payload.get("counter_choice_accepted"), true)
+
+
 func test_skip_attack_modifier_validate_rejects_non_attacker() -> void:
 	var state: GameState = _swarm_modify_state(true)
 	var command := SkipAttackModifierCommand.new(0, {

@@ -33,6 +33,7 @@
 ##   "flow_payload"        — Dictionary (deep-copied attack payload)
 ##   "final"               — bool; when true, clears the flow to
 ##                            [method InteractionFlow.empty]
+##   "source_attack_id"    — required canonical attack lifecycle identity
 ##
 ## Plan: [code]docs/refactoring_phase_i_plan.md[/code] §I6b-3.
 class_name PublishAttackFlowCommand
@@ -56,9 +57,29 @@ func _init(p_player: int = 0,
 	super._init(p_player, "publish_attack_flow", p_payload)
 
 
-## Always valid — this command is a pure flow-snapshot publication.
 func validate(game_state: GameState) -> String:
-	return super.validate(game_state)
+	var base: String = super.validate(game_state)
+	if not base.is_empty():
+		return base
+	if payload.size() != 5:
+		return "Attack-flow publication payload does not match its exact schema."
+	for key: String in ["step_id", "controller_player", "flow_payload",
+			"final", "source_attack_id"]:
+		if not payload.has(key):
+			return "Attack-flow publication payload does not match its exact schema."
+	if typeof(payload.get("step_id")) != TYPE_INT \
+			or typeof(payload.get("controller_player")) != TYPE_INT \
+			or not payload.get("flow_payload") is Dictionary \
+			or typeof(payload.get("final")) != TYPE_BOOL \
+			or typeof(payload.get("source_attack_id")) != TYPE_STRING:
+		return "Attack-flow publication payload has invalid field types."
+	var source_attack_id: String = str(payload["source_attack_id"])
+	if not _is_canonical_attack_id(source_attack_id):
+		return "Attack-flow publication has invalid source attack identity."
+	var flow_payload: Dictionary = payload["flow_payload"] as Dictionary
+	if bool(payload["final"]):
+		return _validate_final(game_state, source_attack_id, flow_payload)
+	return _validate_non_final(game_state, source_attack_id, flow_payload)
 
 
 ## Writes the snapshot into [member GameState.interaction_flow] on the
@@ -85,6 +106,60 @@ func execute(game_state: GameState) -> Dictionary:
 			Constants.Visibility.ALL,
 			flow_payload)
 	return {"applied": true, "step_id": int(step_id)}
+
+
+func _validate_non_final(game_state: GameState, source_attack_id: String,
+		flow_payload: Dictionary) -> String:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active:
+		return "Attack-flow publication requires an active current attack."
+	if attack.attack_id != source_attack_id:
+		return "Stale attack-flow publication source identity."
+	if typeof(flow_payload.get("attack_id")) != TYPE_STRING \
+			or str(flow_payload.get("attack_id", "")) != source_attack_id:
+		return "Attack-flow payload source identity mismatch."
+	var step_id: int = int(payload["step_id"])
+	if not FLOW_SPEC_SCRIPT.has_spec(
+			int(Constants.InteractionFlow.ATTACK), step_id):
+		return "Attack-flow publication has an invalid interaction step."
+	return ""
+
+
+func _validate_final(game_state: GameState, source_attack_id: String,
+		flow_payload: Dictionary) -> String:
+	if not flow_payload.is_empty():
+		return "Final attack-flow publication must carry an empty flow payload."
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack != null and attack.active:
+		return "Final attack-flow publication cannot clear an active attack."
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK:
+		return "Final attack-flow publication has no matching attack projection."
+	if typeof(flow.payload.get("attack_id")) != TYPE_STRING \
+			or str(flow.payload.get("attack_id", "")) != source_attack_id:
+		return "Final attack-flow publication source identity mismatch."
+	var projected_attacker: Variant = flow.payload.get("attacker_player")
+	if typeof(projected_attacker) != TYPE_INT \
+			or int(projected_attacker) != player_index:
+		return "Final attack-flow publication attacker identity mismatch."
+	var inspection: CompletedAttackInspection = \
+			game_state.completed_attack_inspection
+	if inspection != null:
+		var inspection_data: Dictionary = inspection.serialize()
+		var inspection_attacker: Dictionary = inspection_data.get(
+				"attacker", {}) as Dictionary
+		if inspection.source_attack_id() != source_attack_id \
+				or int(inspection_attacker.get("player", -1)) != player_index:
+			return "Final attack-flow publication inspection identity mismatch."
+	return ""
+
+
+static func _is_canonical_attack_id(value: String) -> bool:
+	if not value.begins_with("attack:"):
+		return false
+	var raw_sequence: String = value.trim_prefix("attack:")
+	return raw_sequence.is_valid_int() and raw_sequence.to_int() >= 0 \
+			and str(raw_sequence.to_int()) == raw_sequence
 
 
 func _attack_controller_context(flow_payload: Dictionary) -> Dictionary:

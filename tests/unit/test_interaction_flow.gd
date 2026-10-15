@@ -146,6 +146,85 @@ func test_deserialize_handles_non_dictionary_payload() -> void:
 			"Non-dictionary payload must be coerced to {}.")
 
 
+func test_counter_identity_json_round_trip_restores_all_four_integers() -> void:
+	var encoded: String = JSON.stringify(_counter_flow_data())
+	var decoded: Variant = JSON.parse_string(encoded)
+	assert_true(decoded is Dictionary)
+	for key: String in _counter_identity_keys():
+		assert_eq(typeof((decoded as Dictionary)["payload"][key]), TYPE_FLOAT)
+
+	var restored: InteractionFlow = InteractionFlow.deserialize(
+			decoded as Dictionary)
+	assert_not_null(restored)
+	for key: String in _counter_identity_keys():
+		assert_eq(typeof(restored.payload[key]), TYPE_INT,
+				"%s must be canonical int after JSON reconstruction." % key)
+
+
+func test_counter_identity_reconstruction_fails_closed_for_partial_payload() \
+		-> void:
+	var data: Dictionary = _counter_flow_data()
+	(data["payload"] as Dictionary).erase(
+			"counter_target_squadron_index")
+	assert_null(InteractionFlow.deserialize(data))
+
+
+func test_counter_identity_reconstruction_fails_closed_for_invalid_values() \
+		-> void:
+	var cases: Array[Dictionary] = [
+		{"field": "counter_attacker_player", "value": 0.5},
+		{"field": "counter_attacker_player", "value": true},
+		{"field": "counter_attacker_player", "value": "1"},
+		{"field": "counter_attacker_player", "value": INF},
+		{"field": "counter_attacker_player", "value": 2.0},
+		{"field": "counter_target_player", "value": -1.0},
+		{"field": "counter_attacker_squadron_index", "value": -1.0},
+		{"field": "counter_target_squadron_index", "value": 2147483648.0},
+	]
+	for invalid: Dictionary in cases:
+		var data: Dictionary = _counter_flow_data()
+		(data["payload"] as Dictionary)[invalid["field"]] = invalid["value"]
+		assert_null(InteractionFlow.deserialize(data),
+				"Counter identity must reject %s=%s." % [
+					invalid["field"], str(invalid["value"])])
+
+
+func test_counter_identity_normalization_is_not_a_generic_adapter() -> void:
+	var data: Dictionary = _counter_flow_data()
+	data["step_id"] = int(Constants.InteractionStep.ATTACK_DECLARE)
+	var restored: InteractionFlow = InteractionFlow.deserialize(data)
+	assert_not_null(restored)
+	for key: String in _counter_identity_keys():
+		assert_eq(typeof(restored.payload[key]), TYPE_INT)
+	var json_data: Dictionary = JSON.parse_string(JSON.stringify(data)) \
+			as Dictionary
+	var json_restored: InteractionFlow = InteractionFlow.deserialize(json_data)
+	assert_not_null(json_restored)
+	for key: String in _counter_identity_keys():
+		assert_eq(typeof(json_restored.payload[key]), TYPE_FLOAT,
+				"Non-Counter steps must not receive identity normalization.")
+
+
+func _counter_flow_data() -> Dictionary:
+	return InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
+			1, Constants.Visibility.ALL, {
+				"attack_id": "attack:50",
+				"counter_attacker_player": 1,
+				"counter_attacker_squadron_index": 0,
+				"counter_target_player": 0,
+				"counter_target_squadron_index": 0,
+			}).serialize()
+
+
+func _counter_identity_keys() -> Array[String]:
+	return [
+		"counter_attacker_player", "counter_attacker_squadron_index",
+		"counter_target_player", "counter_target_squadron_index",
+	]
+
+
 # ---------------------------------------------------------------------------
 # is_actor()
 # ---------------------------------------------------------------------------

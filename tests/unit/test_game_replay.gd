@@ -112,8 +112,8 @@ func test_create_replay_rejects_unpaired_reconstructed_cursor() -> void:
 
 
 func test_bug_031_cutover_uses_replay_format_nine() -> void:
-	assert_eq(GameReplay.FORMAT_VERSION, 11,
-			"BUG-070 / BUG-071 semantic cutover requires replay format 11")
+	assert_eq(GameReplay.FORMAT_VERSION, 12,
+			"Attack lifecycle and damage presentation cutover requires replay format 12")
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION,
 			"Signing must not create a second semantic replay format")
 
@@ -366,7 +366,10 @@ func test_disk_roundtrip_preserves_exact_seed_and_declared_numeric_types() -> vo
 			"payload": {
 				"step_id": int(Constants.InteractionStep.ATTACK_DEFENSE_TOKENS),
 				"controller_player": 1,
+				"final": false,
+				"source_attack_id": "attack:0",
 				"flow_payload": {
+					"attack_id": "attack:0",
 					"attacker_player": 0,
 					"defender_zone": "front",
 					"dice_pool": {"RED": 3},

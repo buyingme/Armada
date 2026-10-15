@@ -15,7 +15,12 @@
     ],
     "source_refs": [
         "RRG 1.5.0 Squadron Keywords",
-        "src/core/effects/rules/squadron_keywords/counter.gd"
+        "src/core/effects/rules/squadron_keywords/counter.gd",
+        "Accepted requirements: docs/requirements/gameplay_interactions/counter_attack_interaction.md",
+        "Accepted implementation and verification specification: docs/architecture/implementation_workbooks/network-attack-flow-lifecycle-and-remote-damage-presentation-repair-implementation-workbook.md",
+        "Implementation evidence: src/core/state/current_attack_continuation.gd; src/core/commands/begin_attack_command.gd; src/scenes/game_board/attack_executor.gd",
+        "Automated verification evidence: tests/unit/test_counter_inspection_release.gd; tests/unit/test_attack_executor_counter.gd; tests/acceptance/network_resume/driver.gd",
+        "Owner acceptance evidence: docs/qa/bugs/open/BUG-074/evidence/final-acceptance-evidence.md; manual gameplay PASS, final closure audit pending"
     ],
     "implemented_rule_ids": [
         "squadron_keyword.counter"

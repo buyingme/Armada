@@ -992,7 +992,7 @@ func test_production_in_memory_replay_is_exact_and_driver_compatible() -> void:
 			"Production replay creation must capture the semantic history.")
 	var loaded: GameReplay = GameReplay.deserialize(
 			JSON.parse_string(JSON.stringify(replay_file.serialize())))
-	assert_not_null(loaded, "The non-fixture replay-11 payload must load.")
+	assert_not_null(loaded, "The non-fixture replay-12 payload must load.")
 	assert_typeof(loaded.header["rng_seed"], TYPE_INT)
 	assert_eq(loaded.header["rng_seed"], EXACT_REPLAY_SEED,
 			"The exact 64-bit replay seed must survive JSON serialization.")

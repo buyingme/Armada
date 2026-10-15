@@ -1221,9 +1221,16 @@ static func _deserialize_representation(data: Dictionary,
 		state.damage_deck = DamageDeck.deserialize_for_save7(deck_data)
 		if state.damage_deck == null:
 			return null
-	var rng_data: Dictionary = data.get("rng", {})
-	if not rng_data.is_empty():
-		state.rng = GameRng.deserialize(rng_data)
+	var raw_rng: Variant = data.get("rng", null)
+	if passive:
+		if not (raw_rng is Dictionary) or not (raw_rng as Dictionary).is_empty():
+			return null
+	else:
+		if not (raw_rng is Dictionary):
+			return null
+		state.rng = GameRng.deserialize(raw_rng as Dictionary)
+		if state.rng == null:
+			return null
 	if state.damage_deck != null and state.rng != null:
 		state.damage_deck.set_rng(state.rng)
 	var flow_data: Dictionary = data.get("interaction_flow", {})

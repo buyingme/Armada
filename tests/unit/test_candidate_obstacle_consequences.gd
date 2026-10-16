@@ -788,6 +788,184 @@ func test_nested_asteroid_state_round_trips_and_mismatches_fail_closed() -> void
 	assert_null(ShipInstance.deserialize(invalid, ship.ship_data))
 
 
+func test_pending_obstacle_pre_effect_json_round_trip_restores_ordinal_and_continues() \
+		-> void:
+	var fixture: Dictionary = _json_fixture("asteroid_1", [])
+	var live: GameState = fixture["state"]
+	var live_ship: ShipInstance = fixture["ship"]
+	assert_false(_commit_order(live).execute(live).is_empty())
+	var live_record: Dictionary = live_ship.pending_obstacle_pre_effect_snapshot()
+	assert_false(live_record.is_empty())
+	var parsed_ship: Dictionary = JSON.parse_string(
+			JSON.stringify(live_ship.serialize())) as Dictionary
+	assert_eq(typeof(parsed_ship["active_maneuver_execution"] \
+			["obstacle_pre_effect"]["ordered_ordinal"]), TYPE_FLOAT)
+	var restored_ship_only: ShipInstance = ShipInstance.deserialize(
+			parsed_ship, live_ship.ship_data)
+	assert_not_null(restored_ship_only)
+	assert_eq(restored_ship_only.active_maneuver_execution_snapshot(),
+			live_ship.active_maneuver_execution_snapshot())
+	assert_eq(typeof(restored_ship_only.pending_obstacle_pre_effect_snapshot() \
+			["ordered_ordinal"]), TYPE_INT)
+
+	var parsed: Dictionary = JSON.parse_string(
+			JSON.stringify(live.serialize())) as Dictionary
+	var parsed_record: Dictionary = parsed["player_states"][0]["ships"][0] \
+			["active_maneuver_execution"]["obstacle_pre_effect"] as Dictionary
+	assert_eq(typeof(parsed_record["ordered_ordinal"]), TYPE_FLOAT)
+	var restored: GameState = GameState.deserialize(parsed)
+	assert_not_null(restored)
+	var restored_ship: ShipInstance = restored.get_ship(0, 0)
+	var restored_record: Dictionary = \
+			restored_ship.pending_obstacle_pre_effect_snapshot()
+	assert_eq(typeof(restored_record["ordered_ordinal"]), TYPE_INT)
+	assert_eq(restored_record, live_record)
+	_assert_full_state_convergence(live, restored)
+
+	var live_ack := AcknowledgeObstaclePreEffectCommand.new(0, {
+		"occurrence_id": live_record["occurrence_id"],
+	})
+	var restored_ack := AcknowledgeObstaclePreEffectCommand.new(0, {
+		"occurrence_id": restored_record["occurrence_id"],
+	})
+	assert_eq(live_ack.validate(live), "")
+	assert_eq(restored_ack.validate(restored), "")
+	assert_eq(restored_ack.execute(restored), live_ack.execute(live))
+	assert_eq(EVALUATOR.next_action(restored, 0, 0),
+			EVALUATOR.next_action(live, 0, 0))
+	assert_eq(restored.serialize(), live.serialize())
+
+
+func test_asteroid_completion_json_round_trip_restores_ordinal_and_continues() \
+		-> void:
+	var fixture: Dictionary = _json_fixture("asteroid_1", [
+		_card("damage:json-ordinal", "ordinary", "persistent"),
+	])
+	var live: GameState = fixture["state"]
+	var live_ship: ShipInstance = fixture["ship"]
+	assert_true(_commit_and_ack(live))
+	var asteroid: GameCommand = ASTEROID.new(0, _base("obstacle:0"))
+	asteroid.sequence = 73
+	assert_false(asteroid.execute(live).is_empty())
+	var live_record: Dictionary = \
+			live_ship.asteroid_completion_outstanding_snapshot()
+	assert_false(live_record.is_empty())
+	var parsed_ship: Dictionary = JSON.parse_string(
+			JSON.stringify(live_ship.serialize())) as Dictionary
+	assert_eq(typeof(parsed_ship["active_maneuver_execution"] \
+			["asteroid_completion_outstanding"]["ordered_ordinal"]), TYPE_FLOAT)
+	var restored_ship_only: ShipInstance = ShipInstance.deserialize(
+			parsed_ship, live_ship.ship_data)
+	assert_not_null(restored_ship_only)
+	assert_eq(restored_ship_only.active_maneuver_execution_snapshot(),
+			live_ship.active_maneuver_execution_snapshot())
+	assert_eq(typeof(restored_ship_only \
+			.asteroid_completion_outstanding_snapshot()["ordered_ordinal"]),
+			TYPE_INT)
+
+	var parsed: Dictionary = JSON.parse_string(
+			JSON.stringify(live.serialize())) as Dictionary
+	var parsed_record: Dictionary = parsed["player_states"][0]["ships"][0] \
+			["active_maneuver_execution"] \
+			["asteroid_completion_outstanding"] as Dictionary
+	assert_eq(typeof(parsed_record["ordered_ordinal"]), TYPE_FLOAT)
+	var restored: GameState = GameState.deserialize(parsed)
+	assert_not_null(restored)
+	var restored_ship: ShipInstance = restored.get_ship(0, 0)
+	var restored_record: Dictionary = \
+			restored_ship.asteroid_completion_outstanding_snapshot()
+	assert_eq(typeof(restored_record["ordered_ordinal"]), TYPE_INT)
+	assert_eq(restored_record, live_record)
+	_assert_full_state_convergence(live, restored)
+
+	var inspection_id: String = live.faceup_damage_inspection.inspection_id()
+	assert_eq(restored.faceup_damage_inspection.inspection_id(), inspection_id)
+	assert_false(AcknowledgeFaceupDamageCommand.new(0, {
+		"inspection_id": inspection_id,
+	}).execute(live).is_empty())
+	assert_false(AcknowledgeFaceupDamageCommand.new(0, {
+		"inspection_id": inspection_id,
+	}).execute(restored).is_empty())
+	var completion_payload: Dictionary = _base("obstacle:0").merged({
+		"ordered_ordinal": live_record["ordered_ordinal"],
+		"occurrence_id": live_record["occurrence_id"],
+		"inspection_id": inspection_id,
+	})
+	var live_completion := CompleteAsteroidOverlapCommand.new(
+			0, completion_payload.duplicate(true))
+	var restored_completion := CompleteAsteroidOverlapCommand.new(
+			0, completion_payload.duplicate(true))
+	assert_eq(live_completion.validate(live), "")
+	assert_eq(restored_completion.validate(restored), "")
+	assert_eq(restored_completion.execute(restored),
+			live_completion.execute(live))
+	assert_true(restored_ship.asteroid_completion_outstanding_snapshot().is_empty())
+	assert_ne(restored_completion.validate(restored), "")
+	assert_eq(EVALUATOR.next_action(restored, 0, 0),
+			EVALUATOR.next_action(live, 0, 0))
+	assert_eq(restored.serialize(), live.serialize())
+
+
+func test_maneuver_optional_record_ordinals_reject_malformed_values() -> void:
+	var variants: Array[Dictionary] = []
+	var pre_effect: Dictionary = _json_fixture("asteroid_1", [])
+	assert_false(_commit_order(pre_effect["state"]).execute(
+			pre_effect["state"]).is_empty())
+	variants.append({
+		"record_key": "obstacle_pre_effect",
+		"ship": pre_effect["ship"],
+		"serialized": (pre_effect["ship"] as ShipInstance).serialize(),
+	})
+
+	var completion: Dictionary = _json_fixture("asteroid_1", [
+		_card("damage:json-malformed", "ordinary", "persistent"),
+	])
+	assert_true(_commit_and_ack(completion["state"]))
+	var asteroid: GameCommand = ASTEROID.new(0, _base("obstacle:0"))
+	asteroid.sequence = 74
+	assert_false(asteroid.execute(completion["state"]).is_empty())
+	variants.append({
+		"record_key": "asteroid_completion_outstanding",
+		"ship": completion["ship"],
+		"serialized": (completion["ship"] as ShipInstance).serialize(),
+	})
+
+	var invalid_values: Array = [
+		0.5, -1.5, INF, -INF, NAN, -1, 1, 9, true, "0", null, [], {},
+	]
+	for variant: Dictionary in variants:
+		var record_key: String = str(variant["record_key"])
+		var source: Dictionary = (variant["serialized"] as Dictionary).duplicate(true)
+		var template: ShipData = (variant["ship"] as ShipInstance).ship_data
+		var json_source: Dictionary = JSON.parse_string(
+				JSON.stringify(source)) as Dictionary
+		assert_not_null(ShipInstance.deserialize(json_source, template), record_key)
+		for invalid_value: Variant in invalid_values:
+			var invalid: Dictionary = source.duplicate(true)
+			invalid["active_maneuver_execution"][record_key] \
+					["ordered_ordinal"] = invalid_value
+			assert_null(ShipInstance.deserialize(invalid, template),
+					"%s rejects %s" % [record_key, str(invalid_value)])
+
+		var missing: Dictionary = source.duplicate(true)
+		missing["active_maneuver_execution"][record_key].erase(
+				"ordered_ordinal")
+		assert_null(ShipInstance.deserialize(missing, template),
+				"%s rejects a missing ordinal" % record_key)
+		var wrong_container: Dictionary = source.duplicate(true)
+		wrong_container["active_maneuver_execution"][record_key] = []
+		assert_null(ShipInstance.deserialize(wrong_container, template),
+				"%s rejects a wrong record container" % record_key)
+		for mismatch_key: String in [
+				"obstacle_id", "occurrence_id", "ship_activation_identity",
+				"maneuver_execution_id"]:
+			var mismatched: Dictionary = source.duplicate(true)
+			mismatched["active_maneuver_execution"][record_key][mismatch_key] = \
+					"stale:%s" % mismatch_key
+			assert_null(ShipInstance.deserialize(mismatched, template),
+					"%s rejects mismatched %s" % [record_key, mismatch_key])
+
+
 func test_debris_and_station_pending_recovery_and_completed_non_reopening() -> void:
 	for obstacle_key: String in ["debris_1", "station"]:
 		var cards: Array[DamageCard] = []
@@ -855,6 +1033,58 @@ func _fixture(obstacle_key: String,
 		"last_maneuver_execution_id": "",
 	}]
 	return {"state": state, "ship": ship}
+
+
+func _json_fixture(obstacle_key: String,
+		deck_cards: Array[DamageCard]) -> Dictionary:
+	var state := GameState.new()
+	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.deserialize(_binding_data)))
+	state.current_phase = Constants.GamePhase.SHIP
+	state.ship_phase_selection_controller = 0
+	state.damage_deck = _deck(deck_cards)
+	var data: ShipData = AssetLoader.load_ship_data("cr90_corvette_a")
+	assert_not_null(data)
+	var ship := ShipInstance.create_from_data(
+			"cr90_corvette_a", data, 1, 0)
+	ship.roster_entry_id = "json-obstacle-ship"
+	ship.pos_x = 0.5
+	ship.pos_y = 0.5
+	ship.current_speed = 1
+	state.get_player_state(0).ships.append(ship)
+	assert_true(ship.establish_ship_activation(ACTIVATION_ID))
+	assert_true(ship.open_maneuver_opportunity(ACTIVATION_ID))
+	assert_true(ship.commit_maneuver_execution(
+			ACTIVATION_ID, EXECUTION_ID, false, {
+				"yaw_clicks": [0], "yaw_bonus_joint": -1,
+				"pos_x": 0.5, "pos_y": 0.5, "rotation_deg": 0.0,
+			}, {"kind": "none"}))
+	assert_false(ship.apply_maneuver_final_transform(
+			ACTIVATION_ID, EXECUTION_ID).is_empty())
+	state.objectives["obstacles"] = [{
+		"obstacle_id": "obstacle:0",
+		"data_key": obstacle_key,
+		"pos_x": 0.5,
+		"pos_y": 0.5,
+		"rotation_deg": 0.0,
+		"placing_player": 0,
+		"placement_order": 0,
+		"last_maneuver_execution_id": "",
+	}]
+	return {"state": state, "ship": ship}
+
+
+func _assert_full_state_convergence(live: GameState,
+		restored: GameState) -> void:
+	assert_eq(restored.interaction_flow.serialize(),
+			live.interaction_flow.serialize(),
+			"InteractionFlow must be independently stable for this digest proof.")
+	var live_serialized: Dictionary = live.serialize()
+	var restored_serialized: Dictionary = restored.serialize()
+	assert_eq(restored_serialized, live_serialized)
+	assert_eq(CanonicalJson.hash(restored_serialized),
+			CanonicalJson.hash(live_serialized))
 
 
 func _lethal_asteroid_sequence(passive: bool) -> Dictionary:

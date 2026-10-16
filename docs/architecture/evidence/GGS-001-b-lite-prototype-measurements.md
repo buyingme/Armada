@@ -1,6 +1,6 @@
 # GGS-001 B-Lite Prototype Measurements
 
-Status: **Gate 1 hard falsification failed — Owner review required**
+Status: **Gate 1 Owner accepted; Gate 2 authorized, then stopped at final-digest falsification — Owner review required**
 
 Evidence date: 2026-10-06
 
@@ -10,12 +10,17 @@ Gate 0 Owner-accepted: 2026-10-07
 
 Source revision: `39d12ff3ee93cacb3f4faa0d0ca48fcaa7a69633`
 
+Gate 1 reassessment: 2026-10-15 at revision
+`5bb9c510cba9e341e84df97004653481b42d7948`
+
+Gate 1 Owner acceptance and Gate 2 authorization: 2026-10-15
+
 This is the measurement record authorized by
 [the accepted GGS-001 implementation workbook](../implementation_workbooks/GGS-001-limited-b-lite-prototype-implementation-workbook.md).
 Gate 0 created no GGS code, artifact, Candidate, fixture, or directory and made
-no gameplay change. The Owner-set values are now recorded below. Gate 1 remains
-unauthorized until the Owner explicitly approves proceeding after this Gate 0
-evidence review.
+no gameplay change. The Owner-set values are recorded below. The original Gate
+1 failure and stop recommendation remain preserved in §8; §9 records the later
+reassessment. §10 records the subsequently authorized Gate 2 attempt and stop.
 
 ## 1. Nearest Focused-Test Baseline
 
@@ -274,3 +279,146 @@ production-reconstructible and actionable, and the first command replays
 successfully, but the workbook requires exact current RNG preservation through
 JSON. That hard requirement is falsified by the existing production
 serialization seam. Gate 2 is not authorized.
+
+## 9. Gate 1 Evidence Reconciliation — 2026-10-15
+
+### Resolution of the historical failure
+
+The §8 failure was an exact production JSON serialization defect, not a failed
+maneuver boundary. The separately Owner-accepted
+[exact authoritative RNG repair workbook](../implementation_workbooks/exact-authoritative-rng-save-serialization-repair-implementation-workbook.md#L1)
+required canonical decimal strings for both authoritative RNG fields. Its
+[Owner stop-gate resolution](../implementation_workbooks/exact-authoritative-rng-save-serialization-repair-implementation-workbook.md#L485)
+authorized only a test assertion correction from the obsolete numeric JSON
+shape to that representation, while retaining exact value equality. Current
+`GameRng.serialize()` emits decimal strings and `GameRng.deserialize()` checks
+and restores their exact signed-int64 values
+([implementation](../../../src/core/state/game_rng.gd#L71)). The original
+`5975857563556095516` to `5975857563556096000` loss remains the historical
+observed failure; it is not reclassified as a passing result.
+
+The unchanged substantive Gate 1 feasibility test was run in a fresh headless
+Godot process at the reassessment revision. Result: **1/1 test passed, 101/101
+assertions, GUT 0.742 s, process wall time 3.98 s**. The prior §8 result was
+97/98 assertions; the current test includes the Owner-authorized string-shape
+assertions as well as exact restored seed and current-state equality. This is
+one feasibility run, not the later Gate 3 requirement of 10/10 Candidate runs.
+
+### Exact boundary and proof reconciliation
+
+The passing test covers every accepted workbook §6.2 boundary condition and
+§6.3 proof step
+([workbook](../implementation_workbooks/GGS-001-limited-b-lite-prototype-implementation-workbook.md#L231),
+[test](../../../tests/experimental/ggs/test_maneuver_obstacle_order_s0_feasibility.gd#L62)):
+
+| Required proof | Current passing evidence |
+|---|---|
+| Reach the one allowlisted decision through production authority; capture its cursor | A full-authority Hot-Seat state submits ordinary `execute_maneuver` at 40; the normal processor derives `apply_maneuver_transform` at 41 and stops at the two-obstacle order choice. The in-memory S0 cursor is 42. Target decision facts are not assigned after execution. |
+| Match the canonical boundary | Ship Activation/Maneuver flow, one active activation and matching maneuver execution, final transform, two stable unresolved overlaps, exact actor and obstacle options, and absence of higher-priority or pending consequence obligations are asserted before and after reconstruction. |
+| Preserve S0 through JSON and production deserialization | `GameState.serialize()` → `JSON.stringify()` → `JSON.parse_string()` → `GameState.deserialize()` retains activation/execution and obstacle identities/options, damage-deck order, and exact RNG seed and current state. Both RNG fields remain canonical decimal strings across JSON. |
+| Restore live state and decision without invented gameplay | Direct `GameManager.start_new_game_from_state()` restores cursor 42 with empty history. The evaluator's canonical decision signature matches before and after roundtrip and after installation. |
+| Reconstruct actionable production UI without committing | Normal `GameBoard` reconstruction presents both order permutations to the owner; it submits no semantic command and leaves cursor/history unchanged. |
+| Replay the first normal choice | The selected command is serialized, JSON-parsed, deserialized through `GameCommand.deserialize()`, validated, and accepted by `CommandProcessor.submit_replay()` at 42. History has exactly that command and the cursor advances to 43. |
+
+No §6.4 hard-falsification condition is observed. The proof uses the existing
+production state, board, installer, command and replay submission seams. The
+separate RNG repair was not introduced as GGS-only state or a parallel path.
+This remains a constructed feasibility specimen, not genuine Owner gameplay,
+a GGS Candidate, or proof of economic value.
+
+### Actual-plus-forecast Medium reassessment
+
+| Field | Classification | Reassessed result |
+|---|---|---|
+| Gate 0 and original Gate 1 | Measured / historical estimate | Gate 0 completed as Small evidence work; §8 records one planned 331-line feasibility test, one execution and a narrow clarification, assessed Small at the time. No GGS schema, runner, recorder or Candidate was built. |
+| Separate RNG repair | Scope classification | Cross-cutting production repair authorized and verified under its own workbook, with its own save/replay/Network and baseline obligations. Its cost is real project cost, but it is not additional prototype machinery or an unapproved expansion of the GGS Medium package. No numerical effort or credit usage is inferred here. |
+| Gate 1 reassessment | Measured with limitation | One focused proof rerun, source/workbook comparison and this evidence reconciliation; process wall time 3.98 s. Session-wide active/elapsed engineering time and credit usage are unavailable. No production, test, fixture or Candidate edit is part of this reassessment. |
+| Remaining through first Candidate | Estimated | The accepted Gate 2 one-family removable slice remains Medium; Gate 3 adds small implementation and measured Owner recording effort. With Gate 0, Gate 1 and this reconciliation, actual plus forecast remains **Medium near its upper bound** on current evidence, without an invented numeric remainder. Reassess at the Gate 2 checkpoint and stop before expansion if the forecast becomes Large. |
+
+The Gate 0 Owner thresholds remain unchanged: one boundary/family/Candidate and
+Medium package cap; target at most 10 minutes Owner preparation/recording
+(more than 20 minutes requires review), at most two attempts, 15 minutes per
+diagnostic path, break-even within three relevant uses, and 10/10 fresh-process
+Candidate executions. None of the capture, reliability, diagnosis or break-even
+thresholds can be evaluated from Gate 1 alone.
+
+### Gate 1 checkpoint and recommendation
+
+**GO to the Owner checkpoint; do not start Gate 2 automatically.** The exact
+technical feasibility proof now passes and the current actual-plus-forecast
+assessment does not establish a Large GGS package. No further Gate 1 technical
+acceptance gap is identified. Remaining risks are unmeasured Owner capture
+effort, Candidate reliability, marginal diagnostic value against the nearest
+focused test, and whether later work can stay within Medium. Those belong to
+the later workbook gates rather than a new Gate 1 mechanism.
+
+The precise pending decision is for the Project Owner to review this repaired
+Gate 1 proof and Gate 0–1 actual-plus-forecast cost, then **explicitly authorize
+or reject Gate 2's isolated, single-family minimal vertical slice** under the
+accepted Medium cap. A passing test, the separate RNG repair, BUG-074 closure,
+and this recommendation do not supply that authorization. The first genuine
+Owner Candidate and any further gate each require their own later checkpoint.
+
+## 10. Authorized Gate 2 Attempt And Stop — 2026-10-15
+
+The Project Owner accepted the repaired Gate 1 proof and authorized only the
+bounded Gate 2 B-lite vertical slice. That authorization did not include a
+production canonical-state repair, a different final-digest contract, or the
+first Owner Candidate. Work began from revision
+`5bb9c510cba9e341e84df97004653481b42d7948` with no Candidate or fixture
+created or changed.
+
+### Observed final-digest falsification
+
+A tagged `synthetic_test_specimen` exercised the one allowlisted maneuver
+obstacle-order S0 boundary. The attempted strict runner installed JSON-rebuilt
+S0 through `GameManager.start_new_game_from_state()`, rechecked the canonical
+decision, deserialized the first normal order command, and successfully
+submitted it through `CommandProcessor.submit_replay()` at cursor 42. History
+and cursor advanced as expected. The final canonical digest nevertheless
+disagreed with the same command executed from the original live S0.
+
+The first directly observed state difference was
+`interaction_flow.payload.ship_index`: the live final state serialized integer
+`0`, while the JSON-reconstructed/replayed final state serialized floating
+`0.0`. Godot parses the JSON number as a float; for Ship Activation/Maneuver,
+[`InteractionFlow.deserialize()`](../../../src/core/state/interaction_flow.gd#L92)
+duplicates the payload without restoring that field's integer type. The order
+command does not rewrite the field. `CanonicalJson.hash()` therefore hashes
+different canonical JSON. This is a concrete representation divergence, not a
+rejected maneuver command or RNG loss. Other differences were not exhaustively
+classified after the first sufficient falsification.
+
+The accepted [prototype workbook](../implementation_workbooks/GGS-001-limited-b-lite-prototype-implementation-workbook.md#L388)
+requires the expected digest of the genuine live final `GameState.serialize()`
+and direct production reconstruction. A GGS-only normalization of S0 or final
+state, or hashing a rewritten expected state, would create a parallel canonical
+representation and obscure this failure. A production deserialization repair
+would touch the authoritative save/replay/Network representation outside Gate
+2's permitted files and requires separate authority and verification. No such
+change was made.
+
+### Verification and cost ledger
+
+| Field | Classification | Gate 2 attempt result |
+|---|---|---|
+| Prototype work | Measured | One Codex implementation session constructed three isolated experimental source files, a thin runner plus startup wrapper, three machinery-test files, and a small lazy DebugMode hook. Approximately 940 experimental lines were attempted before STOP; all Gate 2 code and the hook were then removed. Only this evidence record remains changed. |
+| Focused machinery verification | Measured | Strict envelope tests: 2/2 passed, 15 assertions. Capture safety tests: 2/2 passed, 8 assertions. Synthetic runner tests: 0/3 passed, 36/42 assertions; the valid in-process and fresh-process runs both reached accepted first-command execution but failed the final digest. The rejection-path test also needed an expected-warning assertion and did not pass. These were temporary machinery specimens, never Candidate evidence. |
+| Effort and rework | Measured with limitation | One session included implementation, a startup-order adjustment for the Godot CLI, a temporary-path correction for the write probe, diagnostic comparison, and STOP cleanup. Session-wide active/elapsed engineering timers and Codex/credit usage were unavailable; no precise total is invented. Individual focused runs took approximately 2.6–4.8 s process wall time. |
+| Actual plus forecast | Estimated | Gate 0–1 remained Medium near its upper bound before this attempt. Gate 2 now needs an unapproved cross-cutting canonical-state decision/repair and renewed verification before a trustworthy first Candidate. The remaining work cannot be certified within the Owner-approved Medium cap on present evidence. No Gate 3 recording estimate or benefit claim is substituted for the missing repair decision. |
+
+**Gate 2 verdict: STOP and return to the Owner.** The attempted vertical slice
+is not ready for its recording checkpoint. The exact unresolved decision is
+whether to authorize a separate bounded production normalization of the Ship
+Activation/Maneuver payload (with save/replay/Network and digest impact
+assessed), revise the accepted GGS final-digest design, or stop the experiment.
+Codex cannot select one of those materially different representation contracts
+under Gate 2 authority. If the Owner chooses a continuation, the complete
+actual-plus-forecast Medium package must be reassessed before work resumes.
+
+The planned STOP cleanup was applied: no GGS envelope, runner, recorder, Debug
+hook, Candidate directory/file, synthetic fixture, new autoload, or changed
+replay/save/Network version remains. The accepted Gate 1 test and historical
+measurement evidence are retained. After cleanup, the focused Gate 1 proof
+passed again: 1/1 test, 101 assertions. The separate Owner checkpoint before
+any genuine recording remains mandatory.

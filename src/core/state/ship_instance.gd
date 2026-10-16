@@ -2332,6 +2332,16 @@ static func _normalize_save7_maneuver_integers(data: Dictionary) -> bool:
 			for key: String in ["target_owner_player", "target_ship_index"]:
 				if not _normalize_integral_field(collision as Dictionary, key):
 					return false
+		for record_key: String in [
+				"obstacle_pre_effect", "asteroid_completion_outstanding"]:
+			var raw_record: Variant = execution.get(record_key)
+			if not raw_record is Dictionary:
+				return false
+			var record: Dictionary = raw_record as Dictionary
+			if not record.is_empty() \
+					and not _normalize_integral_field(
+						record, "ordered_ordinal"):
+				return false
 	for owner_key: String in [
 			"active_debris_resolution", "active_station_resolution"]:
 		var record: Dictionary = data[owner_key] as Dictionary

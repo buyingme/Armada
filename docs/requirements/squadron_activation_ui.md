@@ -97,6 +97,17 @@ attack → commit), reusing existing systems wherever possible.
 | SQA-TM-003 | After both players pass or all squadrons are activated, the phase advances to Status Phase automatically. | TF-012 | Already handled by `_advance_squadron_phase_turn()`. |
 | SQA-TM-004 | Activated squadrons are visually dimmed (reduced alpha) on the board to indicate they cannot be selected again. | SQ-008 | Toggle visual on `activated_this_round = true`. |
 
+**Accepted atomic Counter successor clarification (2026-10-17):** This file
+remains a historical draft. For the current SQA-TM-003 transition,
+[CON-007-COUNTER-006](../architecture/contracts/CON-007-post-attack-continuation-release-contract.md#11-accepted-atomic-counter-release-amendment-2026-10-17)
+and the accepted
+[atomic Counter architecture](../architecture/implementation_workbooks/atomic-counter-choice-publication-architecture-design.md)
+require Squadron-to-Status advancement only when neither player has a
+surviving unactivated Squadron and no active attack, inspection, or activation
+blocks progression. Both the initial active/zero empty-phase shape and the
+post-completion inactive/zero exhausted shape are valid. The historical
+"pass" shorthand above does not authorize premature advancement.
+
 ---
 
 ## 4. Rules Compliance Check

@@ -12,6 +12,7 @@ Accepted by: Owner
 Accepted date: 2026-07-18
 Accepted update date: 2026-09-01
 BUG-070 / BUG-071 refinement date: 2026-10-03
+Accepted Atomic Counter amendment date: 2026-10-17
 Supersedes: None
 Superseded by: None
 
@@ -838,3 +839,84 @@ An implementation is CON-001-conformant only when:
 - `docs/architecture/contracts/CON-005-timing-window-implementation-contract.md`
 - `docs/architecture/tests/TEST-003-interactive-rule-timing-window-verification.md`
 - `docs/architecture/DOCUMENT_AUTHORITY.md`
+
+## 13. Accepted Atomic Counter Current-Attack Amendment (2026-10-17)
+
+The Project Owner accepted the
+[atomic Counter architecture design](../implementation_workbooks/atomic-counter-choice-publication-architecture-design.md)
+after independent acceptance audit and targeted re-audit. The following
+purpose-specific obligations refine Sections 4–6 and 9. All non-Counter
+current-attack, timing, rule, and projection ownership remains as above.
+
+CON-001-COUNTER-001: An active parent `CurrentAttackState` SHALL own one
+source-scoped Counter disposition: absent before choice, then exactly one
+native `accepted` or `declined` value after a successful choice. The existing
+parent `attack_id` scopes it. Eligibility, participants, and Counter pool
+remain derived from that parent and canonical `SquadronInstance` owners.
+`InteractionFlow.counter_choice_accepted`, when present, is only an exact
+derived mirror and SHALL NOT decide legality, continuation, or recovery.
+
+CON-001-COUNTER-002: `CounterChoiceCommand` SHALL carry the exact parent
+`attack_id` on direct and JSON entry. Before rule hooks can inspect the
+command, a pure Counter-specific shape/source check SHALL reject malformed or
+stale intent. Full command validation SHALL require a complete, consistent,
+installed Counter publication, the entitled Counter controller, native boolean
+choice, exact canonical participant identities, and an absent parent
+disposition. Its one accepted execution SHALL install the selected disposition
+through the existing `GameState.set_current_attack_state()` value boundary and
+update only the derived flow mirror. A duplicate, wrong-source, malformed, or
+premature choice SHALL leave all canonical owners, history, sequence, and
+observer follow-ups unchanged.
+
+CON-001-COUNTER-003: A decided parent SHALL NOT complete before its permitted
+retirement transaction. With a legitimate inspection **I**, parent
+`CompleteAttackCommand` SHALL atomically transfer its immutable
+source-scoped decision witness to **I** and retire the parent. Accept retains
+the consistent Counter projection pending exact child Begin; Decline installs
+the enclosing Squadron route in the completion command. With no **I**,
+Decline uses the same terminal completion and route installation. With no
+**I**, Accept SHALL NOT use `CompleteAttackCommand` or create an empty
+inspection: one Counter-only `BeginAttackCommand` under LIFE-010 SHALL validate
+exact parent-source intent and adjacent owners, then atomically replace the
+still-active decided parent with a distinct child and child Declare
+projection. Failure SHALL preserve the parent and all adjacent owners; the
+ordinary inactive rollback is invalid for this replacement branch. No other
+active-parent Begin becomes legal.
+
+CON-001-COUNTER-004: A complete `ATTACK_COUNTER_CHOICE` projection SHALL be
+installed only by one accepted ordered publication after parent damage
+acceptance and, in live Network play, after its broadcast. The publication
+SHALL be constructed prospectively from the resolved parent and canonical
+Squadrons without a precommit local flow write. Counter-eligible damage
+callbacks SHALL NOT patch `final_damage`, mutate flow, recursively publish, or
+submit a competing continuation. A purpose-specific consistency check SHALL
+compare complete source, participants, controller, availability, Counter pool,
+and Squadron `final_damage` against the validated canonical
+`resolved_outcome.requested_hull_damage`; capped `actual_hull_damage` is not the
+published value. Missing or malformed requested damage rejects, including
+after JSON reconstruction. Installed Counter projection SHALL reject duplicate
+publication, same-parent downgrade, stale replacement, and premature final
+clear before publication hooks or command mutation. Only the authorized parent
+completion or child Begin semantic transaction retires that projection.
+
+CON-001-COUNTER-005: On full `GameState` reconstruction, validate the active
+parent disposition or transferred **I** witness against the installed
+projection and canonical Attack/Squadron owners before commands or UI. An
+absent active-parent disposition before choice is valid only with a complete,
+source-matching pending publication or a canonically derivable opportunity
+before publication. Where a committed choice or **I** witness is required, a
+missing, partial, stale, malformed, or projection-only witness SHALL fail
+closed. The separately observed `CurrentAttackState.resolved_outcome` JSON
+integer reconstruction defect is a prerequisite repair; Counter publication
+SHALL NOT coerce that outcome or mask a full-state digest difference. Live
+authority may re-derive exactly one missing ordered continuation from
+canonical owners. Passive Network and replay SHALL only apply accepted
+recorded commands in order.
+
+CON-001-COUNTER-006: The integrated correction SHALL use Save 11 / Network 12 /
+Replay 13 acceptance gates. Old development Save-10 ambiguity and mixed
+Network-11 peers reject at their version gates; historical Replay-12 files and
+hashes remain immutable evidence. Current-format replay inputs require genuine
+manual Owner recording and first-field diagnosis before any new baseline/hash
+promotion. This amendment authorizes documentation alignment, not production
+implementation or fixture renewal.

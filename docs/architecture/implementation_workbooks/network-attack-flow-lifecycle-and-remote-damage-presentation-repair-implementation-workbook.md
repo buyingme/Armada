@@ -1084,3 +1084,21 @@ Closure: **PASS**. Save 10 / Network protocol 11 / replay 12 remain the accepted
 compatibility boundaries. The final evidence preserves the distinction between
 implemented behavior, automated verification, Owner manual acceptance, and
 defect closure.
+
+## 16. Accepted Atomic Counter Successor Note (2026-10-17)
+
+The Project Owner subsequently accepted the
+[atomic Counter architecture design](atomic-counter-choice-publication-architecture-design.md).
+This is a successor correction to future Counter-choice publication and
+continuation, not a revision of BUG-074 implementation acceptance or the
+historical Save 10 / Network 11 / Replay 12 evidence above. The accepted
+successor requires one complete ordered Counter publication after damage
+acceptance/broadcast; canonical parent disposition and a witness in a
+legitimate inspection **I**; atomic no-**I** parent-to-child replacement;
+single-use recovery through child **J** and the enclosing Squadron/phase/Ship
+owners; and Save 11 / Network 12 / Replay 13 compatibility gates. The
+separate Boundary C outcome reconstruction prerequisite and manually
+Owner-recorded replacement replays are governed by the consolidated
+implementation workbook. This note does not authorize production work,
+fixture promotion, or Boundary B resumption. The three deferred Counter
+variations remain only in the GGS assurance backlog.

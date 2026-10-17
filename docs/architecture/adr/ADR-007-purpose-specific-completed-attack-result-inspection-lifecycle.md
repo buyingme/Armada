@@ -1,6 +1,6 @@
 # ADR-007: Purpose-Specific Completed-Attack Result Inspection Lifecycle
 
-Status: Accepted, Accepted UX-010 Amendment
+Status: Accepted, Accepted UX-010 and Atomic Counter Amendments
 
 ADR-ID: ADR-007
 Title: Purpose-Specific Completed-Attack Result Inspection Lifecycle
@@ -9,6 +9,7 @@ Accepted by: Project Owner
 
 Accepted date: 2026-08-15
 Accepted UX-010 amendment date: 2026-09-29
+Accepted Atomic Counter amendment date: 2026-10-17
 
 Decision owner: Project Owner
 
@@ -735,3 +736,47 @@ for pre-cutover artifacts. Existing authority makes the compatibility owners
 unambiguous but does not allocate UX-005 values. The follow-up implementation
 workbook must make that collision-checked allocation before implementation;
 this does not block Project Owner review of the architectural decision.
+
+## 18. Accepted Atomic Counter Inspection Amendment (2026-10-17)
+
+The Project Owner accepted the
+[atomic Counter architecture design](../implementation_workbooks/atomic-counter-choice-publication-architecture-design.md)
+after independent acceptance audit and targeted re-audit. This amendment is a
+narrow exception to Sections 4.1, 4.3, and 6 for a Counter-eligible parent
+attack. It does not change ordinary completed-result inspections.
+
+ADR-007-COUNTER-001: During the active parent attack, the source-scoped Counter
+disposition (absent, accepted, or declined) belongs only to canonical
+`CurrentAttackState`. `InteractionFlow` is projection and cannot commit a
+choice or supply a missing recovery witness.
+
+ADR-007-COUNTER-002: If and only if the accepted parent completion creates a
+legitimate inspection **I** with a nonempty required-principal set, that same
+terminal command SHALL copy the already committed `accepted` or `declined`
+disposition as one immutable, source-scoped witness into **I** before retiring
+the parent. The inspection's established result, identities, acknowledgement
+sets, and exact-once lifecycle remain authoritative. This witness is permitted
+solely to distinguish the two legal post-parent continuations; it is not a
+generic continuation descriptor, next-command object, route, or new owner of
+Squadron or Ship progress. Acknowledgement SHALL NOT mutate the witness.
+
+ADR-007-COUNTER-003: A satisfied **I** with an `accepted` witness permits only
+the exact source-bound Counter child Begin transaction to consume it; a
+`declined` witness permits only the applicable enclosing Squadron action or
+completion transaction to consume it. The consumer SHALL validate source,
+principal satisfaction, canonical context, and single use, then consume **I**
+atomically with its own semantic mutation. Rejection leaves **I** intact.
+
+ADR-007-COUNTER-004: If no human principal requires inspection, no **I** may be
+created. Accepted Counter choice retains its active parent witness until one
+Counter-only atomic parent-to-child replacement; declined choice completes
+the parent and installs the enclosing Squadron route in the same command.
+Neither branch may pass through a witness-free recoverable interval that
+requires the retired decision. Empty or artificial inspections remain
+prohibited.
+
+The accepted architecture allocates Save 11 / Network 12 / Replay 13 for the
+integrated Counter correction. Historical Save 10 / Network 11 / Replay 12
+evidence remains historical; this allocation does not retroactively change
+the earlier UX-005 compatibility record. Production implementation and fixture
+renewal require separate authorization and the consolidated workbook gates.

@@ -15,6 +15,7 @@ Accepted date: 2026-08-18
 Accepted update date: 2026-08-22
 Accepted second update date: 2026-09-05
 Accepted UX-010/UX-011 update date: 2026-09-29
+Accepted Atomic Counter amendment date: 2026-10-17
 Supersedes: None
 Superseded by: None
 
@@ -44,6 +45,8 @@ It governs only the release of the ADR-007 completed-result inspection and the
 existing context-specific progression that follows it. Attack declaration is
 governed by CON-006; active attack lifecycle and mutation are governed by
 ADR-001 and CON-001; ship activation facts are governed by ADR-006.
+The accepted purpose-specific Counter amendment in Section 11 additionally
+constrains the Counter decision and retirement boundary leading into release.
 
 For that post-Attack release only, CON-007 explicitly adopts the ODR-001
 composed-return convergence principle. This is an outcome requirement for the
@@ -450,3 +453,84 @@ CON-007 does not:
 | PAC-OD-007 — anti-squadron iteration close ownership | Sections 2, 4, and 6 |
 | ODR-001 — composed-return convergence principle | Sections 1–5, 7, and 8 |
 | Accepted ODR-002 — CON-007 convergence refinement direction | Sections 1–5 and 7–9 |
+
+## 11. Accepted Atomic Counter Release Amendment (2026-10-17)
+
+The Project Owner accepted the
+[atomic Counter architecture design](../implementation_workbooks/atomic-counter-choice-publication-architecture-design.md)
+after independent acceptance audit and targeted re-audit. These clauses are a
+narrow Counter application of the existing purpose-specific release and
+composed-return model. The active parent disposition is governed by CON-001;
+the legitimate inspection **I** witness is governed by ADR-007. Nothing here
+adds a generic continuation owner or changes ordinary non-Counter release.
+
+CON-007-COUNTER-001: Parent damage resolution SHALL precede any dependent
+Counter-choice publication in accepted command order and live Network
+broadcast. One complete, authoritative, source-matching Counter publication
+may then expose an undecided choice; no incomplete Counter step may be
+observable, saved, replayed as current conformance, or reconstructed. The
+entitled Counter player makes one Accept or Decline decision through
+`CounterChoiceCommand`; the active parent `CurrentAttackState` owns its
+durable disposition. Projection, callbacks, and pending follow-up queues do
+not own that decision.
+
+CON-007-COUNTER-002: If parent completion legitimately creates inspection
+**I**, it SHALL transfer the already decided disposition atomically to the
+immutable source-scoped witness in **I**. Acknowledgement changes only the
+received-principal set. A satisfied `accepted` **I** permits only exact
+source-bound Counter child Begin, which consumes **I** while installing child
+Declare. A satisfied `declined` **I** permits the applicable enclosing
+Squadron Move, Move-decline, or terminal activation-completion consumer, which
+consumes **I** with its own mutation. Each rejected, duplicate, wrong-source,
+or premature consumer leaves **I** and gameplay state unchanged.
+
+CON-007-COUNTER-003: If no inspection is required, Accept SHALL retain the
+decided active parent until one Counter-only child Begin atomically replaces
+it; no inactive, witness-free interval or artificial **I** is permitted.
+Decline SHALL retire the parent and install the enclosing Squadron route in
+one terminal command. Parent completion SHALL reject an absent disposition
+and the no-**I** accepted branch. Direct final publication SHALL NOT substitute
+for either retirement transaction.
+
+CON-007-COUNTER-004: The Counter child uses ordinary locked Declare, Roll,
+damage, and terminal attack commands. Its completion creates inspection
+**J** only for a legitimate nonempty required-principal set; otherwise it
+installs the enclosing Squadron route atomically. Acknowledgement satisfies
+**J** without consuming it. A matching satisfied **J** is consumed exactly
+once by legal Move, Move-decline, or terminal
+`CompleteSquadronActivationCommand`. The child does not become a new parent
+continuation authority, and losing an observer follow-up cannot lose **J** or
+the retained original Squadron activation.
+
+CON-007-COUNTER-005: If the Counter child destroyed the original activating
+Squadron, that retained `SquadronInstance` remains the activation owner but
+has no legal Move or Move-decline. With **J**, exactly one terminal
+`CompleteSquadronActivationCommand` SHALL consume the matching satisfied **J**
+and complete the activation; without **J**, the same command completes it
+without an inspection ID. Rejection preserves the inspection and activation.
+The existing Squadron Phase or commanding `ShipInstance` then owns the
+enclosing result.
+
+CON-007-COUNTER-006: In Squadron Phase, `AdvancePhaseCommand` to Status SHALL
+reject while either player has a surviving unactivated Squadron or an active
+attack, inspection, or activation blocks progress. It SHALL accept both
+canonical exhausted progress shapes: inactive controller/count zero after last
+completion, and active initial controller/count zero on entry to an empty
+Squadron Phase. In Ship Squadron Command, exhaustion of capacity or absence of
+another eligible Squadron permits the existing automatic activation-step
+advance; while capacity and an eligible Squadron remain, selection or
+voluntary finish is a recoverable live player decision. Recovery SHALL NOT
+automatically choose voluntary finish. These existing Squadron/Ship owners,
+not the Counter child, determine any further composed return.
+
+CON-007-COUNTER-007: The existing live-authority post-success and
+reconstruction evaluation SHALL use the same canonical owner predicates,
+respect faceup and **I**/**J** barriers, and submit at most one missing
+semantic command at each boundary until a recoverable live decision or stable
+state is reached. Replay and passive Network execution SHALL synthesize none.
+Save/load and reconnect SHALL reconstruct the active parent, transferred
+**I**, child, **J**, and enclosing Squadron/phase/Ship owners before release
+evaluation. If two legal continuations require different outcomes, the
+canonical state at that interruption boundary SHALL distinguish them; a flow,
+history, callback, or queue is not a substitute. Failure to derive a unique
+authorized transition is an architecture stop.

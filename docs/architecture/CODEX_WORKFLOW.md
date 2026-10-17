@@ -74,6 +74,8 @@ Architecture-sensitive changes include:
   attack/setup flow state.
 - Changes affecting save/load, replay, network sync, filtered state snapshots,
   deterministic RNG, or command history.
+- Changes to the existence, commitment, consumption, or recovery of a mandatory
+  or optional gameplay decision.
 - New rule behavior, upgrades, objectives, obstacles, tokens, ship rules, or
   squadron special rules.
 - New responsibilities in `GameManager`, `EventBus`, autoload services, or
@@ -107,6 +109,17 @@ Activities:
 - Verify code evidence.
 - Search for missing paths.
 - Challenge assumptions.
+- For each affected committed gameplay decision, independently check the
+  authorized decision maker, authoritative commitment command, canonical owner
+  and durable outcome, decision-equivalent recovery witness, single-use
+  consumption boundary, and command acceptance and ordering guarantees.
+- Apply the canonical distinguishability test: if committed outcomes require
+  different legal continuations, canonical state must distinguish them at every
+  relevant interruption boundary. Check accepted-command boundaries and stable
+  intervals between commands. Command history remains valid input for
+  deterministic replay, but cannot replace canonical decision ownership for
+  save/load, reconnect, or other supported recovery. Projection, callbacks,
+  and pending follow-up queues cannot supply the missing canonical witness.
 - For a nested feature, trace its acceptance boundary to the applicable
   composed-return authority and record the enclosing stable outcome or live
   legal decision that verification must assert. For post-Attack work, use
@@ -179,6 +192,34 @@ A Context Pack becomes Superseded when it no longer accurately describes the
 implementation after migration.
 
 A new Context Pack may be created for the new architecture.
+
+## Implementation Workbooks And Independent Audits
+
+For a new or revised implementation workbook that creates or changes a
+committed gameplay decision, include one compact ownership row per affected
+decision in its existing authority, scope, or verification section:
+
+| Decision | Authorized decision maker | Commitment command | Canonical owner and durable outcome | Recovery witness | Single-use consumption boundary | Command acceptance and ordering guarantees |
+| --- | --- | --- | --- | --- | --- | --- |
+
+Name the concrete canonical fact or deterministic derivation and any boundary
+where its witness transfers or is consumed. For architecture-sensitive work
+that does not change a committed decision, a one-sentence "Not applicable"
+reason is sufficient. Expand the row into a transition matrix only when a
+handoff, owner, or interruption boundary remains ambiguous. This guidance does
+not retroactively revise accepted workbooks or historical audit evidence.
+
+An independent workbook or completion audit applies the distinguishability
+test without relying on the workbook's claimed owner. Ask whether two committed
+outcomes can reach the same canonical state at a relevant interruption boundary
+while requiring different legal next commands. For in-scope recovery paths,
+compare both outcomes after serialization and reconstruction, after loss of an
+automatic follow-up, and across any owner transfer. Record each concrete
+witness and legal continuation. A flow payload, replay history, callback, or
+successful end-to-end trace alone does not close this question. An absent
+canonical witness blocks acceptance or implementation completion until the
+authority or design is resolved. Keep the audit proportional to the affected
+decision and its supported interruption boundaries.
 
 ## Decision Outcomes
 

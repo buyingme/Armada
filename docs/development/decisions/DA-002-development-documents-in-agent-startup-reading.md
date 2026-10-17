@@ -4,7 +4,7 @@
 > **Authority:** Development Architecture Decision
 > **Audience:** Project Owner, AI Agents
 > **Date:** 2026-06-27
-> **Amended:** 2026-08-18
+> **Amended:** 2026-10-17
 
 ---
 
@@ -43,6 +43,15 @@ workbook does not replace or override the existing document-authority hierarchy.
 Additional authority is loaded only when required by the workbook or routing,
 when evidence conflicts with it, when authority is ambiguous or contradictory,
 or when a required invariant cannot be resolved from it.
+
+When architecture-sensitive work creates or changes a committed gameplay
+decision, bounded routing requires a brief decision-ownership check in the
+applicable implementation workbook. If its owner, recovery witness, or command
+guarantees cannot be established from accepted authority and evidence, route
+the unresolved part as Uncertain/High-Risk Architecture. The accepted-workbook
+fast path applies only when that check is explicit for the affected decision.
+This check does not expand startup reading for routine work or require a full
+transition matrix for a bounded change.
 
 A workflow-stage transition alone does not require a new Codex task.
 Deliberately independent or high-risk verification gates remain separate when

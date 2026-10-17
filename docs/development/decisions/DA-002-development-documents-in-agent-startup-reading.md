@@ -46,12 +46,13 @@ or when a required invariant cannot be resolved from it.
 
 When architecture-sensitive work creates or changes a committed gameplay
 decision, bounded routing requires a brief decision-ownership check in the
-applicable implementation workbook. If its owner, recovery witness, or command
-guarantees cannot be established from accepted authority and evidence, route
-the unresolved part as Uncertain/High-Risk Architecture. The accepted-workbook
-fast path applies only when that check is explicit for the affected decision.
-This check does not expand startup reading for routine work or require a full
-transition matrix for a bounded change.
+applicable new or revised implementation workbook. For an unchanged accepted
+workbook, record the brief check in task-local evidence without modifying that
+workbook; its accepted-workbook fast path remains available. If the affected
+decision's owner, required recovery witness, or command guarantees cannot be
+established from accepted authority and evidence, route the unresolved part as
+Uncertain/High-Risk Architecture. This check does not expand startup reading
+for routine work or require a full transition matrix for a bounded change.
 
 A workflow-stage transition alone does not require a new Codex task.
 Deliberately independent or high-risk verification gates remain separate when

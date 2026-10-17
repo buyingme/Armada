@@ -217,9 +217,12 @@ compare both outcomes after serialization and reconstruction, after loss of an
 automatic follow-up, and across any owner transfer. Record each concrete
 witness and legal continuation. A flow payload, replay history, callback, or
 successful end-to-end trace alone does not close this question. An absent
-canonical witness blocks acceptance or implementation completion until the
-authority or design is resolved. Keep the audit proportional to the affected
-decision and its supported interruption boundaries.
+canonical witness blocks acceptance or implementation completion only at a
+boundary where distinct committed outcomes require different legal
+continuations. An atomically consumed decision needs no separate surviving
+witness when canonical state already determines all subsequent legal behavior.
+Keep the audit proportional to the affected decision and its supported
+interruption boundaries.
 
 ## Decision Outcomes
 

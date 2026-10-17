@@ -1,8 +1,8 @@
 # InteractionFlow Integer Reconstruction Repair Implementation Workbook
 
-Status: **Draft — reconciled with completed production runtime proof; ready for
-targeted re-audit and Project Owner review; not accepted and not implementation
-authorization**
+Status: **Boundary A implementation accepted by the Project Owner —
+2026-10-17. Boundary B, Boundary C, and GGS-001 remain pending and
+unauthorized.**
 
 Purpose: specify the smallest production correction that restores established
 integer-valued `InteractionFlow.payload` fields after JSON reconstruction,
@@ -13,7 +13,7 @@ Primary evidence:
 
 - [GGS-001 Gate 2 stop evidence](../evidence/GGS-001-b-lite-prototype-measurements.md#L362)
 - [GGS-001 limited B-lite prototype workbook](GGS-001-limited-b-lite-prototype-implementation-workbook.md#L366)
-- [`InteractionFlow` production codec](../../../src/core/state/interaction_flow.gd#L77)
+- [`InteractionFlow` production codec](../../../src/core/state/interaction_flow.gd#L198)
 - [`GameCommand` integer reconstruction precedent](../../../src/core/commands/game_command.gd#L23)
 
 Related boundaries and work:
@@ -723,7 +723,8 @@ Stop implementation and return to the Project Owner if evidence requires:
 8. expanding beyond a bounded Medium repair after measured implementation
    effort is reassessed.
 
-Owner decisions required before Boundary A implementation:
+Owner decisions required before Boundary A implementation (completed by the
+2026-10-16 acceptance and implementation authorization):
 
 1. accept or reject this bounded normalization scope after independent audit;
 2. confirm no format bump for integral-number type restoration; and
@@ -746,7 +747,7 @@ Estimated work packages:
 
 | Package | Estimate | Authorization state |
 |---|---|---|
-| Boundary A — InteractionFlow state repair | **Medium**: Small production-code change plus Medium inventory, negative-case, recovery, and compatibility verification. | Requires targeted re-audit, Owner acceptance, and separate implementation authorization. |
+| Boundary A — InteractionFlow state repair | **Medium**: Small production-code change plus Medium inventory, negative-case, recovery, and compatibility verification. | Workbook and completed implementation accepted by the Project Owner. |
 | Boundary B — Attack publication command codec | **Small to Medium**: Small codec extension plus focused Replay-12, application, and compatibility verification. | Separate proposal; requires separate Owner acceptance and implementation authorization. |
 | Boundary C — `resolved_outcome` investigation | **Small** bounded diagnosis and repair recommendation. Any implementation cost remains unestimated until the representation and affected consumers are known. | Requires separate Owner authorization to investigate; no repair is authorized. |
 
@@ -779,6 +780,75 @@ Exit requires all of the following:
 7. implementation evidence reports actual effort, remaining risks, and any
    discovered baseline impact.
 
-Current readiness: **ready for targeted independent re-audit and subsequent
-Project Owner review; no production implementation or GGS continuation is
-authorized**.
+### 11.1 Boundary A implementation and verification evidence — 2026-10-17
+
+Implementation is complete in the authorized owner-local codec. Private
+flow/step declarations restore only the Section 3 integer fields after the
+payload copy. Accepted string variants and unknown fields remain unchanged.
+The existing Counter choice requirement and Displacement native-int/JSON-float
+asymmetry remain in force. No production consumer, command codec, canonical
+attack state, stored format, or gameplay owner changed.
+
+Changed files are `src/core/state/interaction_flow.gd`,
+`tests/unit/test_interaction_flow.gd`,
+`tests/unit/test_candidate_obstacle_consequences.gd`, and
+`tests/integration/test_squadron_attack_target_recovery.gd`, plus this
+workbook. No fixture, expected hash, baseline, or prior Owner evidence changed.
+The legacy Counter test now requires integer restoration wherever the four
+identity fields are present; their presence remains mandatory only at Counter
+choice.
+
+Focused proof covers every declared non-Attack step, cumulative production FSM
+Attack payloads at every reachable step (including restart retention), the
+complete declared Attack integer union, mixed string/numeric fields, malformed
+whole payload and field values, and preserved Displacement range behavior.
+`GameState` JSON reconstruction yields exact flow form and flow-hash equality
+for representative stable Ship/Maneuver, Setup, Status, Displacement, production
+Attack declaration, and Squadron declaration-skip states. The Maneuver
+obstacle-order decision and first normal command remain legal; a mismatched
+ship identity is still rejected. Authorized state filtering preserves the
+route integers and hides the owner payload from the other player. Passive
+Network reconstruction is verified on its supported native Variant snapshot.
+
+Verification results:
+
+| Gate | Result |
+|---|---|
+| Focused `InteractionFlow` suite | **PASS** — 39 tests, 479 assertions. |
+| Maneuver obstacle consequence suite | **PASS** — 22 tests, 752 assertions. |
+| Squadron attack/target recovery suite | **PASS** — 20 tests, 480 assertions. |
+| Game-flow commands/integration; Setup placement/deployment; Attack production resume; Counter recovery; displacement; state filter; save/load; replay driver; canonical JSON | **PASS** — all targeted suites. |
+| Full repository suite | **PASS** — 280 scripts, 4,461 tests, 22,326 assertions. |
+| Hot-Seat, Network peer-equality, and replay baselines | **PASS** — existing traces and expected hashes match. |
+| Real ENet resume/reconnect and compatibility acceptance | **PASS** — MATCH-003 A–C and Section 14.2 D. |
+| Manual Network gameplay smoke | **PASS** — Project Owner report at the implementation acceptance checkpoint; no additional manual replay or log retention required. |
+
+The production Squadron declaration-skip test uses exactly representable
+coordinates and proves equal full-state hashes after proving every non-flow
+serialized field stable. An earlier attempt to assert that digest on a
+different existing Squadron fixture found a separate `pos_x` precision change
+(`1000 / 2160`) after JSON parsing. This remains a **pending, separate non-flow
+reconstruction finding**. The full-state assertion for that fixture was
+withheld; the first non-flow difference was identified and no coordinate
+normalization or baseline change was made. Production Attack declaration
+proves exact flow restoration; any full-state divergence in
+`CurrentAttackState.resolved_outcome` remains Boundary C, outside this repair.
+Boundary B's Attack command-codec mismatch also remains separate.
+
+Actual bounded scope is one production codec, three existing test files, and
+this evidence update, consistent with the **Medium** repair estimate. The
+remaining Boundary A forecast was **Small** Owner review and acceptance; that
+checkpoint is now complete. Save 10, Network 11, and Replay 12 formats and
+compatibility remain unchanged. Fixtures, baseline traces, expected hashes,
+and prior Owner evidence remain unchanged. Boundary B, Boundary C, and GGS-001
+retain separate pending status and are unauthorized.
+
+### 11.2 Project Owner implementation acceptance — 2026-10-17
+
+The Project Owner **accepted the Boundary A implementation** after the
+completed focused, full-suite, baseline, and Network resume verification above
+and reported **PASS** for a manual Network gameplay smoke test. The Owner
+requires no additional manual replay or log retention for this checkpoint.
+This acceptance closes Boundary A implementation only. The separate `pos_x`
+precision finding remains pending; Boundary B, Boundary C, and GGS-001 remain
+pending and unauthorized.

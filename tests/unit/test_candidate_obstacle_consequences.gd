@@ -836,6 +836,47 @@ func test_pending_obstacle_pre_effect_json_round_trip_restores_ordinal_and_conti
 	assert_eq(restored.serialize(), live.serialize())
 
 
+func test_maneuver_order_flow_json_recovery_keeps_decision_and_digest() -> void:
+	var fixture: Dictionary = _json_fixture("asteroid_1", [])
+	var live: GameState = fixture["state"]
+	live.interaction_flow = FlowSpec.make_interaction_flow(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.MANEUVER_STEP,
+			live, {"active_player": 0}, Constants.Visibility.ALL,
+			{"ship_index": 0,
+				"ship_activation_identity": ACTIVATION_ID})
+	var action: Dictionary = EVALUATOR.next_action(live, 0, 0)
+	assert_eq(action.get("command_type"), "commit_maneuver_obstacle_order")
+	var live_data: Dictionary = live.serialize()
+	var parsed: Dictionary = JSON.parse_string(
+			JSON.stringify(live_data)) as Dictionary
+	assert_eq(typeof(parsed["interaction_flow"]["payload"] \
+			["ship_index"]), TYPE_FLOAT)
+	var restored: GameState = GameState.deserialize(parsed)
+	assert_not_null(restored)
+	if restored == null:
+		return
+	assert_eq(typeof(restored.interaction_flow.payload["ship_index"]), TYPE_INT)
+	assert_eq(restored.interaction_flow.serialize(),
+			live.interaction_flow.serialize())
+	assert_eq(CanonicalJson.hash(restored.interaction_flow.serialize()),
+			CanonicalJson.hash(live.interaction_flow.serialize()))
+	_assert_full_state_convergence(live, restored)
+	assert_eq(EVALUATOR.next_action(restored, 0, 0), action)
+	var invalid: Dictionary = _identity_base().merged({
+		"ship_index": 1, "obstacle_ids": ["obstacle:0"],
+	}, true)
+	assert_ne(ORDER.new(0, invalid).validate(restored), "")
+	var live_command: GameCommand = _commit_order(live)
+	var recovered_command: GameCommand = GameCommand.deserialize(
+			JSON.parse_string(JSON.stringify(live_command.serialize())) \
+			as Dictionary)
+	assert_not_null(recovered_command)
+	assert_eq(recovered_command.validate(restored), "")
+	assert_eq(recovered_command.execute(restored), live_command.execute(live))
+	_assert_full_state_convergence(live, restored)
+
+
 func test_asteroid_completion_json_round_trip_restores_ordinal_and_continues() \
 		-> void:
 	var fixture: Dictionary = _json_fixture("asteroid_1", [

@@ -14,6 +14,36 @@ const VICTORY_KEY: String = "victory_ii_class_star_destroyer"
 const TIE_KEY: String = "tie_fighter_squadron"
 const HOWLRUNNER_KEY: String = "tie_fighter_howlrunner"
 
+
+func _first_serialized_difference(left: Variant, right: Variant,
+		path: String = "state") -> String:
+	if typeof(left) != typeof(right):
+		return "%s type %s -> %s" % [path, typeof(left), typeof(right)]
+	if left is Dictionary and right is Dictionary:
+		for key: Variant in (left as Dictionary).keys():
+			if not (right as Dictionary).has(key):
+				return "%s.%s missing" % [path, str(key)]
+			var child: String = _first_serialized_difference(
+					(left as Dictionary)[key], (right as Dictionary)[key],
+					"%s.%s" % [path, str(key)])
+			if not child.is_empty():
+				return child
+		return "" if (left as Dictionary).size() == (right as Dictionary).size() \
+				else "%s extra key" % path
+	if left is Array and right is Array:
+		if (left as Array).size() != (right as Array).size():
+			return "%s length %s -> %s" % [path,
+					(left as Array).size(), (right as Array).size()]
+		for index: int in range((left as Array).size()):
+			var child: String = _first_serialized_difference(
+					(left as Array)[index], (right as Array)[index],
+					"%s[%d]" % [path, index])
+			if not child.is_empty():
+				return child
+		return ""
+	return "" if left == right else "%s value %s -> %s" % [
+			path, str(left), str(right)]
+
 const FORENSIC_TIE_0_NORM := Vector2(
 		0.407147838451244, 0.395567152235243)
 const COMPARISON_TIE_5_PX := Vector2(820.0, 900.0)
@@ -155,6 +185,39 @@ func test_bug_025_victory_side_arc_projects_and_begins_nebulon() -> void:
 		assert_eq(state.current_attack_state.defender_player, 0)
 		assert_eq(state.current_attack_state.defender_index, 0)
 		assert_eq(_history_types(), [BeginAttackCommand.TYPE])
+
+
+func test_production_attack_declare_json_restores_exact_flow() -> void:
+	var state: GameState = _make_bug_025_ship_state(
+			NEBULON_KEY, BUG_025_NEBULON_PX, 45.0)
+	_install_state(state)
+	var candidates: Array[Dictionary] = _ship_target_candidates(
+			TargetingListBuilder.authoritative_ship_target_entries(
+					state, 1, 0), Constants.HullZone.RIGHT, 0, 0)
+	assert_false(candidates.is_empty())
+	if candidates.is_empty():
+		return
+	assert_false(CommandProcessor.submit(BeginAttackCommand.new(
+			1, _ship_begin_payload(state, candidates[0]))).is_empty())
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.ATTACK)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_DECLARE)
+	var live_flow: Dictionary = state.interaction_flow.serialize()
+	var parsed: Dictionary = JSON.parse_string(
+			JSON.stringify(state.serialize())) as Dictionary
+	var restored: GameState = GameState.deserialize(parsed)
+	assert_not_null(restored)
+	if restored == null:
+		return
+	assert_eq(restored.interaction_flow.serialize(), live_flow)
+	assert_eq(CanonicalJson.hash(restored.interaction_flow.serialize()),
+			CanonicalJson.hash(live_flow))
+	var live_intent: UIProjector.UIIntent = UIProjector.project(state, 1)
+	var recovered_intent: UIProjector.UIIntent = UIProjector.project(restored, 1)
+	assert_eq(recovered_intent.modal_kind, live_intent.modal_kind)
+	assert_eq(recovered_intent.is_interactive, live_intent.is_interactive)
+	assert_eq(recovered_intent.payload, live_intent.payload)
 
 
 func test_bug_025_ship_controls_reject_illegal_arc_and_clear_between_states() \
@@ -316,6 +379,56 @@ func test_all_four_declaration_skip_rows_are_preview_independent() -> void:
 						"Preview must not alter the %s Skip row." % context)
 			else:
 				without_preview[context] = outcome
+
+
+func test_squadron_declaration_skip_route_json_digest_converges() -> void:
+	CommandProcessor.reset()
+	var fixture: Dictionary = _make_declaration_skip_fixture(
+			"non_rogue_squadron_phase")
+	var state: GameState = fixture["state"]
+	var attacker: SquadronInstance = state.get_squadron(0, 0)
+	var defender: SquadronInstance = state.get_squadron(1, 0)
+	var target_ship: ShipInstance = state.get_ship(1, 0)
+	# Exact binary coordinates keep unrelated geometry stable through JSON.
+	attacker.pos_x = 0.5
+	attacker.pos_y = 0.5
+	defender.pos_x = 0.5
+	defender.pos_y = 0.375
+	target_ship.pos_x = 0.5
+	target_ship.pos_y = 0.375
+	_install_state(state)
+	assert_false(CommandProcessor.submit(SkipAttackCommand.new(
+			0, fixture["payload"])).is_empty())
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.SQUADRON_ACTIVATION)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT)
+	assert_eq(typeof(state.interaction_flow.payload["squadron_index"]), TYPE_INT)
+	var live: Dictionary = state.serialize()
+	var parsed: Dictionary = JSON.parse_string(JSON.stringify(live)) \
+			as Dictionary
+	assert_eq(typeof(parsed["interaction_flow"]["payload"] \
+			["squadron_index"]), TYPE_FLOAT)
+	var restored: GameState = GameState.deserialize(parsed)
+	assert_not_null(restored)
+	if restored == null:
+		return
+	assert_eq(typeof(restored.interaction_flow.payload["squadron_index"]),
+			TYPE_INT)
+	assert_eq(restored.interaction_flow.serialize(),
+			state.interaction_flow.serialize())
+	assert_eq(CanonicalJson.hash(restored.interaction_flow.serialize()),
+			CanonicalJson.hash(state.interaction_flow.serialize()))
+	var reconstructed: Dictionary = restored.serialize()
+	var other_live: Dictionary = live.duplicate(true)
+	var other_reconstructed: Dictionary = reconstructed.duplicate(true)
+	other_live.erase("interaction_flow")
+	other_reconstructed.erase("interaction_flow")
+	assert_eq(other_reconstructed, other_live,
+			"Non-flow first difference: %s" % [
+				_first_serialized_difference(other_live, other_reconstructed)])
+	if other_reconstructed == other_live:
+		assert_eq(CanonicalJson.hash(reconstructed), CanonicalJson.hash(live))
 
 
 func test_all_squadron_declaration_contexts_begin_with_exact_owner_transition() \

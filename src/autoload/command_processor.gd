@@ -259,6 +259,16 @@ func submit_replay_deferred_followups(command: GameCommand) -> Dictionary:
 ## Returns an empty string when the command may continue, otherwise the
 ## rejection reason that should be emitted to callers.
 func preflight(command: GameCommand, game_state: GameState) -> String:
+	if command != null and command.command_type == "publish_attack_flow":
+		var publication_reason: String = \
+				PublishAttackFlowCommand.prehook_reason(command, game_state)
+		if not publication_reason.is_empty():
+			return publication_reason
+	if command != null and command.command_type == CounterChoiceCommand.TYPE:
+		var choice_reason: String = CounterChoiceCommand.prehook_reason(
+				command, game_state)
+		if not choice_reason.is_empty():
+			return choice_reason
 	var terminal_reason: String = _check_terminal_admission(
 			command, game_state)
 	if not terminal_reason.is_empty():

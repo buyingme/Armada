@@ -6,7 +6,7 @@ extends RefCounted
 const _KEYS: Array[String] = [
 	"inspection_id", "source_attack_id", "attacker", "defender",
 	"attack_kind", "dice_results", "outcome", "required_principal_ids",
-	"received_principal_ids",
+	"received_principal_ids", "counter_disposition",
 ]
 const _REFERENCE_KEYS: Array[String] = ["kind", "player", "index", "zone"]
 
@@ -29,6 +29,7 @@ static func create_from_attack(attack: CurrentAttackState, outcome: Dictionary,
 		"outcome": outcome.duplicate(true),
 		"required_principal_ids": required_ids.duplicate(),
 		"received_principal_ids": [],
+		"counter_disposition": attack.counter_disposition,
 	})
 
 
@@ -38,6 +39,7 @@ static func deserialize(raw: Dictionary) -> CompletedAttackInspection:
 	var inspection_id: Variant = raw.get("inspection_id")
 	var source_attack_id: Variant = raw.get("source_attack_id")
 	var attack_kind: Variant = raw.get("attack_kind")
+	var counter_disposition: Variant = raw.get("counter_disposition")
 	var attacker: Variant = _validated_reference(raw.get("attacker"))
 	var defender: Variant = _validated_reference(raw.get("defender"))
 	var dice: Variant = _validated_dice(raw.get("dice_results"))
@@ -48,8 +50,18 @@ static func deserialize(raw: Dictionary) -> CompletedAttackInspection:
 			raw.get("received_principal_ids"), false)
 	if not (inspection_id is String) or not (source_attack_id is String) \
 			or not (attack_kind is String) or str(attack_kind).is_empty() \
+			or not (counter_disposition is String) \
 			or attacker == null or defender == null or dice == null \
 			or outcome == null or required == null or received == null:
+		return null
+	if str(counter_disposition) not in [CurrentAttackState.COUNTER_UNDECIDED,
+			CurrentAttackState.COUNTER_ACCEPTED,
+			CurrentAttackState.COUNTER_DECLINED]:
+		return null
+	if str(counter_disposition) != CurrentAttackState.COUNTER_UNDECIDED \
+			and (str(attack_kind) == SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER \
+				or str((attacker as Dictionary).get("kind")) != "squadron" \
+				or str((defender as Dictionary).get("kind")) != "squadron"):
 		return null
 	if str(inspection_id) != "completed:%s" % str(source_attack_id) \
 			or str(source_attack_id).is_empty():
@@ -68,6 +80,7 @@ static func deserialize(raw: Dictionary) -> CompletedAttackInspection:
 		"outcome": (outcome as Dictionary).duplicate(true),
 		"required_principal_ids": (required as Array).duplicate(),
 		"received_principal_ids": (received as Array).duplicate(),
+		"counter_disposition": str(counter_disposition),
 	}
 	return result
 
@@ -86,6 +99,10 @@ func inspection_id() -> String:
 
 func source_attack_id() -> String:
 	return str(_data.get("source_attack_id", ""))
+
+
+func counter_disposition() -> String:
+	return str(_data.get("counter_disposition", ""))
 
 
 func is_satisfied() -> bool:

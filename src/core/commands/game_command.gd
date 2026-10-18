@@ -20,6 +20,10 @@ class_name GameCommand
 extends RefCounted
 
 
+const ATTACK_PUBLICATION_INTEGERS: GDScript = preload(
+		"res://src/core/commands/attack_publication_payload_integers.gd")
+
+
 ## Command payload fields whose canonical contract is integer-valued.
 ##
 ## Godot's JSON parser returns JSON numbers as floats.  Replay and network
@@ -380,40 +384,15 @@ static func _canonicalize_structured_payload(command_type_value: String,
 		values: Dictionary) -> bool:
 	if command_type_value == "roll_dice" and values.has("dice_pool"):
 		return _canonicalize_integer_dictionary(values, "dice_pool")
+	if command_type_value == "counter_choice" \
+			and values.has("counter_dice_pool"):
+		return _canonicalize_integer_dictionary(values, "counter_dice_pool")
 	if command_type_value != "publish_attack_flow" \
 			or not values.has("flow_payload"):
 		return true
-	var raw_flow_payload: Variant = values.get("flow_payload")
-	if not raw_flow_payload is Dictionary:
-		return false
-	var flow_payload: Dictionary = \
-			(raw_flow_payload as Dictionary).duplicate(true)
-	# This legacy projection has a few accepted string variants (for example
-	# defender_zone="front" and dice face="hit").  Restore only numeric values
-	# at the explicitly integer-capable fields and preserve those strings.
-	for field: String in [
-			"attacker_player", "attacker_ship_index",
-			"attacker_squadron_index", "attacker_zone", "chooser_player",
-			"controller_player", "defender_player", "defender_ship_index",
-			"defender_speed", "defender_zone", "final_damage",
-			"modified_damage", "redirect_remaining", "target_ship_index",
-			"target_squadron_index"]:
-		if flow_payload.has(field) \
-				and not _canonicalize_integer_if_numeric(flow_payload, field):
-			return false
-	if flow_payload.has("locked_tokens") \
-			and not _canonicalize_integer_array(flow_payload, "locked_tokens"):
-		return false
-	if flow_payload.has("defense_tokens") \
-			and not _canonicalize_nested_integer_array(
-					flow_payload, "defense_tokens", ["type", "state"]):
-		return false
-	if flow_payload.has("dice_results") \
-			and not _canonicalize_mixed_nested_integer_array(
-					flow_payload, "dice_results", ["color", "face"]):
-		return false
-	if flow_payload.has("dice_pool") \
-			and not _canonicalize_integer_dictionary(flow_payload, "dice_pool"):
+	var flow_payload: Variant = ATTACK_PUBLICATION_INTEGERS.canonical_copy(
+			values.get("flow_payload"))
+	if flow_payload == null:
 		return false
 	values["flow_payload"] = flow_payload
 	return true

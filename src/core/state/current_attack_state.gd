@@ -37,6 +37,9 @@ const DAMAGE_RESOLVED: String = "resolved"
 
 const KIND_SHIP: String = "ship"
 const KIND_SQUADRON: String = "squadron"
+const COUNTER_UNDECIDED: String = ""
+const COUNTER_ACCEPTED: String = "accepted"
+const COUNTER_DECLINED: String = "declined"
 
 const _STAGES: Array[String] = [
 	STAGE_INACTIVE,
@@ -97,6 +100,7 @@ const _KEYS: Array[String] = [
 	"redirect_allocations",
 	"damage_stage",
 	"resolved_outcome",
+	"counter_disposition",
 ]
 
 var _data: Dictionary = _inactive_data()
@@ -200,6 +204,9 @@ var damage_stage: String:
 var resolved_outcome: Dictionary:
 	get:
 		return (_data["resolved_outcome"] as Dictionary).duplicate(true)
+var counter_disposition: String:
+	get:
+		return str(_data["counter_disposition"])
 
 
 func configure_active(id: String, values: Dictionary) -> bool:
@@ -342,7 +349,8 @@ static func _validate_active_scalars(data: Dictionary) -> bool:
 			"attack_kind", "range_band", "cf_choice",
 			"cf_choice_lifecycle_id", "cf_choice_activation_id",
 			"cf_dial_resolution",
-			"cf_token_resolution", "defense_stage", "damage_stage"]:
+			"cf_token_resolution", "defense_stage", "damage_stage",
+			"counter_disposition"]:
 		if typeof(data[key]) != TYPE_STRING:
 			return false
 	for key: String in ["attacker_player", "attacker_index", "attacker_zone",
@@ -356,6 +364,9 @@ static func _validate_active_scalars(data: Dictionary) -> bool:
 	if not _is_attack_id(str(data["attack_id"])) \
 			or not _STAGES.has(str(data["stage"])) \
 			or str(data["stage"]) == STAGE_INACTIVE:
+		return false
+	if str(data["counter_disposition"]) not in [COUNTER_UNDECIDED,
+			COUNTER_ACCEPTED, COUNTER_DECLINED]:
 		return false
 	if not _KINDS.has(str(data["attacker_kind"])) \
 			or not _KINDS.has(str(data["defender_kind"])):
@@ -380,6 +391,13 @@ static func _validate_active_scalars(data: Dictionary) -> bool:
 
 static func _validate_stage_semantics(data: Dictionary) -> bool:
 	var stage_value: String = str(data["stage"])
+	if str(data["counter_disposition"]) != COUNTER_UNDECIDED \
+			and (stage_value != STAGE_RESOLVED \
+				or str(data["attacker_kind"]) != KIND_SQUADRON \
+				or str(data["defender_kind"]) != KIND_SQUADRON \
+				or str(data["attack_kind"]) \
+					== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER):
+		return false
 	var dice: Array = data["dice_results"] as Array
 	# ResolveDamageCommand owns the only accepted transition from completed
 	# defense directly to STAGE_RESOLVED. There is no command-owned writer for
@@ -695,6 +713,7 @@ static func _inactive_data() -> Dictionary:
 		"redirect_allocations": [],
 		"damage_stage": DAMAGE_PENDING,
 		"resolved_outcome": {},
+		"counter_disposition": COUNTER_UNDECIDED,
 	}
 
 

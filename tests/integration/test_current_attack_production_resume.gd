@@ -5535,6 +5535,7 @@ func _satisfied_inactive_phase_squadron_state(
 				"required_principal_ids": state.get_distinct_controlling_principal_ids(
 						MatchPlayerControlBinding.KIND_HUMAN),
 				"received_principal_ids": [],
+				"counter_disposition": "",
 			})
 	assert_not_null(inspection)
 	assert_true(state.install_completed_attack_inspection(inspection))
@@ -5752,6 +5753,7 @@ func _satisfied_inactive_counter_child_commanded_state() -> GameState:
 						"post_resolution_hull": 4, "destroyed": false},
 				"required_principal_ids": principals,
 				"received_principal_ids": [],
+				"counter_disposition": "",
 			})
 	assert_not_null(inspection)
 	assert_true(state.install_completed_attack_inspection(inspection))
@@ -5938,6 +5940,7 @@ func _satisfied_inactive_anti_state(has_remaining_target: bool) -> GameState:
 				"required_principal_ids": state.get_distinct_controlling_principal_ids(
 						MatchPlayerControlBinding.KIND_HUMAN),
 				"received_principal_ids": [],
+				"counter_disposition": "",
 			})
 	assert_not_null(inspection)
 	assert_true(state.install_completed_attack_inspection(inspection))

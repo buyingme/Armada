@@ -11,6 +11,8 @@ extends GameCommand
 
 const TYPE: String = "counter_choice"
 const RESULT_COUNTER_ACCEPTED: String = "counter_accepted"
+const COUNTER_CONSISTENCY: GDScript = preload(
+		"res://src/core/state/counter_publication_consistency.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -18,6 +20,56 @@ static func register() -> void:
 	GameCommand.register_type(TYPE, func(player: int,
 			pl: Dictionary) -> GameCommand:
 		return CounterChoiceCommand.new(player, pl))
+
+
+## Pure command-specific guard before Counter's registered rule hook can
+## inspect the choice, participant indices, or nested pool.
+static func prehook_reason(command: GameCommand,
+		game_state: GameState) -> String:
+	if typeof(command.payload.get("accepted")) != TYPE_BOOL:
+		return "Counter choice requires a native boolean accepted value."
+	if typeof(command.payload.get("attack_id")) != TYPE_STRING \
+			or str(command.payload.get("attack_id", "")).is_empty():
+		return "Counter choice requires an exact source attack identity."
+	for key: String in ["counter_attacker_player",
+			"counter_attacker_squadron_index", "counter_target_player",
+			"counter_target_squadron_index"]:
+		if typeof(command.payload.get(key)) != TYPE_INT:
+			return "Counter choice has an invalid participant identity."
+		var value: int = int(command.payload[key])
+		if key.ends_with("_player"):
+			if value < 0 or value >= Constants.PLAYER_COUNT:
+				return "Counter choice has an invalid participant identity."
+		elif value < 0 or value > 2147483647:
+			return "Counter choice has an invalid participant identity."
+	if not command.payload.get("counter_dice_pool") is Dictionary:
+		return "Counter choice requires a Dictionary dice pool."
+	var pool: Dictionary = command.payload["counter_dice_pool"] as Dictionary
+	if not pool.has("BLUE"):
+		return "Counter choice requires BLUE dice."
+	for key: Variant in pool:
+		if typeof(key) != TYPE_STRING \
+				or typeof(pool[key]) != TYPE_INT or int(pool[key]) < 0 \
+				or int(pool[key]) > 9007199254740991:
+			return "Counter choice has an invalid dice pool."
+	if int(pool["BLUE"]) <= 0:
+		return "Counter choice requires positive BLUE dice."
+	if game_state == null or game_state.current_attack_state == null \
+			or not game_state.current_attack_state.active:
+		return "Counter choice requires an active parent attack."
+	var parent: CurrentAttackState = game_state.current_attack_state
+	if parent.attack_id != command.payload["attack_id"] \
+			or parent.counter_disposition \
+					!= CurrentAttackState.COUNTER_UNDECIDED:
+		return "Counter choice source is stale or already decided."
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK \
+			or flow.step_id != Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
+			or flow.payload.get("attack_id") != command.payload["attack_id"]:
+		return "Counter choice has no matching installed publication."
+	if not COUNTER_CONSISTENCY.reconstructed_state_is_consistent(game_state):
+		return "Counter choice publication disagrees with canonical owners."
+	return ""
 
 
 func _init(p_player: int = 0,
@@ -30,15 +82,24 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
+	var safe_shape: String = prehook_reason(self, game_state)
+	if not safe_shape.is_empty():
+		return safe_shape
 	var phase_error: String = _validate_phase(game_state)
 	if phase_error != "":
 		return phase_error
 	var flow_error: String = _validate_flow(game_state)
 	if flow_error != "":
 		return flow_error
-	if not payload.has("accepted"):
-		return "Counter choice missing accepted flag."
-	return _validate_identity(game_state.interaction_flow.payload)
+	var identity_error: String = _validate_identity(
+			game_state.interaction_flow.payload)
+	if not identity_error.is_empty():
+		return identity_error
+	var counter_rule: Dictionary = CounterKeyword.new().validate_counter_choice(
+			game_state, self)
+	if not bool(counter_rule.get("allowed", false)):
+		return str(counter_rule.get("reason", "Invalid Counter choice."))
+	return ""
 
 
 ## Echoes the choice payload and records the accepted existing Counter

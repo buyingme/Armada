@@ -31,7 +31,8 @@ func test_counter_choice_validate_rejects_missing_identity() -> void:
 	payload.erase("counter_target_squadron_index")
 	var command := CounterChoiceCommand.new(1, payload)
 
-	assert_eq(command.validate(state), "Counter choice identity mismatch.",
+	assert_eq(command.validate(state),
+			"Counter choice has an invalid participant identity.",
 			"Counter choice must carry the exact pending attack identity.")
 
 
@@ -99,6 +100,20 @@ func test_confirm_attack_dice_validate_rejects_non_attacker() -> void:
 
 func _counter_choice_state() -> GameState:
 	var state: GameState = _base_state()
+	var counter := SquadronInstance.create_from_data(
+			"tie_interceptor_squadron",
+			AssetLoader.load_squadron_data("tie_interceptor_squadron"), 1)
+	counter.roster_entry_id = "counter-marker-test"
+	state.get_player_state(1).squadrons.append(counter)
+	assert_not_null(CurrentAttackFixture.install(state, {
+		"attack_id": "attack:8",
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"stage": CurrentAttackState.STAGE_RESOLVED,
+		"resolved_outcome": {"target_kind": "squadron",
+			"requested_hull_damage": 1, "actual_hull_damage": 1,
+			"post_resolution_hull": 2, "destroyed": false},
+	}))
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
@@ -111,12 +126,16 @@ func _counter_flow_payload(available: bool) -> Dictionary:
 	payload.erase("accepted")
 	payload[CounterKeyword.PAYLOAD_AVAILABLE] = available
 	payload[CounterKeyword.PAYLOAD_CONTROLLER_PLAYER] = 1
+	payload["controller_player"] = 1
+	payload["final_damage"] = 1
 	return payload
 
 
 func _counter_choice_payload(accepted: bool) -> Dictionary:
 	return {
+		"attack_id": "attack:8",
 		"accepted": accepted,
+		"counter_dice_pool": {"BLUE": 2},
 		"counter_attacker_player": 1,
 		"counter_attacker_squadron_index": 0,
 		"counter_target_player": 0,

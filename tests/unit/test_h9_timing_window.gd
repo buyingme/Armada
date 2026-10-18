@@ -551,8 +551,8 @@ func test_roll_dice_activates_ship_window_and_compatibility_boundary() -> void:
 			TimingWindowDefinitions.ATTACK_MODIFY)
 	assert_true(bool(projected.get("is_interactive", false)))
 	assert_false(_projected_h9(projected).is_empty())
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 10)
-	assert_eq(GameReplay.FORMAT_VERSION, 12)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 11)
+	assert_eq(GameReplay.FORMAT_VERSION, 13)
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION)
 	assert_ne(ConfirmAttackDiceCommand.new(0, {"attack_id": "attack:0"}) \
 			.validate(state), "")

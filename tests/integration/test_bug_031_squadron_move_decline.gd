@@ -180,6 +180,7 @@ func _satisfied_inspection(state: GameState) -> CompletedAttackInspection:
 			"post_resolution_hull": state.get_squadron(1, 0).current_hull},
 		"required_principal_ids": [principal_id],
 		"received_principal_ids": [principal_id],
+		"counter_disposition": "",
 	})
 
 

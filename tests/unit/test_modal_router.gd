@@ -325,6 +325,7 @@ func test_completed_result_precedes_stale_attack_modal_dispatch() -> void:
 				"post_resolution_hull": 3, "destroyed": false},
 		"required_principal_ids": required_principals,
 		"received_principal_ids": [client_principal],
+		"counter_disposition": "",
 	})
 	state._completed_attack_inspection = inspection
 	state.interaction_flow = InteractionFlow.make(
@@ -976,6 +977,7 @@ func test_accepted_counter_parent_blocks_early_enclosing_action_recovery() -> vo
 			"post_resolution_hull": 0, "destroyed": true},
 		"required_principal_ids": ["principal:0", "principal:1"],
 		"received_principal_ids": ["principal:0", "principal:1"],
+		"counter_disposition": CurrentAttackState.COUNTER_ACCEPTED,
 	})
 	assert_not_null(inspection)
 	state.interaction_flow = InteractionFlow.make(

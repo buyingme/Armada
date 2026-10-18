@@ -263,6 +263,7 @@ func test_completed_result_projection_overrides_stale_attack_flow_by_principal()
 				"post_resolution_hull": 2, "destroyed": false},
 		"required_principal_ids": required_principals,
 		"received_principal_ids": [client_principal],
+		"counter_disposition": "",
 	})
 	assert_not_null(inspection)
 	# The projector contract needs only canonical inspection data and binding;

@@ -98,11 +98,13 @@ func _is_squadron_target_publish(flow_payload: Dictionary) -> bool:
 func _published_squadron(game_state: GameState,
 		flow_payload: Dictionary,
 		prefix: String) -> SquadronInstance:
-	var owner: int = int(flow_payload.get("%s_player" % prefix, -1))
+	var owner: int
 	var key: String = "%s_squadron_index" % prefix
 	if prefix == "target":
 		owner = int(flow_payload.get("defender_player",
 				1 - int(flow_payload.get("attacker_player", 0))))
+	else:
+		owner = int(flow_payload.get("%s_player" % prefix, -1))
 	var squadron_index: int = int(flow_payload.get(key, -1))
 	return game_state.get_squadron(owner, squadron_index)
 

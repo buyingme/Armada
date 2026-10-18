@@ -193,7 +193,7 @@ func test_protocol_ten_network_resume_roll_converges_without_passive_rng() -> vo
 	var loaded: GameState = loaded_result.get("state") as GameState
 	var loaded_meta: SaveGameMetadata = loaded_result.get("meta") as SaveGameMetadata
 	assert_not_null(loaded)
-	assert_eq(NetworkManager.PROTOCOL_VERSION, 11)
+	assert_eq(NetworkManager.PROTOCOL_VERSION, 12)
 	assert_true(GameManager.start_new_game_from_state(
 			loaded, loaded_meta.scenario_id, loaded_meta.next_command_sequence))
 	var host: GameState = GameManager.current_game_state
@@ -220,7 +220,7 @@ func test_protocol_ten_network_resume_roll_converges_without_passive_rng() -> vo
 	assert_eq(host.rng.get_state(), uninterrupted.rng.get_state())
 	var envelope: Dictionary = NetworkManager._build_result_envelope(
 			host_command, host_result, 1)
-	assert_eq(envelope.get("protocol_version"), 11)
+	assert_eq(envelope.get("protocol_version"), 12)
 	assert_false(passive_command.execute_with_application_result(
 			passive, envelope.get("application_result") as Dictionary).is_empty())
 	assert_null(passive.rng)

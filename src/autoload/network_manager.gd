@@ -26,7 +26,7 @@ extends Node
 # ---------------------------------------------------------------------------
 
 ## Current protocol version.  Incremented whenever the message format changes.
-const PROTOCOL_VERSION: int = 11
+const PROTOCOL_VERSION: int = 12
 
 ## Interval (seconds) between keepalive pings.
 const HEARTBEAT_INTERVAL_SEC: float = 5.0

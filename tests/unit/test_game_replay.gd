@@ -112,7 +112,7 @@ func test_create_replay_rejects_unpaired_reconstructed_cursor() -> void:
 
 
 func test_bug_031_cutover_uses_replay_format_nine() -> void:
-	assert_eq(GameReplay.FORMAT_VERSION, 12,
+	assert_eq(GameReplay.FORMAT_VERSION, 13,
 			"Attack lifecycle and damage presentation cutover requires replay format 12")
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION,
 			"Signing must not create a second semantic replay format")

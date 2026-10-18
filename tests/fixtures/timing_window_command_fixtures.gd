@@ -11,7 +11,7 @@ const OPPORTUNITY: GDScript = preload(
 const PARTICIPANT: GDScript = preload(
 		"res://tests/fixtures/timing_window_participant_fixture.gd")
 
-const OPEN_TYPE: String = "publish_attack_flow"
+const OPEN_TYPE: String = "acknowledge_faceup_damage"
 const USE_TYPE: String = "reroll_attack_die"
 const DECLINE_TYPE: String = "skip_attack_modifier"
 const CONTINUATION_TYPE: String = "confirm_attack_dice"

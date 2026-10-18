@@ -6,7 +6,7 @@ extends GutTest
 
 const CmdProcessor := preload("res://src/autoload/command_processor.gd")
 const TEST_NOOP_TYPE: String = "debug_deal_damage"
-const TEST_FAILING_TYPE: String = "publish_attack_flow"
+const TEST_FAILING_TYPE: String = "debug_reposition"
 
 var _processor: Node
 var _state: GameState

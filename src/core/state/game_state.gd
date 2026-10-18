@@ -1284,6 +1284,11 @@ static func _deserialize_representation(data: Dictionary,
 		state._timing_window_state = _new_timing_window_state()
 	if not state.validate_current_attack_references():
 		return null
+	var counter_policy: GDScript = load(
+			"res://src/core/state/counter_publication_consistency.gd") as GDScript
+	if counter_policy == null or not bool(counter_policy.call(
+			"reconstructed_state_is_consistent", state)):
+		return null
 	if not passive and (not state.has_valid_match_player_control_binding() \
 			or not state.validate_ship_phase_selection_controller() \
 			or not state.validate_finalized_destruction_cleanup() \

@@ -1,15 +1,17 @@
 # Atomic Counter-Choice Lifecycle — Consolidated Implementation Workbook
 
-Status: **Owner ACCEPTED 2026-10-17; implementation NOT AUTHORIZED.**
+Status: **Owner ACCEPTED 2026-10-17; Stage A Owner ACCEPTED and Stage B
+implementation AUTHORIZED 2026-10-18; Stages C–F remain NOT AUTHORIZED.**
 Prepared: 2026-10-17. Architecture accepted by the Project Owner after
 independent acceptance audit and targeted re-audit. The independent
 implementation-readiness audit passed without blockers. Boundary B
-implementation remains **STOPPED**; its uncommitted partial changes are
-preserved. No production implementation, test change, fixture recording, or baseline
-promotion is authorized by this workbook.
+implementation was **STOPPED at workbook acceptance**; its uncommitted partial
+changes were preserved. Workbook acceptance alone authorized no production
+implementation, test change, fixture recording, or baseline promotion. The
+later, separate Stage A and Stage B Owner directions are recorded below.
 
 Scope: BC-009 / AT-008 Counter parent publication, choice, retirement, child,
-inspection, and enclosing return, integrated with the stopped Boundary B
+inspection, and enclosing return, integrated with the preserved Boundary B
 Attack-publication command-codec repair. The accepted
 [architecture design](atomic-counter-choice-publication-architecture-design.md)
 and its complete transition matrix are the architecture authority for this
@@ -336,3 +338,28 @@ replay fixtures through genuine application execution; historical evidence
 remains unchanged. Separate explicit Owner implementation authorization is
 required. After authorized implementation, the Owner reviews any new oracles
 and separately accepts final implementation and manual evidence.
+
+**Stage A implementation direction — 2026-10-18:** The Owner separately
+authorized E2 and then Stage A only. E2 passed before production changes; its
+version, runner, assertion, historical-artifact, and genuine Owner-recording
+inventory is in the [E2 implementation-entry record](../evidence/atomic-counter-stage-a-e2-entry-record.md).
+Stage A implementation and focused evidence are recorded there for a separate
+Owner acceptance checkpoint. Boundary B's uncommitted partial work remains
+stopped and preserved. Stages B–F and replacement fixture recording remain
+unauthorized by this direction.
+
+**Stage A acceptance and Stage B direction — 2026-10-18:** The Owner accepted
+the Stage A implementation and authorized Stage B implementation under this
+workbook. Stage B may review and reuse the preserved Boundary B partial work;
+its command admission, validation, hook-safety, and atomic-rejection exit gates
+remain binding. Stages C–F, fixture recording, and baseline promotion remain
+unauthorized. The [E2 implementation-entry record](../evidence/atomic-counter-stage-a-e2-entry-record.md)
+separates completed Stage A assertion updates from later-stage obligations and
+inventories the immutable BUG-074 diagnosis replay.
+
+**Stage B implementation checkpoint — 2026-10-18:** Focused command admission,
+codec, owner-consistency, installed-flow, source-bound choice, hook-safety,
+and rejection-atomicity verification passed. The
+[Stage B implementation evidence](../evidence/atomic-counter-stage-b-implementation-evidence.md)
+records exact results and the later-stage full-suite failures. Stage B awaits
+independent audit and Owner acceptance; Stages C–F remain unauthorized.

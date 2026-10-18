@@ -43,6 +43,8 @@ extends GameCommand
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
 const ECM_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
+const COUNTER_CONSISTENCY: GDScript = preload(
+		"res://src/core/state/counter_publication_consistency.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -50,6 +52,23 @@ static func register() -> void:
 	GameCommand.register_type("publish_attack_flow", func(player: int,
 			pl: Dictionary) -> GameCommand:
 		return PublishAttackFlowCommand.new(player, pl))
+
+
+## Pure hook-safety gate. Full ownership and predecessor legality remains in
+## validate(); this reads the installed projection without changing either.
+static func prehook_reason(command: GameCommand,
+		game_state: GameState) -> String:
+	var integer_reason: String = ATTACK_PUBLICATION_INTEGERS.validate(
+			command.payload.get("flow_payload"))
+	if not integer_reason.is_empty():
+		return integer_reason
+	if game_state != null and game_state.interaction_flow != null \
+			and game_state.interaction_flow.flow_type \
+					== Constants.InteractionFlow.ATTACK \
+			and game_state.interaction_flow.step_id \
+					== Constants.InteractionStep.ATTACK_COUNTER_CHOICE:
+		return "Installed Counter choice cannot be replaced by publication."
+	return ""
 
 
 func _init(p_player: int = 0,
@@ -61,6 +80,9 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if not base.is_empty():
 		return base
+	var prehook: String = prehook_reason(self, game_state)
+	if not prehook.is_empty():
+		return prehook
 	if payload.size() != 5:
 		return "Attack-flow publication payload does not match its exact schema."
 	for key: String in ["step_id", "controller_player", "flow_payload",
@@ -77,9 +99,25 @@ func validate(game_state: GameState) -> String:
 	if not _is_canonical_attack_id(source_attack_id):
 		return "Attack-flow publication has invalid source attack identity."
 	var flow_payload: Dictionary = payload["flow_payload"] as Dictionary
+	var integer_reason: String = ATTACK_PUBLICATION_INTEGERS.validate(
+			flow_payload)
+	if not integer_reason.is_empty():
+		return integer_reason
+	var canonical: Variant = ATTACK_PUBLICATION_INTEGERS.canonical_copy(
+			flow_payload)
+	if canonical == null:
+		return "Attack-flow publication has invalid integer payload."
+	var canonical_flow: Dictionary = canonical as Dictionary
+	var reason: String
 	if bool(payload["final"]):
-		return _validate_final(game_state, source_attack_id, flow_payload)
-	return _validate_non_final(game_state, source_attack_id, flow_payload)
+		reason = _validate_final(game_state, source_attack_id, canonical_flow)
+	else:
+		reason = _validate_non_final(game_state, source_attack_id,
+				canonical_flow)
+	if not reason.is_empty():
+		return reason
+	payload["flow_payload"] = canonical_flow
+	return ""
 
 
 ## Writes the snapshot into [member GameState.interaction_flow] on the
@@ -122,7 +160,146 @@ func _validate_non_final(game_state: GameState, source_attack_id: String,
 	if not FLOW_SPEC_SCRIPT.has_spec(
 			int(Constants.InteractionFlow.ATTACK), step_id):
 		return "Attack-flow publication has an invalid interaction step."
+	if step_id == Constants.InteractionStep.ATTACK_COUNTER_CHOICE:
+		for field: String in ["counter_attacker_player",
+				"counter_attacker_squadron_index", "counter_target_player",
+				"counter_target_squadron_index"]:
+			if not flow_payload.has(field):
+				return "Attack-flow Counter participant identity is missing."
+		if game_state.completed_attack_inspection != null:
+			return "Counter publication cannot replace a pending inspection."
+		var original: SquadronInstance = game_state.get_squadron(
+				attack.attacker_player, attack.attacker_index)
+		if original == null:
+			return "Counter publication has no canonical attacker Squadron."
+		var installed: InteractionFlow = game_state.interaction_flow
+		if installed == null:
+			return "Counter publication requires an installed predecessor."
+		if not _counter_predecessor_matches_owners(game_state, installed,
+				attack, original):
+			return "Counter publication predecessor disagrees with canonical owners."
+		if int(payload["controller_player"]) != attack.defender_player:
+			return "Counter publication controller mismatch."
+		var candidate: InteractionFlow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+				Constants.InteractionFlow.ATTACK,
+				Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
+				game_state, _attack_controller_context(flow_payload),
+				Constants.Visibility.ALL, flow_payload)
+		if not COUNTER_CONSISTENCY.candidate_matches_active_parent(
+				game_state, candidate):
+			return "Counter publication disagrees with canonical owners."
 	return ""
+
+
+## The installed projection is checked independently of the proposed Counter
+## payload. It cannot confer source, participant, phase, or damage authority.
+func _counter_predecessor_matches_owners(game_state: GameState,
+		installed: InteractionFlow, attack: CurrentAttackState,
+		original: SquadronInstance) -> bool:
+	if attack.stage != CurrentAttackState.STAGE_RESOLVED \
+			or attack.damage_stage != CurrentAttackState.DAMAGE_RESOLVED \
+			or attack.defense_stage != CurrentAttackState.DEFENSE_COMPLETE \
+			or not attack.accuracy_complete \
+			or game_state.get_active_squadron_activation() != original \
+			or original.attack_action_disposition \
+					!= SquadronInstance.ATTACK_ACTION_BEGUN:
+		return false
+	var phase: Constants.GamePhase = game_state.current_phase
+	if phase == Constants.GamePhase.SQUADRON:
+		if original.activation_context \
+				!= SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE \
+				or game_state.squadron_phase_controller_player \
+					!= attack.attacker_player:
+			return false
+	elif phase == Constants.GamePhase.SHIP:
+		if original.activation_context \
+				!= SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
+				or original.commanding_ship_player != attack.attacker_player:
+			return false
+		var ship: ShipInstance = game_state.get_ship(
+				original.commanding_ship_player,
+				original.commanding_ship_index)
+		if ship == null or game_state.get_active_ship_activation() != ship \
+				or not ship.has_active_ship_activation():
+			return false
+	else:
+		return false
+	if installed.flow_type == Constants.InteractionFlow.ATTACK:
+		if installed.step_id not in [
+				Constants.InteractionStep.ATTACK_MODIFY,
+				Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+				Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+		]:
+			return false
+		var expected_controller: int = attack.defender_player \
+				if installed.step_id \
+						== Constants.InteractionStep.ATTACK_DEFENSE_TOKENS \
+				else attack.attacker_player
+		if installed.controller_player != expected_controller:
+			return false
+		var projection: Dictionary = installed.payload
+		if projection.get("attack_id") != attack.attack_id:
+			return false
+		var retained: Dictionary = {
+			"attacker_kind": attack.attacker_kind,
+			"attacker_player": attack.attacker_player,
+			"attacker_squadron_index": attack.attacker_index,
+			"target_kind": attack.defender_kind,
+			"defender_kind": attack.defender_kind,
+			"defender_player": attack.defender_player,
+			"defender_index": attack.defender_index,
+			"defender_squadron_index": attack.defender_index,
+			"target_squadron_index": attack.defender_index,
+			"controller_player": installed.controller_player,
+			"dice_results": attack.dice_results,
+			"locked_tokens": attack.accuracy_locked_tokens,
+		}
+		for key: String in retained:
+			if projection.has(key) and projection[key] != retained[key]:
+				return false
+		if projection.has("final_damage") \
+				and projection["final_damage"] \
+						!= attack.resolved_outcome.get("requested_hull_damage"):
+			return false
+		return true
+	if installed.flow_type == Constants.InteractionFlow.SQUADRON_ACTIVATION:
+		return phase == Constants.GamePhase.SQUADRON \
+				and installed.step_id == Constants.InteractionStep.SQUAD_ATTACK \
+				and installed.controller_player == attack.attacker_player \
+				and _enclosing_projection_matches(installed.payload, attack,
+						original, null)
+	if installed.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION:
+		var commanding_ship: ShipInstance = game_state.get_ship(
+				original.commanding_ship_player,
+				original.commanding_ship_index)
+		return phase == Constants.GamePhase.SHIP \
+				and installed.step_id == Constants.InteractionStep.SQUADRON_STEP \
+				and installed.controller_player == attack.attacker_player \
+				and _enclosing_projection_matches(installed.payload, attack,
+						original, commanding_ship)
+	return false
+
+
+func _enclosing_projection_matches(projection: Dictionary,
+		attack: CurrentAttackState, original: SquadronInstance,
+		ship: ShipInstance) -> bool:
+	var retained: Dictionary = {
+		"attack_id": attack.attack_id,
+		"attacker_player": attack.attacker_player,
+		"attacker_squadron_index": attack.attacker_index,
+		"defender_player": attack.defender_player,
+		"target_squadron_index": attack.defender_index,
+		"squadron_index": attack.attacker_index,
+		"activation_id": original.activation_id,
+		"activation_context": original.activation_context,
+	}
+	if ship != null:
+		retained["ship_index"] = original.commanding_ship_index
+		retained["ship_activation_identity"] = ship.ship_activation_identity
+	for key: String in retained:
+		if projection.has(key) and projection[key] != retained[key]:
+			return false
+	return true
 
 
 func _validate_final(game_state: GameState, source_attack_id: String,

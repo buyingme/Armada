@@ -1,7 +1,7 @@
 # Atomic Counter-Choice Lifecycle — Consolidated Implementation Workbook
 
-Status: **Owner ACCEPTED 2026-10-17; Stage A Owner ACCEPTED and Stage B
-implementation AUTHORIZED 2026-10-18; Stages C–F remain NOT AUTHORIZED.**
+Status: **Owner ACCEPTED 2026-10-17; Stages A/B Owner ACCEPTED and Stage C
+implementation AUTHORIZED 2026-10-18; Stages D–F remain NOT AUTHORIZED.**
 Prepared: 2026-10-17. Architecture accepted by the Project Owner after
 independent acceptance audit and targeted re-audit. The independent
 implementation-readiness audit passed without blockers. Boundary B
@@ -361,5 +361,14 @@ inventories the immutable BUG-074 diagnosis replay.
 codec, owner-consistency, installed-flow, source-bound choice, hook-safety,
 and rejection-atomicity verification passed. The
 [Stage B implementation evidence](../evidence/atomic-counter-stage-b-implementation-evidence.md)
-records exact results and the later-stage full-suite failures. Stage B awaits
-independent audit and Owner acceptance; Stages C–F remain unauthorized.
+records exact results and the later-stage full-suite failures. At that
+checkpoint Stage B awaited independent audit and Owner acceptance; Stages C–F
+were unauthorized.
+
+**Stage B Owner acceptance and Stage C direction — 2026-10-18:** The Owner
+accepted Stage B after independent audit PASS and closed predecessor-consistency
+blocker B-1. The accepted Stage A/B implementation and evidence are committed
+in `e7f48fe`. The Owner separately authorized Stage C under this workbook:
+atomic ordered Counter publication and trusted live Network origin only.
+Stages D–F remain unauthorized; no replay fixture, baseline, hash, or
+historical Owner evidence promotion is authorized.

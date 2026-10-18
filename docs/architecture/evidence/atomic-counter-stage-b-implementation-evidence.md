@@ -1,10 +1,10 @@
 # Atomic Counter Stage B — command admission implementation evidence
 
-Status: **Stage B focused exit PASS; independent Stage B audit and Owner
-acceptance pending.** Recorded 2026-10-18 under the
+Status: **Stage B Owner ACCEPTED 2026-10-18; independent audit PASS; B-1
+CLOSED.** Recorded 2026-10-18 under the
 [Owner-accepted consolidated workbook](../implementation_workbooks/atomic-counter-choice-lifecycle-consolidated-implementation-workbook.md).
-The Owner accepted Stage A and authorized Stage B on 2026-10-18. Stages C–F
-remain unauthorized.
+The Owner accepted Stage A and authorized Stage B on 2026-10-18. At that
+implementation checkpoint, Stages C–F were unauthorized.
 
 ## Implemented boundary
 
@@ -100,5 +100,14 @@ broken pipe while echoing its large captured output. The final full-suite run
 with normal user-data access is **4,489 tests: 4,473 passing, 16 failing;
 24,713/24,782 assertions**. The same fifteen Counter inspection/child-release
 tests remain assigned to Stages D/E, and the one Replay-version expectation
-remains assigned to Stage F. No new B-1 failure appeared. Stage B remains
-**not Owner-accepted** pending targeted independent re-audit.
+remains assigned to Stage F. No new B-1 failure appeared. The targeted
+independent re-audit subsequently passed, as recorded below.
+
+## Owner implementation acceptance — 2026-10-18
+
+The Owner accepted Stage B after independent audit PASS and closed B-1.
+The accepted Stage A/B implementation and evidence are isolated in commit
+`e7f48fe`. Stage C is separately authorized under the consolidated workbook;
+Stages D–F remain unauthorized. This checkpoint does not accept the deferred
+full-suite failures or authorize fixture, baseline, hash, or historical
+evidence changes.

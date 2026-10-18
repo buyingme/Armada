@@ -598,7 +598,28 @@ static func _validated_redirects(raw: Variant) -> Variant:
 static func _validated_resolved_outcome(raw: Variant) -> Variant:
 	if not (raw is Dictionary):
 		return null
-	return (raw as Dictionary).duplicate(true)
+	var outcome: Dictionary = (raw as Dictionary).duplicate(true)
+	var integer_keys: Array[String] = []
+	match outcome.get("target_kind"):
+		KIND_SQUADRON:
+			integer_keys = ["requested_hull_damage", "actual_hull_damage",
+					"post_resolution_hull"]
+		KIND_SHIP:
+			integer_keys = ["affected_zone", "final_damage", "shield_absorbed",
+					"post_resolution_shields", "hull_damage"]
+	for key: String in integer_keys:
+		if not outcome.has(key):
+			continue
+		var value: Variant = outcome[key]
+		if typeof(value) == TYPE_INT:
+			continue
+		if typeof(value) != TYPE_FLOAT or not is_finite(value) \
+				or value != floor(value) \
+				or value < -9223372036854775808.0 \
+				or value >= 9223372036854775808.0:
+			return null
+		outcome[key] = int(value)
+	return outcome
 
 
 static func _normalized_integral(raw: Variant) -> Variant:

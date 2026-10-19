@@ -3366,12 +3366,15 @@ func _on_redirect_done_early() -> void:
 ## Rules Reference: "Damage", p.4 — "Damage is applied one point at a
 ## time."
 func _attack_exec_resolve_damage() -> void:
-	# Phase I3: MODIFY/DEFENSE_TOKENS -> RESOLVE_DAMAGE is always legal.
-	if _flow_fsm.current_step != AttackFlowFSM.Step.RESOLVE_DAMAGE:
-		_fsm_advance(AttackFlowFSM.Step.RESOLVE_DAMAGE)
 	var attack: CurrentAttackState = _current_attack()
 	if attack == null or not attack.active:
 		return
+	# A Counter-eligible damage command must commit before its complete choice
+	# projection. Do not write or publish an intermediate local Resolve step.
+	if not CurrentAttackContinuation.counter_opportunity(
+			GameManager.current_game_state, attack) \
+			and _flow_fsm.current_step != AttackFlowFSM.Step.RESOLVE_DAMAGE:
+		_fsm_advance(AttackFlowFSM.Step.RESOLVE_DAMAGE)
 	var result: Dictionary
 	if attack.defender_kind == CurrentAttackState.KIND_SHIP:
 		result = GameManager.submit_resolve_ship_damage(
@@ -3393,6 +3396,8 @@ func apply_damage_result(result: Dictionary) -> void:
 	if attack == null or attack.attack_id != attack_id \
 			or attack.stage != CurrentAttackState.STAGE_RESOLVED:
 		return
+	var counter_eligible: bool = CurrentAttackContinuation.counter_opportunity(
+			GameManager.current_game_state, attack)
 	# ResolveDamageCommand may be derived directly from CommitAccuracyCommand
 	# when the defender has no defense interaction. That authoritative path
 	# deliberately bypasses _attack_exec_resolve_damage(), so reconcile the
@@ -3414,8 +3419,9 @@ func apply_damage_result(result: Dictionary) -> void:
 	# The accepted deal owns the faceup inspection now. Publishing another
 	# Attack flow snapshot before acknowledgment would be rejected by the
 	# canonical gate and could expose a local-only flow patch.
-	if GameManager.current_game_state == null \
-			or GameManager.current_game_state.faceup_damage_inspection == null:
+	if not counter_eligible \
+			and (GameManager.current_game_state == null \
+				or GameManager.current_game_state.faceup_damage_inspection == null):
 		_fsm_patch_payload({"final_damage": final_damage})
 	# Brace is already applied during Step 4 (canonical order before
 	# Redirect), so _state.modified_damage is already halved.
@@ -3425,7 +3431,7 @@ func apply_damage_result(result: Dictionary) -> void:
 		return
 	if str(presentation_result.get("target_type", "")) == "squadron":
 		_apply_squadron_damage_result(presentation_result)
-		if _pending_counter_attacker != null:
+		if counter_eligible:
 			return
 		_attack_exec_finalize_after_delay()
 		return
@@ -3556,14 +3562,12 @@ func _apply_squadron_damage_result(result: Dictionary) -> void:
 
 
 func _maybe_offer_counter_attack() -> bool:
-	if not _is_counter_available():
+	if not CurrentAttackContinuation.counter_opportunity(
+			GameManager.current_game_state, _current_attack()):
 		return false
 	_pending_counter_attacker = _state.defender_squadron
 	_pending_counter_target = _state.attacker_squadron
-	_start_counter_choice_flow()
-	if _get_panel() and NetworkManager.get_local_player_index() < 0:
-		_get_panel().show_counter_section()
-	_log.info("Counter available — awaiting defender choice.")
+	# Only the accepted ordered publication may expose the actionable choice.
 	return true
 
 
@@ -3578,14 +3582,22 @@ func _is_counter_available() -> bool:
 			_state.attack_kind, attacker, defender)
 
 
-func _publish_counter_payload(available: bool) -> void:
-	_fsm_patch_payload(_counter_choice_payload(available))
-
-
-func _start_counter_choice_flow() -> void:
-	_flow_fsm.defender_player = _get_counter_controller_player()
-	_fsm_advance(AttackFlowFSM.Step.COUNTER_CHOICE)
-	_publish_counter_payload(true)
+## Called only after the authoritative publication command has installed the
+## complete flow. This restores transient presentation without writing state.
+func apply_counter_publication_result() -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	var attack: CurrentAttackState = gs.current_attack_state
+	var flow: InteractionFlow = gs.interaction_flow
+	if attack == null or flow == null \
+			or not CounterPublicationConsistency.candidate_matches_active_parent(
+					gs, flow):
+		return
+	_flow_fsm.restore_projection(AttackFlowFSM.Step.COUNTER_CHOICE,
+			attack.attacker_player, attack.defender_player, flow.payload)
+	if _get_panel() and NetworkManager.get_local_player_index() < 0:
+		_get_panel().show_counter_section()
 
 
 func _get_counter_controller_player() -> int:

@@ -1618,6 +1618,10 @@ func _submit_command_to_server(data: Dictionary) -> void:
 	if cmd == null:
 		_log.warn("Failed to deserialize command from peer %d." % sender_id)
 		return
+	if PublishAttackFlowCommand.is_counter_step_submission(cmd):
+		_send_command_rejection(sender_id, data,
+				"Counter publication is authority-owned.")
+		return
 	if cmd.command_type in ["debug_reposition", "debug_deal_damage"]:
 		_log.warn("Remote peer %d attempted host-only debug command [%s]." % [
 			sender_id, cmd.command_type])

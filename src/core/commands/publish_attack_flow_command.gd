@@ -54,6 +54,17 @@ static func register() -> void:
 		return PublishAttackFlowCommand.new(player, pl))
 
 
+## Live peer and host-player routes must not originate this engine-owned step.
+## Recorded replay commands still use ordinary command validation.
+static func is_counter_step_submission(command: GameCommand) -> bool:
+	return command != null and command.command_type == "publish_attack_flow" \
+			and typeof(command.payload.get("final")) == TYPE_BOOL \
+			and not bool(command.payload["final"]) \
+			and typeof(command.payload.get("step_id")) == TYPE_INT \
+			and command.payload["step_id"] \
+					== int(Constants.InteractionStep.ATTACK_COUNTER_CHOICE)
+
+
 ## Pure hook-safety gate. Full ownership and predecessor legality remains in
 ## validate(); this reads the installed projection without changing either.
 static func prehook_reason(command: GameCommand,

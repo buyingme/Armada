@@ -1,7 +1,7 @@
 # Atomic Counter-Choice Lifecycle — Consolidated Implementation Workbook
 
-Status: **Owner ACCEPTED 2026-10-17; Stages A/B Owner ACCEPTED and Stage C
-implementation AUTHORIZED 2026-10-18; Stages D–F remain NOT AUTHORIZED.**
+Status: **Owner ACCEPTED 2026-10-17; Stages A–C Owner ACCEPTED and Stage D
+implementation AUTHORIZED 2026-10-19; Stages E/F remain NOT AUTHORIZED.**
 Prepared: 2026-10-17. Architecture accepted by the Project Owner after
 independent acceptance audit and targeted re-audit. The independent
 implementation-readiness audit passed without blockers. Boundary B
@@ -372,3 +372,20 @@ in `e7f48fe`. The Owner separately authorized Stage C under this workbook:
 atomic ordered Counter publication and trusted live Network origin only.
 Stages D–F remain unauthorized; no replay fixture, baseline, hash, or
 historical Owner evidence promotion is authorized.
+
+**Stage C implementation checkpoint — 2026-10-19:** The bounded atomic
+publication, authoritative Network origin, and damage-before-publication
+implementation and focused verification are recorded in the
+[Stage C implementation evidence](../evidence/atomic-counter-stage-c-implementation-evidence.md).
+Stage C awaits independent audit and Owner acceptance. Stages D–F remain
+unauthorized; the existing full Counter ENet scenario and deferred full-suite
+failures remain assigned to their later-stage gates.
+
+**Stage C Owner acceptance and Stage D direction — 2026-10-19:** The Owner
+accepted Stage C following independent audit PASS and separately authorized
+Stage D under this workbook: source-bound single-use Counter choice, semantic
+parent retirement, inspection **I**/**J** boundaries, and atomic child Begin.
+The [Stage C evidence](../evidence/atomic-counter-stage-c-implementation-evidence.md)
+records the corrected related-suite assertion count and the separate
+mapping-1 ENet rerun provenance. Stages E/F remain unauthorized. No replay
+fixture, baseline, hash, or historical Owner evidence promotion is authorized.

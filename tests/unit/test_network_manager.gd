@@ -55,6 +55,30 @@ func test_protocol_version_is_ux_integration_cutover_nine() -> void:
 	assert_eq(NetworkManager.PROTOCOL_VERSION, 12)
 
 
+func test_live_peer_counter_publication_is_rejected_before_command_processing() -> void:
+	var command := PublishAttackFlowCommand.new(0, {
+		"step_id": int(Constants.InteractionStep.ATTACK_COUNTER_CHOICE),
+		"controller_player": 1,
+		"flow_payload": {"attack_id": "attack:1"},
+		"final": false,
+		"source_attack_id": "attack:1",
+	})
+	var wire: Dictionary = JSON.parse_string(
+			JSON.stringify(command.serialize())) as Dictionary
+	assert_not_null(GameCommand.deserialize(wire))
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager.peers[0] = {"command_admission_enabled": true}
+	var history_before: int = CommandProcessor.get_command_count()
+	var sequence_before: int = CommandProcessor.get_next_sequence()
+	var followups_before: int = CommandProcessor \
+			.get_pending_observer_followup_count()
+	NetworkManager._submit_command_to_server(wire)
+	assert_eq(CommandProcessor.get_command_count(), history_before)
+	assert_eq(CommandProcessor.get_next_sequence(), sequence_before)
+	assert_eq(CommandProcessor.get_pending_observer_followup_count(),
+			followups_before)
+
+
 func test_heartbeat_interval_is_positive() -> void:
 	assert_gt(NetworkManager.HEARTBEAT_INTERVAL_SEC, 0.0,
 			"Heartbeat interval should be positive.")

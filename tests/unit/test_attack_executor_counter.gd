@@ -74,14 +74,12 @@ func test_resolve_damage_zero_damage_squadron_attack_offers_counter() -> void:
 	assert_same(executor._pending_counter_target, attacker,
 			"Counter should target the squadron that performed the attack.")
 	assert_eq(executor._flow_fsm.get_interaction_step(),
-			Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
-			"Counter availability should move into a defender-owned choice step.")
-	assert_true(bool(executor._flow_fsm.payload.get(
-			CounterKeyword.PAYLOAD_AVAILABLE, false)),
-			"Counter payload should mark the optional attack available.")
-	assert_eq(executor._flow_fsm.payload.get(
-			CounterKeyword.PAYLOAD_DICE_POOL, {}), {"BLUE": 2},
-			"Counter payload should expose the defender's Counter dice pool.")
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			"Damage presentation cannot install a Counter choice.")
+	assert_false(bool(executor._flow_fsm.payload.get(
+			CounterKeyword.PAYLOAD_AVAILABLE, false)))
+	assert_ne(state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_COUNTER_CHOICE)
 
 
 func test_no_defense_damage_result_reconciles_modify_before_counter() -> void:
@@ -104,13 +102,22 @@ func test_no_defense_damage_result_reconciles_modify_before_counter() -> void:
 	executor.apply_damage_result(damage.execute(state))
 
 	assert_eq(executor._flow_fsm.current_step,
-			AttackFlowFSM.Step.COUNTER_CHOICE)
+			AttackFlowFSM.Step.RESOLVE_DAMAGE)
 	assert_eq(state.interaction_flow.step_id,
-			Constants.InteractionStep.ATTACK_COUNTER_CHOICE)
-	assert_eq(state.interaction_flow.controller_player, 1)
-	assert_eq(state.interaction_flow.payload.get("attack_id", ""), "attack:22")
-	assert_true(bool(state.interaction_flow.payload.get(
-			CounterKeyword.PAYLOAD_AVAILABLE, false)))
+			Constants.InteractionStep.ATTACK_MODIFY,
+			"Damage callback must preserve the installed predecessor.")
+	var publication: GameCommand = CurrentAttackContinuation \
+			.derive_reconstructed_resolved_attack(state)
+	assert_not_null(publication)
+	if publication != null:
+		assert_eq(publication.validate(state), "")
+		assert_false(publication.execute(state).is_empty())
+		executor.apply_counter_publication_result()
+		assert_eq(executor._flow_fsm.current_step,
+				AttackFlowFSM.Step.COUNTER_CHOICE)
+		assert_eq(state.interaction_flow.step_id,
+				Constants.InteractionStep.ATTACK_COUNTER_CHOICE)
+		assert_eq(state.interaction_flow.controller_player, 1)
 
 
 func test_illegal_damage_flow_reconciliation_fails_without_publication() -> void:

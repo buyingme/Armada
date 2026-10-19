@@ -58,10 +58,107 @@ static func derive_reconstructed_resolved_attack(
 		return null
 	var attack: CurrentAttackState = game_state.current_attack_state
 	if attack == null or not attack.active \
-			or attack.stage != CurrentAttackState.STAGE_RESOLVED \
-			or _post_damage_decision_pending(game_state, attack):
+			or attack.stage != CurrentAttackState.STAGE_RESOLVED:
+		return null
+	if counter_opportunity(game_state, attack):
+		return _build_counter_publication(game_state, attack)
+	if _post_damage_decision_pending(game_state, attack):
 		return null
 	return _build_complete_attack(attack)
+
+
+## Reads only the existing Attack and Squadron owners. A scene token or flow
+## affordance cannot establish Counter eligibility.
+static func counter_opportunity(game_state: GameState,
+		attack: CurrentAttackState) -> bool:
+	if game_state == null or attack == null or not attack.active \
+			or attack.attacker_kind != CurrentAttackState.KIND_SQUADRON \
+			or attack.defender_kind != CurrentAttackState.KIND_SQUADRON \
+			or attack.counter_disposition \
+					!= CurrentAttackState.COUNTER_UNDECIDED:
+		return false
+	return CounterKeyword.is_counter_trigger_available(
+			attack.attack_kind,
+			game_state.get_squadron(attack.attacker_player,
+					attack.attacker_index),
+			game_state.get_squadron(attack.defender_player,
+					attack.defender_index))
+
+
+## Detached prospective publication. The command's accepted validation is
+## the only route that installs this Counter projection.
+static func _build_counter_publication(game_state: GameState,
+		attack: CurrentAttackState) -> PublishAttackFlowCommand:
+	if attack.stage != CurrentAttackState.STAGE_RESOLVED \
+			or attack.damage_stage != CurrentAttackState.DAMAGE_RESOLVED \
+			or game_state.completed_attack_inspection != null \
+			or game_state.faceup_damage_inspection != null \
+			or not counter_opportunity(game_state, attack):
+		return null
+	var installed: InteractionFlow = game_state.interaction_flow
+	if installed == null or (installed.flow_type \
+			== Constants.InteractionFlow.ATTACK and installed.step_id \
+			== Constants.InteractionStep.ATTACK_COUNTER_CHOICE):
+		return null
+	var outcome: Dictionary = attack.resolved_outcome
+	if outcome.get("target_kind") != CurrentAttackState.KIND_SQUADRON \
+			or typeof(outcome.get("requested_hull_damage")) != TYPE_INT \
+			or int(outcome["requested_hull_damage"]) < 0:
+		return null
+	var original: SquadronInstance = game_state.get_squadron(
+			attack.attacker_player, attack.attacker_index)
+	var counter: SquadronInstance = game_state.get_squadron(
+			attack.defender_player, attack.defender_index)
+	if original == null or counter == null:
+		return null
+	var blue_count: int = SquadronKeywordRuleHelper.get_keyword_value(
+			counter, SquadronKeywordRuleHelper.KEYWORD_COUNTER)
+	if blue_count <= 0:
+		return null
+	var projected: Dictionary = {}
+	if installed.flow_type == Constants.InteractionFlow.ATTACK:
+		projected = installed.payload.duplicate(true)
+	projected.merge({
+		"attack_id": attack.attack_id,
+		"attacker_kind": attack.attacker_kind,
+		"attacker_player": attack.attacker_player,
+		"attacker_squadron_index": attack.attacker_index,
+		"attacker_zone": attack.attacker_zone,
+		"target_kind": attack.defender_kind,
+		"defender_player": attack.defender_player,
+		"target_squadron_index": attack.defender_index,
+		"defender_zone": attack.defender_zone,
+		"attack_kind": attack.attack_kind,
+		"range_band": attack.range_band,
+		"dice_pool": attack.dice_pool,
+		"dice_results": attack.dice_results,
+		"locked_tokens": attack.accuracy_locked_tokens,
+		"attacker_name": original.squadron_data.squadron_name,
+		"defender_name": counter.squadron_data.squadron_name,
+		"final_damage": outcome["requested_hull_damage"],
+		"counter_attack_available": true,
+		"counter_controller_player": attack.defender_player,
+		"controller_player": attack.defender_player,
+		"counter_attacker_player": attack.defender_player,
+		"counter_attacker_squadron_index": attack.defender_index,
+		"counter_target_player": attack.attacker_player,
+		"counter_target_squadron_index": attack.attacker_index,
+		"counter_dice_pool": {"BLUE": blue_count},
+	}, true)
+	projected.erase("counter_choice_accepted")
+	var prospective: InteractionFlow = FlowSpec.make_interaction_flow(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
+			game_state, {"attacker_player": attack.attacker_player,
+				"defender_player": attack.defender_player,
+				"controller_player": attack.defender_player},
+			Constants.Visibility.ALL, projected)
+	var publication: PublishAttackFlowCommand = GameManager \
+			.build_publish_attack_flow_command(game_state, prospective,
+					attack.attacker_player)
+	if publication == null or not publication.validate(game_state).is_empty():
+		return null
+	return publication
 
 
 static func _derive_followup(game_state: GameState,
@@ -90,6 +187,8 @@ static func _derive_followup(game_state: GameState,
 		return _derive_defense_followup(
 				game_state, attack, command, result)
 	if command.command_type == "resolve_damage":
+		if counter_opportunity(game_state, attack):
+			return _build_counter_publication(game_state, attack)
 		if not _post_damage_decision_pending(game_state, attack):
 			return _build_complete_attack(attack)
 	if command.command_type == "counter_choice" \

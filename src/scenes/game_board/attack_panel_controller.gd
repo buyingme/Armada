@@ -61,6 +61,10 @@ func initialize(
 func react_to_command(command: GameCommand, result: Dictionary) -> void:
 	if command == null:
 		return
+	if PublishAttackFlowCommand.is_counter_step_submission(command):
+		if _attack_executor != null:
+			_attack_executor.apply_counter_publication_result()
+		return
 	if command.command_type == "publish_attack_flow" \
 			and bool(command.payload.get("final", false)):
 		_attack_executor.apply_terminal_attack_flow_result(command, result)

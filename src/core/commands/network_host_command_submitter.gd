@@ -22,6 +22,8 @@ var _log: GameLogger = GameLogger.new("NetworkHostCommandSubmitter")
 func submit(command: GameCommand) -> Dictionary:
 	if command != null and command.command_type == "debug_deal_damage":
 		return {}
+	if PublishAttackFlowCommand.is_counter_step_submission(command):
+		return {}
 	if NetworkManager.is_authority_only_maneuver_submission(command):
 		return {}
 	if not _is_host_debug_command(command) \

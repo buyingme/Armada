@@ -1485,6 +1485,12 @@ func _restore_declaration_adjacent_projection(
 			and attack.attacker_player == active_squadron.owner_player \
 			and game_state.find_squadron_index(active_squadron) \
 					== attack.attacker_index
+	# A Counter child may destroy the original activating Squadron. The board
+	# has no token to restore for it; canonical Attack/inspection/action owners
+	# retain the exact terminal continuation instead.
+	if active_squadron != null and active_squadron.is_destroyed():
+		return _retained_destroyed_counter_original_can_resume(
+				game_state, attack, active_squadron)
 	if active_squadron != null:
 		if active_squadron.activation_context \
 				== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
@@ -1503,6 +1509,39 @@ func _restore_declaration_adjacent_projection(
 			and _activation_ctx.ship_activation_state != null:
 		_ship_activation_controller.open_modal_from_interaction_state()
 	return true
+
+
+func _retained_destroyed_counter_original_can_resume(game_state: GameState,
+		attack: CurrentAttackState, original: SquadronInstance) -> bool:
+	if original == null or not original.is_destroyed() \
+			or original.attack_action_disposition \
+					!= SquadronInstance.ATTACK_ACTION_BEGUN:
+		return false
+	var original_index: int = game_state.find_squadron_index(original)
+	if original_index < 0:
+		return false
+	if attack != null and attack.active:
+		return attack.attack_kind \
+				== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER \
+				and attack.defender_kind == CurrentAttackState.KIND_SQUADRON \
+				and attack.defender_player == original.owner_player \
+				and attack.defender_index == original_index
+	var inspection: CompletedAttackInspection = \
+			game_state.completed_attack_inspection
+	if inspection != null:
+		var data: Dictionary = inspection.serialize()
+		var defender: Dictionary = data.get("defender", {}) as Dictionary
+		return str(data.get("attack_kind", "")) \
+				== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER \
+				and defender.get("kind") == CurrentAttackState.KIND_SQUADRON \
+				and defender.get("player") == original.owner_player \
+				and defender.get("index") == original_index
+	var completion: GameCommand = CurrentAttackContinuation \
+			.derive_reconstructed_cancelled_attack_return(game_state)
+	return completion != null and completion.command_type \
+			== CompleteSquadronActivationCommand.TYPE \
+			and completion.player_index == original.owner_player \
+			and completion.payload.get("squadron_index") == original_index
 
 
 func _show_fixed_round1_toast_if_needed() -> void:

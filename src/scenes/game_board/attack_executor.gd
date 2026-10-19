@@ -46,6 +46,7 @@ const RESUME_SPEND_DEFENSE: String = "spend_defense_token"
 const RESUME_EVADE: String = "select_evade_die"
 const RESUME_REDIRECT: String = "select_redirect_zone"
 const RESUME_DAMAGE: String = "resolve_damage"
+const RESUME_COUNTER_CHOICE: String = "counter_choice"
 const RESUME_AWAIT_RECORDED_COMPLETION: String = "await_recorded_completion"
 
 ## Hull-zone index → display name mapping.
@@ -141,6 +142,10 @@ var _pending_counter_attacker: SquadronToken = null
 ## Presentation-only token reconstructed for an exact active destroyed Counter
 ## child after load/reconnect. It is never registered with board lookup.
 var _transient_destroyed_counter_attacker: SquadronToken = null
+
+## Presentation-only token for a retired Counter-eligible defender or the
+## destroyed original Squadron retained through the Counter child.
+var _transient_destroyed_counter_defender: SquadronToken = null
 
 ## Range remembered while BeginAttackCommand is awaiting network authority.
 var _pending_begin_range: String = ""
@@ -304,13 +309,14 @@ func resume_current_attack(
 	if not ship_token_for_instance.is_valid() \
 			or not squadron_token_for_instance.is_valid():
 		return _resume_failure("Attack token resolvers are unavailable.")
-	_dispose_transient_destroyed_counter_attacker()
+	_dispose_transient_destroyed_counter_tokens()
 	var refs: Dictionary = _resolve_resume_references(
 			game_state, attack, ship_token_for_instance,
 			squadron_token_for_instance)
 	if not bool(refs.get(RESUME_KEY_OK, false)):
 		return refs
-	_reset_exec_state(_transient_destroyed_counter_attacker != null)
+	_reset_exec_state(_transient_destroyed_counter_attacker != null \
+			or _transient_destroyed_counter_defender != null)
 	_install_resume_scene_references(attack, refs)
 	_sync_ship_attack_progress_from_authority()
 	_sync_scene_from_current_attack()
@@ -578,6 +584,14 @@ func _resolve_resume_references(
 			and _state.defender_squadron != null \
 			and _state.defender_squadron.get_squadron_instance() == defender:
 		defender_token = _state.defender_squadron
+	if defender_token == null and attack.defender_kind \
+			== CurrentAttackState.KIND_SQUADRON \
+			and defender is SquadronInstance \
+			and (defender as SquadronInstance).is_destroyed() \
+			and _is_exact_destroyed_counter_defender(
+					game_state, attack, defender as SquadronInstance):
+		defender_token = _reconstruct_destroyed_counter_defender(
+				defender as SquadronInstance)
 	if attacker_token == null and attack.attacker_kind \
 			== CurrentAttackState.KIND_SQUADRON \
 			and attacker is SquadronInstance \
@@ -591,19 +605,19 @@ func _resolve_resume_references(
 					attacker as SquadronInstance)
 	if attack.attacker_kind == CurrentAttackState.KIND_SHIP \
 			and not attacker_token is ShipToken:
-		_dispose_transient_destroyed_counter_attacker()
+		_dispose_transient_destroyed_counter_tokens()
 		return _resume_failure("Canonical attacking ship has no board token.")
 	if attack.attacker_kind == CurrentAttackState.KIND_SQUADRON \
 			and not attacker_token is SquadronToken:
-		_dispose_transient_destroyed_counter_attacker()
+		_dispose_transient_destroyed_counter_tokens()
 		return _resume_failure("Canonical attacking squadron has no board token.")
 	if attack.defender_kind == CurrentAttackState.KIND_SHIP \
 			and not defender_token is ShipToken:
-		_dispose_transient_destroyed_counter_attacker()
+		_dispose_transient_destroyed_counter_tokens()
 		return _resume_failure("Canonical defending ship has no board token.")
 	if attack.defender_kind == CurrentAttackState.KIND_SQUADRON \
 			and not defender_token is SquadronToken:
-		_dispose_transient_destroyed_counter_attacker()
+		_dispose_transient_destroyed_counter_tokens()
 		return _resume_failure("Canonical defending squadron has no board token.")
 	return {
 		RESUME_KEY_OK: true,
@@ -621,8 +635,7 @@ func _is_exact_active_destroyed_counter_child(game_state: GameState,
 			or attack.attack_kind \
 					!= SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER \
 			or attacker == null or not attacker.is_destroyed() \
-			or not defender is SquadronInstance \
-			or (defender as SquadronInstance).is_destroyed():
+			or not defender is SquadronInstance:
 		return false
 	var flow: InteractionFlow = game_state.interaction_flow
 	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK:
@@ -631,6 +644,30 @@ func _is_exact_active_destroyed_counter_child(game_state: GameState,
 		return _flow_identifies_counter_child(flow.payload, attack)
 	# The accepted parent projection remains installed briefly while the ordered
 	# live child Begin result is applied before its source-scoped publications.
+	return flow.step_id == Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
+			and bool(flow.payload.get("counter_choice_accepted", false)) \
+			and _parent_flow_identifies_counter_child(flow.payload, attack)
+
+
+func _is_exact_destroyed_counter_defender(game_state: GameState,
+		attack: CurrentAttackState, defender: SquadronInstance) -> bool:
+	if game_state == null or attack == null or not attack.active \
+			or defender == null or not defender.is_destroyed():
+		return false
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK:
+		return false
+	if attack.stage == CurrentAttackState.STAGE_RESOLVED \
+			and flow.step_id \
+					== Constants.InteractionStep.ATTACK_COUNTER_CHOICE:
+		return CounterPublicationConsistency \
+				.reconstructed_state_is_consistent(game_state)
+	if attack.attack_kind \
+			!= SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER \
+			or game_state.get_active_squadron_activation() != defender:
+		return false
+	if str(flow.payload.get("attack_id", "")) == attack.attack_id:
+		return _flow_identifies_counter_child(flow.payload, attack)
 	return flow.step_id == Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
 			and bool(flow.payload.get("counter_choice_accepted", false)) \
 			and _parent_flow_identifies_counter_child(flow.payload, attack)
@@ -721,9 +758,44 @@ func _reconstruct_destroyed_counter_attacker(
 	return token
 
 
+func _reconstruct_destroyed_counter_defender(
+		defender: SquadronInstance) -> SquadronToken:
+	_dispose_transient_destroyed_counter_defender()
+	var token: SquadronToken = SQUADRON_TOKEN_SCENE.instantiate() as SquadronToken
+	if token == null or defender.squadron_data == null:
+		if token != null:
+			token.free()
+		return null
+	add_child(token)
+	token.setup(TokenPlacement.new(
+			defender.data_key, false, defender.squadron_data.faction,
+			defender.pos_x, defender.pos_y, defender.get_rotation_rad(),
+			Constants.ShipSize.SMALL))
+	token.bind_instance(defender)
+	token.set_process_unhandled_input(false)
+	token.visible = false
+	_transient_destroyed_counter_defender = token
+	return token
+
+
+func _dispose_transient_destroyed_counter_tokens() -> void:
+	_dispose_transient_destroyed_counter_attacker()
+	_dispose_transient_destroyed_counter_defender()
+
+
 func _dispose_transient_destroyed_counter_attacker() -> void:
 	var token: SquadronToken = _transient_destroyed_counter_attacker
 	_transient_destroyed_counter_attacker = null
+	if token == null or not is_instance_valid(token):
+		return
+	if token.get_parent() != null:
+		token.get_parent().remove_child(token)
+	token.free()
+
+
+func _dispose_transient_destroyed_counter_defender() -> void:
+	var token: SquadronToken = _transient_destroyed_counter_defender
+	_transient_destroyed_counter_defender = null
 	if token == null or not is_instance_valid(token):
 		return
 	if token.get_parent() != null:
@@ -820,6 +892,22 @@ func _derive_resume_plan(game_state: GameState,
 			plan["flow_step"] = AttackFlowFSM.Step.DEFENSE_TOKENS
 			return _derive_defense_resume_plan(game_state, attack, plan)
 		CurrentAttackState.STAGE_RESOLVED:
+			var flow: InteractionFlow = game_state.interaction_flow
+			if flow != null \
+					and flow.flow_type == Constants.InteractionFlow.ATTACK \
+					and flow.step_id \
+							== Constants.InteractionStep.ATTACK_COUNTER_CHOICE:
+				if not CounterPublicationConsistency \
+						.reconstructed_state_is_consistent(game_state):
+					return _resume_failure(
+							"Counter publication disagrees with canonical owners.")
+				plan["flow_step"] = AttackFlowFSM.Step.COUNTER_CHOICE
+				plan["controller_player"] = attack.defender_player
+				plan[RESUME_KEY_TRANSITION] = RESUME_COUNTER_CHOICE \
+						if attack.counter_disposition \
+								== CurrentAttackState.COUNTER_UNDECIDED \
+						else RESUME_AWAIT_RECORDED_COMPLETION
+				return plan
 			plan["flow_step"] = AttackFlowFSM.Step.RESOLVE_DAMAGE
 			plan[RESUME_KEY_TRANSITION] = RESUME_AWAIT_RECORDED_COMPLETION
 			plan[RESUME_KEY_REQUIRES_INPUT] = true
@@ -941,6 +1029,9 @@ func _resume_has_ecm_choice(game_state: GameState,
 
 func _build_resume_projection(game_state: GameState,
 		attack: CurrentAttackState, plan: Dictionary) -> Dictionary:
+	if int(plan.get("flow_step", AttackFlowFSM.Step.IDLE)) \
+			== AttackFlowFSM.Step.COUNTER_CHOICE:
+		return game_state.interaction_flow.payload.duplicate(true)
 	var payload: Dictionary = _compute_attack_identity_patch()
 	payload["attack_id"] = attack.attack_id
 	payload["range_band"] = attack.range_band
@@ -993,6 +1084,8 @@ func _render_resume_projection(plan: Dictionary) -> void:
 	if not _state.dice_results.is_empty():
 		panel.show_dice_results(_state.dice_results)
 	match str(plan.get(RESUME_KEY_TRANSITION, "")):
+		RESUME_COUNTER_CHOICE:
+			panel.show_counter_section()
 		RESUME_RULE_CHOICE:
 			var colours: Array[String] = _string_values(
 					plan.get("available_colours", []))
@@ -1243,9 +1336,9 @@ func has_any_attack_target(ship_token: ShipToken) -> bool:
 
 ## Resets all attack execution state variables.
 func _reset_exec_state(
-		preserve_transient_counter_attacker: bool = false) -> void:
-	if not preserve_transient_counter_attacker:
-		_dispose_transient_destroyed_counter_attacker()
+		preserve_transient_counter_tokens: bool = false) -> void:
+	if not preserve_transient_counter_tokens:
+		_dispose_transient_destroyed_counter_tokens()
 	_attack_pool_die_choice_rule_id = ""
 	_pending_begin_range = ""
 	_pending_declaration_command = ""

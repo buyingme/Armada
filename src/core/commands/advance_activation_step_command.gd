@@ -46,11 +46,6 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
-	var inspection_reason: String = \
-		game_state.validate_completed_attack_inspection_consumer(
-				str(payload.get("completed_attack_inspection_id", "")))
-	if inspection_reason != "":
-		return inspection_reason
 	if game_state.current_phase != Constants.GamePhase.SHIP:
 		return "Not in Ship Phase."
 	var ship: ShipInstance = game_state.get_ship(
@@ -69,6 +64,12 @@ func validate(game_state: GameState) -> String:
 	var step_id: String = payload.get("step_id", "")
 	if not (step_id in _ALLOWED_STEP_IDS):
 		return "Invalid step_id."
+	var inspection_reason: String = \
+		game_state.validate_completed_attack_ship_consumer(
+				str(payload.get("completed_attack_inspection_id", "")),
+				ship, player_index, step_id, identity)
+	if inspection_reason != "":
+		return inspection_reason
 	if step_id == "squadron_step":
 		if ship.squadron_command_opportunity_disposition \
 				!= ShipInstance.ACTIVATION_DISPOSITION_UNREACHED:

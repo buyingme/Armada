@@ -1955,12 +1955,38 @@ func derive_commanded_squadron_terminal_transition(game_state: GameState,
 	var ship: ShipInstance = game_state.get_ship(ship_player, ship_index)
 	if ship == null or ship.is_destroyed() \
 			or ship.owner_player != completion.player_index \
+			or ship != game_state.get_active_ship_activation() \
 			or str(completion.payload.get("ship_activation_identity", "")) \
-					!= ship.ship_activation_identity \
-			or not ship.has_active_ship_activation() \
-			or ship.squadron_command_opportunity_disposition \
-					!= ShipInstance.ACTIVATION_DISPOSITION_OPEN \
+					!= ship.ship_activation_identity:
+		return null
+	return derive_reconstructed_commanded_squadron_terminal_transition(
+			game_state)
+
+
+## The same automatic Ship-command predicate applies after live completion and
+## after an interrupted observer follow-up. A surviving selectable Squadron is
+## a player decision, so recovery must leave that choice open.
+func derive_reconstructed_commanded_squadron_terminal_transition(
+		game_state: GameState) -> GameCommand:
+	if game_state == null or game_state.current_phase \
+			!= Constants.GamePhase.SHIP \
+			or game_state.current_attack_state.active \
+			or game_state.completed_attack_inspection != null \
+			or game_state.faceup_damage_inspection != null \
 			or game_state.get_active_squadron_activation() != null:
+		return null
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type \
+			!= Constants.InteractionFlow.SHIP_ACTIVATION \
+			or flow.step_id != Constants.InteractionStep.SQUADRON_STEP:
+		return null
+	var ship: ShipInstance = game_state.get_active_ship_activation()
+	if ship == null or ship.is_destroyed() \
+			or ship.squadron_command_opportunity_disposition \
+					!= ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		return null
+	var ship_index: int = game_state.find_ship_index(ship)
+	if ship_index < 0:
 		return null
 	var capacity: int = SquadronCommandResolver.authoritative_capacity(ship)
 	if capacity <= 0 or ship.squadron_command_activations_committed <= 0 \
@@ -1974,6 +2000,32 @@ func derive_commanded_squadron_terminal_transition(game_state: GameState,
 		"step_id": "repair_step",
 		"ship_activation_identity": ship.ship_activation_identity,
 	})
+
+
+## Squadron exhaustion has two valid persisted shapes: inactive progress after
+## the last completion, or initialized zero progress in an empty phase.
+func derive_squadron_phase_exhaustion_transition(
+		game_state: GameState) -> GameCommand:
+	if game_state == null or game_state.current_phase \
+			!= Constants.GamePhase.SQUADRON \
+			or not game_state.validate_squadron_phase_progress() \
+			or game_state.squadron_phase_activations_committed != 0 \
+			or game_state.current_attack_state.active \
+			or game_state.completed_attack_inspection != null \
+			or game_state.faceup_damage_inspection != null \
+			or game_state.get_active_squadron_activation() != null \
+			or game_state.has_unactivated_squadrons(0) \
+			or game_state.has_unactivated_squadrons(1):
+		return null
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type \
+			!= Constants.InteractionFlow.SQUADRON_ACTIVATION \
+			or flow.step_id != Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT:
+		return null
+	var command := AdvancePhaseCommand.new(game_state.initiative_player, {
+		"next_phase": int(Constants.GamePhase.STATUS),
+	})
+	return command if command.validate(game_state).is_empty() else null
 
 
 ## Mirrors the existing ActivateSquadronCommand eligibility boundary using
@@ -2002,7 +2054,8 @@ func _has_eligible_commanded_squadron(game_state: GameState,
 ## mirrors do not synthesize commands; host submission preserves ordered
 ## broadcast before any resulting follow-up drain.
 func release_reconstructed_completed_attack_inspection() -> Dictionary:
-	if current_game_state == null or _is_network_client():
+	if current_game_state == null or _is_network_client() \
+			or ReplayDriver.enabled or CommandProcessor.is_replaying:
 		return {}
 	var immediate: GameCommand = CommandProcessor \
 			.derive_reconstructed_faceup_automatic_immediate(
@@ -2024,11 +2077,23 @@ func release_reconstructed_completed_attack_inspection() -> Dictionary:
 	var followup: GameCommand = \
 		CurrentAttackContinuation.derive_reconstructed_inspection_release(
 				current_game_state)
-	if followup == null:
-		return {}
-	if followup.command_type == BeginAttackCommand.TYPE:
-		return _submitter.submit_authoritative(followup)
-	return _submitter.submit(followup)
+	if followup != null:
+		if followup.command_type == BeginAttackCommand.TYPE:
+			return _submitter.submit_authoritative(followup)
+		return _submitter.submit(followup)
+	var phase_advance: GameCommand = \
+		derive_squadron_phase_exhaustion_transition(current_game_state)
+	if phase_advance != null and is_game_active:
+		var before: int = CommandProcessor.get_next_sequence()
+		advance_phase()
+		return {"recovered_phase_advance": true} \
+				if CommandProcessor.get_next_sequence() > before else {}
+	var ship_advance: GameCommand = \
+		derive_reconstructed_commanded_squadron_terminal_transition(
+				current_game_state)
+	if ship_advance != null:
+		return _submitter.submit_authoritative(ship_advance)
+	return {}
 
 
 func _next_unresolved_defense_token(attack: CurrentAttackState,
@@ -2486,8 +2551,8 @@ func _advance_squadron_phase_turn() -> void:
 	if _is_network_client():
 		return
 	_sync_squadron_progress_projection()
-	if current_game_state.squadron_phase_controller_player \
-			== GameState.SQUADRON_PHASE_CONTROLLER_INACTIVE:
+	if derive_squadron_phase_exhaustion_transition(
+			current_game_state) != null:
 		advance_phase()
 
 

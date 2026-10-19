@@ -360,7 +360,7 @@ static func _derive_counter_child_inspection_release(game_state: GameState,
 			player, squadron_index)
 	var active_squadron: SquadronInstance = \
 			game_state.get_active_squadron_activation()
-	if squadron == null or squadron.is_destroyed() \
+	if squadron == null \
 			or squadron.activated_this_round \
 			or squadron != active_squadron \
 			or squadron.attack_action_disposition \

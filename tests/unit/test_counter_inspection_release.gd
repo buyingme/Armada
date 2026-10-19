@@ -4,8 +4,8 @@ extends GutTest
 
 const SaveManagerScript: GDScript = preload(
 		"res://src/autoload/save_game_manager.gd")
-const TEST_SAVE: String = "counter_parent_identity_save10"
-const TEST_SAVE_DIR: String = "user://counter_parent_identity_save10"
+const TEST_SAVE: String = "counter_parent_identity_save11"
+const TEST_SAVE_DIR: String = "user://counter_parent_identity_save11"
 var _test_signing_key: PackedByteArray = PackedByteArray([
 	0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
 	0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
@@ -67,7 +67,7 @@ func test_final_ack_queues_child_begin_then_child_publication() -> void:
 	for command: GameCommand in CommandProcessor.get_history():
 		types.append(command.command_type)
 	assert_eq(types, ["acknowledge_attack_result", "begin_attack",
-			"publish_attack_flow", "publish_attack_flow"])
+			"publish_attack_flow"])
 	var begin: GameCommand = CommandProcessor.get_history()[1]
 	assert_eq(begin.player_index, 1,
 			"The authoritative follow-up retains the child Counter attacker.")
@@ -84,19 +84,13 @@ func test_final_ack_queues_child_begin_then_child_publication() -> void:
 			"Locked Counter Declare must advance automatically to Roll.")
 	assert_eq(_state.interaction_flow.controller_player, 1)
 	assert_eq(_state.interaction_flow.payload.get("attacker_name"),
-			"TIE Fighter Squadron")
+			"TIE Interceptor Squadron")
 	assert_eq(_state.interaction_flow.payload.get("defender_name"),
 			"X-wing Squadron")
-	var declare: GameCommand = CommandProcessor.get_history()[2]
-	var roll: GameCommand = CommandProcessor.get_history()[3]
-	assert_eq(declare.payload.get("step_id"),
-			int(Constants.InteractionStep.ATTACK_DECLARE))
+	var roll: GameCommand = CommandProcessor.get_history()[2]
 	assert_eq(roll.payload.get("step_id"),
 			int(Constants.InteractionStep.ATTACK_ROLL))
-	assert_eq(declare.payload.get("flow_payload"),
-			roll.payload.get("flow_payload"),
-			"Declare and Roll must preserve one locked child identity.")
-	assert_eq(CommandProcessor.get_next_sequence(), 55)
+	assert_eq(CommandProcessor.get_next_sequence(), 54)
 
 
 func test_unsatisfied_or_wrong_source_inspection_derives_nothing() -> void:
@@ -138,9 +132,9 @@ func test_counter_begin_revalidates_parent_inspection_source() -> void:
 	assert_not_null(explicit_replay)
 	_state.interaction_flow.payload["attack_id"] = "attack:other"
 	assert_eq(child.validate(_state),
-			"Counter parent inspection does not match the accepted choice.")
+			"No accepted Counter attack is pending.")
 	assert_eq(explicit_replay.validate(_state),
-			"Counter parent inspection does not match the accepted choice.",
+			"No accepted Counter attack is pending.",
 			"Explicit replay Begin must enforce the same source validation.")
 	assert_not_null(_state.completed_attack_inspection)
 	assert_false(_state.current_attack_state.active)
@@ -189,7 +183,7 @@ func test_delayed_parent_clear_rejects_after_child_replacement() -> void:
 	assert_eq(_state.interaction_flow.serialize(), before)
 
 
-func test_real_save10_and_reconnect_restore_counter_parent_identity() -> void:
+func test_real_save11_and_reconnect_restore_counter_parent_identity() -> void:
 	_state = _counter_release_state(true)
 	GameManager.current_game_state = _state
 	assert_true(CommandProcessor.restore_next_sequence(51))
@@ -199,7 +193,7 @@ func test_real_save10_and_reconnect_restore_counter_parent_identity() -> void:
 	var metadata: SaveGameMetadata = _manager.build_metadata_for(
 			_state, TEST_SAVE)
 	metadata.game_mode = SaveGameMetadata.MODE_NETWORK
-	assert_eq(metadata.save_format_version, 10)
+	assert_eq(metadata.save_format_version, 11)
 	assert_true(_manager.save_game(_state, TEST_SAVE, metadata))
 
 	var raw_payload: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
@@ -210,23 +204,23 @@ func test_real_save10_and_reconnect_restore_counter_parent_identity() -> void:
 					as Dictionary
 	for key: String in _counter_identity_keys():
 		assert_eq(typeof(raw_flow_payload[key]), TYPE_FLOAT,
-				"Real Save-10 JSON must exercise numeric type restoration.")
+				"Real Save-11 JSON must exercise numeric type restoration.")
 
 	var loaded_result: Dictionary = _manager.load_game(TEST_SAVE)
 	assert_true(bool(loaded_result.get("ok", false)),
-			"Signed Save-10 Counter parent state must load.")
+			"Signed Save-11 Counter parent state must load.")
 	var loaded: GameState = loaded_result.get("state") as GameState
 	assert_not_null(loaded)
 	if loaded == null:
 		return
 	assert_eq((loaded_result.get("meta") as SaveGameMetadata).save_format_version,
-			10)
+			11)
 	_assert_counter_parent_state(loaded, source_flow, source_inspection)
 	assert_eq(loaded.completed_attack_inspection.serialize(), source_inspection)
 	assert_false(loaded.current_attack_state.active)
 	for key: String in _counter_identity_keys():
 		assert_eq(typeof(loaded.interaction_flow.payload[key]), TYPE_INT,
-				"%s must be canonical int after signed Save-10 load." % key)
+				"%s must be canonical int after signed Save-11 load." % key)
 
 	var child: GameCommand = \
 			CurrentAttackContinuation.derive_reconstructed_inspection_release(
@@ -250,7 +244,7 @@ func test_real_save10_and_reconnect_restore_counter_parent_identity() -> void:
 			assert_eq(typeof(passive.interaction_flow.payload[key]), TYPE_INT)
 
 
-func test_save10_and_reconnect_reconstruct_active_destroyed_counter_child() \
+func test_save11_and_reconnect_reconstruct_active_destroyed_counter_child() \
 		-> void:
 	_state = _counter_release_state(false, true)
 	GameManager.current_game_state = _state
@@ -271,7 +265,7 @@ func test_save10_and_reconnect_reconstruct_active_destroyed_counter_child() \
 	assert_true(bool(loaded_result.get("ok", false)))
 	var metadata: SaveGameMetadata = loaded_result.get("meta") \
 			as SaveGameMetadata
-	assert_eq(metadata.save_format_version, 10)
+	assert_eq(metadata.save_format_version, 11)
 	var loaded: GameState = loaded_result.get("state") as GameState
 	assert_not_null(loaded)
 	if loaded == null:
@@ -410,7 +404,7 @@ func test_counter_child_j_mapping_fails_closed_on_inconsistent_context() -> void
 	assert_eq(_state.completed_attack_inspection.serialize(), inspection_before)
 
 
-func test_save10_and_reconnect_restore_satisfied_counter_child_j() -> void:
+func test_save11_and_reconnect_restore_satisfied_counter_child_j() -> void:
 	_state = _counter_child_release_state(false, true)
 	GameManager.current_game_state = _state
 	var inspection_data: Dictionary = \
@@ -418,7 +412,7 @@ func test_save10_and_reconnect_restore_satisfied_counter_child_j() -> void:
 	var metadata: SaveGameMetadata = _manager.build_metadata_for(
 			_state, TEST_SAVE)
 	metadata.game_mode = SaveGameMetadata.MODE_NETWORK
-	assert_eq(metadata.save_format_version, 10)
+	assert_eq(metadata.save_format_version, 11)
 	assert_true(_manager.save_game(_state, TEST_SAVE, metadata))
 
 	var loaded_result: Dictionary = _manager.load_game(TEST_SAVE)
@@ -450,6 +444,69 @@ func test_save10_and_reconnect_restore_satisfied_counter_child_j() -> void:
 		assert_not_null(passive_completion)
 		assert_eq(passive_completion.command_type,
 				CompleteSquadronActivationCommand.TYPE)
+
+
+func test_accepted_i_rejects_wrong_squadron_consumers() -> void:
+	_state = _counter_release_state(true)
+	var original: SquadronInstance = _state.get_squadron(0, 0)
+	var before: Dictionary = _state.serialize()
+	var inspection_id: String = \
+			_state.completed_attack_inspection.inspection_id()
+	var completion := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": 0,
+		"activation_id": original.activation_id,
+		"activation_context": original.activation_context,
+		"completed_attack_inspection_id": inspection_id,
+	})
+	assert_ne(completion.validate(_state), "")
+	var move := MoveSquadronCommand.new(0, {
+		"squadron_index": 0, "pos_x": 0.3, "pos_y": 0.3,
+		"activation_id": original.activation_id,
+		"activation_context": original.activation_context,
+		"completed_attack_inspection_id": inspection_id,
+	})
+	assert_ne(move.validate(_state), "")
+	assert_eq(_state.serialize(), before)
+
+
+func test_destroyed_original_releases_j_or_no_j_in_both_contexts() -> void:
+	for commanded: bool in [false, true]:
+		for with_j: bool in [false, true]:
+			_state = _counter_child_release_state(
+					true, true, with_j, commanded)
+			GameManager.current_game_state = _state
+			var original: SquadronInstance = _state.get_squadron(0, 0)
+			original.mark_destroyed()
+			assert_false(_state.has_legal_remaining_squadron_move_action(
+					original))
+			var restored: GameState = GameState.deserialize(JSON.parse_string(
+					JSON.stringify(_state.serialize())) as Dictionary)
+			assert_not_null(restored)
+			if restored == null:
+				continue
+			_state = restored
+			GameManager.current_game_state = restored
+			original = restored.get_squadron(0, 0)
+			var completion: GameCommand = CurrentAttackContinuation \
+					.derive_reconstructed_inspection_release(restored) \
+					if with_j else CurrentAttackContinuation \
+					.derive_reconstructed_cancelled_attack_return(restored)
+			assert_not_null(completion)
+			if completion == null:
+				continue
+			assert_eq(completion.command_type,
+					CompleteSquadronActivationCommand.TYPE)
+			assert_eq(completion.payload.get(
+					"completed_attack_inspection_id", "").is_empty(),
+					not with_j)
+			var before_cursor: int = CommandProcessor.get_next_sequence()
+			assert_false(CommandProcessor.submit(completion).is_empty())
+			assert_true(original.activated_this_round)
+			assert_null(restored.completed_attack_inspection)
+			assert_null(CurrentAttackContinuation \
+					.derive_reconstructed_inspection_release(restored))
+			assert_eq(CommandProcessor.get_next_sequence(),
+					before_cursor + (2 if commanded else 1))
 
 
 func _history_types() -> Array[String]:
@@ -516,14 +573,15 @@ func _counter_release_state(satisfied: bool,
 	parent_attacker.pos_x = 0.50
 	parent_attacker.pos_y = 0.50
 	state.get_player_state(0).squadrons.append(parent_attacker)
-	var counter_data: SquadronData = AssetLoader.load_squadron_data(
-			"tie_fighter_squadron").duplicate(true) as SquadronData
-	counter_data.keywords.append({
-		"name": SquadronKeywordRuleHelper.KEYWORD_COUNTER,
-		"value": 2,
-	})
+	assert_true(state.initialize_squadron_phase_progress(0))
+	assert_true(parent_attacker.initialize_activation_action_state(
+			"squadron-activation:counter-parent",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	assert_true(parent_attacker.commit_attack_action_begun(
+			parent_attacker.activation_id, false))
 	var counter_attacker := SquadronInstance.create_from_data(
-			"tie_fighter_squadron", counter_data, 1)
+			"tie_interceptor_squadron",
+			AssetLoader.load_squadron_data("tie_interceptor_squadron"), 1)
 	counter_attacker.roster_entry_id = "counter-child-attacker"
 	counter_attacker.pos_x = 0.51
 	counter_attacker.pos_y = 0.50
@@ -552,6 +610,7 @@ func _counter_release_state(satisfied: bool,
 				"outcome": {"target_kind": CurrentAttackState.KIND_SQUADRON,
 					"requested_hull_damage": 1, "actual_hull_damage": 1,
 					"post_resolution_hull": 2, "destroyed": false},
+				"counter_disposition": CurrentAttackState.COUNTER_ACCEPTED,
 				"required_principal_ids": principals,
 				"received_principal_ids": received,
 			})
@@ -569,6 +628,8 @@ func _counter_release_state(satisfied: bool,
 				"counter_attacker_squadron_index": 0,
 				"counter_target_player": 0,
 				"counter_target_squadron_index": 0,
+				"counter_dice_pool": {"BLUE": 2},
+				"final_damage": 1,
 			})
 	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
 	assert_true(state.validate_declaration_adjacent_state())
@@ -576,7 +637,8 @@ func _counter_release_state(satisfied: bool,
 
 
 func _counter_child_release_state(move_legal: bool,
-		satisfied: bool) -> GameState:
+		satisfied: bool, with_j: bool = true,
+		commanded: bool = false) -> GameState:
 	var state := GameState.new()
 	state.initialize()
 	var deck := DamageDeck.new()
@@ -584,10 +646,29 @@ func _counter_child_release_state(move_legal: bool,
 	deck.initialize()
 	state.damage_deck = deck
 	state.current_round = 1
-	state.current_phase = Constants.GamePhase.SQUADRON
+	state.current_phase = Constants.GamePhase.SHIP if commanded \
+			else Constants.GamePhase.SQUADRON
 	assert_true(state.install_match_player_control_binding(
 			MatchPlayerControlBinding.create_two_human()))
-	assert_true(state.initialize_squadron_phase_progress(0))
+	if commanded:
+		var ship := ShipInstance.create_from_data(
+				"cr90_corvette_a",
+				AssetLoader.load_ship_data("cr90_corvette_a"), 2, 0)
+		ship.roster_entry_id = "counter-command-ship"
+		ship.pos_x = 0.25
+		ship.pos_y = 0.25
+		assert_true(ship.command_dial_stack.assign_dials([
+				Constants.CommandType.SQUADRON], 1))
+		assert_false(ship.command_dial_stack.reveal_top().is_empty())
+		assert_true(ship.establish_ship_activation(
+				"ship-activation:counter-original"))
+		assert_true(ship.open_squadron_command_opportunity(
+				ship.ship_activation_identity))
+		assert_true(ship.commit_squadron_command_activation(
+				ship.ship_activation_identity))
+		state.get_player_state(0).ships.append(ship)
+	else:
+		assert_true(state.initialize_squadron_phase_progress(0))
 	var original_data: SquadronData = AssetLoader.load_squadron_data(
 			"x_wing_squadron").duplicate(true) as SquadronData
 	if move_legal:
@@ -607,7 +688,9 @@ func _counter_child_release_state(move_legal: bool,
 	state.get_player_state(1).squadrons.append(counter)
 	assert_true(original.initialize_activation_action_state(
 			"squadron-activation:counter-original",
-			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND
+			if commanded else SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE,
+			0 if commanded else -1, 0 if commanded else -1))
 	assert_true(original.commit_attack_action_begun(
 			original.activation_id, move_legal))
 	var principals: Array[String] = \
@@ -632,12 +715,22 @@ func _counter_child_release_state(move_legal: bool,
 				"outcome": {"target_kind": CurrentAttackState.KIND_SQUADRON,
 					"requested_hull_damage": 1, "actual_hull_damage": 1,
 					"post_resolution_hull": 4, "destroyed": false},
+				"counter_disposition": CurrentAttackState.COUNTER_UNDECIDED,
 				"required_principal_ids": principals,
 				"received_principal_ids": received,
 			})
 	assert_not_null(inspection)
-	assert_true(state.install_completed_attack_inspection(inspection))
-	state.interaction_flow = InteractionFlow.empty()
+	if with_j:
+		assert_true(state.install_completed_attack_inspection(inspection))
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.SQUADRON_STEP,
+			0, Constants.Visibility.ALL, {}) if commanded else \
+			InteractionFlow.make(
+				Constants.InteractionFlow.SQUADRON_ACTIVATION,
+				Constants.InteractionStep.ACTION_CHOICE,
+				0, Constants.Visibility.ALL, {}) if not with_j else \
+			InteractionFlow.empty()
 	assert_true(state.validate_declaration_adjacent_state())
 	return state
 

@@ -53,6 +53,16 @@ func validate(game_state: GameState) -> String:
 		return "Declaration-adjacent state is invalid."
 	if game_state.get_active_squadron_activation() != null:
 		return "Cannot advance phase during a squadron activation."
+	if game_state.current_phase == Constants.GamePhase.SQUADRON:
+		if game_state.current_attack_state.active \
+				or game_state.completed_attack_inspection != null \
+				or game_state.faceup_damage_inspection != null:
+			return "Cannot advance phase during an attack or inspection."
+		if game_state.has_unactivated_squadrons(0) \
+				or game_state.has_unactivated_squadrons(1):
+			return "Squadron Phase still has an eligible squadron."
+		if game_state.squadron_phase_activations_committed != 0:
+			return "Squadron Phase exhaustion progress is invalid."
 	if game_state.current_phase == Constants.GamePhase.SHIP:
 		for player_state: PlayerState in game_state.player_states:
 			if player_state == null:

@@ -43,6 +43,11 @@ func validate(game_state: GameState) -> String:
 			player_index, int(payload["squadron_index"]))
 	if squadron == null or squadron.is_destroyed():
 		return "Squadron not found or destroyed."
+	var owner_reason: String = game_state \
+			.validate_completed_attack_squadron_consumer(
+					str(payload["completed_attack_inspection_id"]), squadron)
+	if not owner_reason.is_empty():
+		return owner_reason
 	if squadron.activated_this_round:
 		return "Squadron activation is already complete."
 	if str(payload["activation_id"]) != squadron.activation_id \

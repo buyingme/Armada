@@ -179,7 +179,7 @@ func can_squadron_move_under_engagement_rules(squadron: SquadronInstance) -> boo
 ## is derived from the current canonical board state.
 func has_legal_remaining_squadron_move_action(
 		squadron: SquadronInstance) -> bool:
-	if squadron == null:
+	if squadron == null or squadron.is_destroyed():
 		return false
 	var is_rogue: bool = squadron.squadron_data != null \
 			and squadron.squadron_data.has_keyword("Rogue")
@@ -899,6 +899,72 @@ func validate_completed_attack_inspection_consumer(
 		return "Completed attack result acknowledgement is outstanding."
 	if inspection_id != _completed_attack_inspection.inspection_id():
 		return "Completed attack inspection identity does not match."
+	return ""
+
+
+## Counter I accepted belongs only to child Begin. A declined I or child J
+## belongs to the retained original Squadron activation; ordinary Squadron
+## inspections belong to their attacker.
+func validate_completed_attack_squadron_consumer(
+		inspection_id: String, squadron: SquadronInstance) -> String:
+	var reason: String = validate_completed_attack_inspection_consumer(
+			inspection_id)
+	if not reason.is_empty() or _completed_attack_inspection == null:
+		return reason
+	if _completed_attack_inspection.counter_disposition() \
+			== CurrentAttackState.COUNTER_ACCEPTED:
+		return "Accepted Counter inspection requires child Begin."
+	var data: Dictionary = _completed_attack_inspection.serialize()
+	var source: Dictionary = data.get("defender", {}) as Dictionary \
+			if str(data.get("attack_kind", "")) \
+					== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER \
+			else data.get("attacker", {}) as Dictionary
+	if squadron == null \
+			or str(source.get("kind", "")) \
+					!= CurrentAttackState.KIND_SQUADRON \
+			or get_squadron(int(source.get("player", -1)),
+					int(source.get("index", -1))) != squadron:
+		return "Completed attack inspection belongs to another Squadron."
+	return ""
+
+
+## An ordinary Ship result can release only into that attacker's Maneuver step.
+## Counter parent I and child J belong to their purpose-specific consumers.
+func validate_completed_attack_ship_consumer(inspection_id: String,
+		ship: ShipInstance, player: int, step_id: String,
+		activation_identity: String) -> String:
+	var reason: String = validate_completed_attack_inspection_consumer(
+			inspection_id)
+	if not reason.is_empty() or _completed_attack_inspection == null:
+		return reason
+	var data: Dictionary = _completed_attack_inspection.serialize()
+	var attacker: Dictionary = data.get("attacker", {}) as Dictionary
+	if step_id != "maneuver_step" \
+			or str(data.get("attack_kind", "")) \
+					!= SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD \
+			or _completed_attack_inspection.counter_disposition() \
+					!= CurrentAttackState.COUNTER_UNDECIDED \
+			or str(attacker.get("kind", "")) != CurrentAttackState.KIND_SHIP:
+		return "Completed attack inspection requires its authorized consumer."
+	var ship_index: int = find_ship_index(ship) if ship != null else -1
+	if ship_index < 0 or ship.owner_player != player \
+			or int(attacker.get("player", -1)) != player \
+			or int(attacker.get("index", -1)) != ship_index \
+			or inspection_id != "completed:%s" \
+					% _completed_attack_inspection.source_attack_id() \
+			or current_phase != Constants.GamePhase.SHIP \
+			or get_active_ship_activation() != ship \
+			or activation_identity.is_empty() \
+			or ship.ship_activation_identity != activation_identity \
+			or not ship.attack_step_active \
+			or _current_attack_state.active \
+			or get_active_squadron_activation() != null \
+			or ship.anti_squadron_attack_zone >= 0 \
+			or ship.committed_attack_count <= 0 \
+			or (ship.committed_attack_count < 2 \
+				and CurrentAttackContinuation._has_remaining_normal_ship_target(
+						self, ship, player, ship_index)):
+		return "Completed attack inspection belongs to another Ship transition."
 	return ""
 
 

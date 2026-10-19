@@ -1,7 +1,7 @@
 # Atomic Counter-Choice Lifecycle — Consolidated Implementation Workbook
 
-Status: **Owner ACCEPTED 2026-10-17; Stages A–D Owner ACCEPTED and Stage E
-implementation AUTHORIZED 2026-10-19; Stage F remains NOT AUTHORIZED.**
+Status: **Owner ACCEPTED 2026-10-17; Stages A–E Owner ACCEPTED; Stage F
+checkpoint F1 AUTHORIZED 2026-10-19.**
 Prepared: 2026-10-17. Architecture accepted by the Project Owner after
 independent acceptance audit and targeted re-audit. The independent
 implementation-readiness audit passed without blockers. Boundary B
@@ -411,3 +411,33 @@ exhaustion, and enclosing Squadron Phase/commanded-Ship return. The
 records the accepted focused and full-suite results and the deferred runner
 gate. Stage F, Replay-13 fixture recording, runner renewal, and baseline/hash
 promotion remain unauthorized.
+
+**Stage E implementation checkpoint — 2026-10-19:** The bounded recovery,
+inspection-release, destroyed-original, composed-return, and board-reload
+changes and focused verification are recorded in the
+[Stage E implementation evidence](../evidence/atomic-counter-stage-e-implementation-evidence.md).
+The Stage E focused suites passed 17/17 and 7/7; the final full suite passed
+4,509/4,510, with only the existing Replay-12 assertion assigned to Stage F.
+The bounded existing real-ENet run reached exact-once **J** consumption and
+the enclosing Ship return on both peers in mapping 0, then timed out on its
+obsolete completion predicate; it is not a full acceptance pass.
+Stage E awaits independent audit and a separate Owner acceptance decision.
+The historical Replay-12 test assertion and old real-ENet completion predicate
+remain assigned to Stage F; neither current-format fixture recording nor
+runner/baseline renewal is authorized. Stage F remains unauthorized.
+
+**Stage E independent audit B-1 correction — 2026-10-19:** The Ship activation
+inspection-consumer gap and its direct/JSON atomicity regressions are recorded
+in the [Stage E implementation evidence](../evidence/atomic-counter-stage-e-implementation-evidence.md).
+The corrected focused Stage E suites pass 3/3, 17/17, and 7/7. The current
+full suite passes 4,512/4,513; its sole failure remains the Stage F Replay-12
+version assertion. Stage E remains unaccepted pending targeted B-1 re-audit.
+
+**Stage E Owner acceptance and Stage F checkpoint F1 direction — 2026-10-19:**
+The Owner accepted Stage E following independent audit PASS and closed B-1.
+The Owner separately authorized only Stage F automated convergence checkpoint
+F1: current Replay-13 assertions, Counter real-ENet runner predicates, both
+role mappings, compatibility checks, and automated regression/lint evidence.
+Stage F fixture recording, baseline/hash promotion, and final Stage F
+acceptance require the separate Owner-controlled manual Replay-13 evidence
+specified above. Historical artifacts remain immutable.

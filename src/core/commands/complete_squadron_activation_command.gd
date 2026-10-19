@@ -42,6 +42,12 @@ func validate(game_state: GameState) -> String:
 	var squadron: SquadronInstance = _get_squadron(game_state)
 	if squadron == null:
 		return "Squadron not found."
+	var owner_reason: String = game_state \
+			.validate_completed_attack_squadron_consumer(
+					str(payload.get("completed_attack_inspection_id", "")),
+					squadron)
+	if not owner_reason.is_empty():
+		return owner_reason
 	if squadron.activated_this_round:
 		return "Squadron activation is already complete."
 	if game_state.current_attack_state.active:

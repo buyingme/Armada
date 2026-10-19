@@ -100,18 +100,33 @@ The planned distinct current-input paths are
 `tests/fixtures/baseline_traces/replay_counter_v13.json`. These names reserve
 separate runner inputs; **none exists or is authorized for Codex to create**
 at E2/Stage A. Stage F must use the genuinely recorded Hot-Seat and Network
-files and require both to exist with signed format-13 headers and ordered,
-contiguous commands. The Hot-Seat trace and final-hash oracles need distinct
+files and require both to exist with Replay-format-13 headers and ordered,
+contiguous commands. All three reserved inputs must remain byte-for-byte
+unchanged from genuine application recording, with source provenance and
+SHA-256 recorded. The Hot-Seat trace and final-hash oracles need distinct
 new paths and separate Owner approval after first-field diagnosis. Network
 retains host/client final-hash convergence without an invented committed
 network oracle. The Counter recording must show one complete source-matching
 Counter publication, canonical choice/child/inspection history, and replay
 exhaustion; it cannot be an automatically transformed Replay-12 specimen.
-Codex may inspect signatures, headers, ordered commands, the single complete
+Codex may inspect format headers, ordered commands, the single complete
 Counter publication, source/child/inspection history, replay exhaustion, and
-host/client convergence. It may not synthesize, transform, re-sign, relabel,
-or overwrite a recording. New expected traces or hashes require first-field
-canonical diagnosis and separate Owner authorization before promotion.
+host/client convergence. It may not synthesize, reconstruct, transform,
+re-sign, relabel, or overwrite a recording, or automatically generate or
+install a fixture. Genuine application auto-save after Owner gameplay is a
+recording, not fixture generation. New expected traces or hashes require
+first-field canonical diagnosis and separate Owner authorization before
+promotion.
+
+**Owner Replay-13 fixture clarification — 2026-10-19:** The Owner accepts
+genuine application-produced Replay-format-13 recordings for the three
+reserved inputs; an HMAC is not required. `SIGNED_FORMAT_VERSION` aliases
+`FORMAT_VERSION`, so the signed-format constant identifies the same semantic
+replay format and does not itself require a signature. Cryptographic replay
+signing and verification remain separate, unchanged capabilities. This
+clarifies the former "signed format-13 headers" wording, which conflated the
+format alias with HMAC presence. The clarification does not change replay
+loading, Network command authority, or fixture provenance and integrity gates.
 
 Stage F owns runner paths, required-input behavior, current-format replay
 execution, full-suite and real-ENet evidence, and baseline comparison. Its

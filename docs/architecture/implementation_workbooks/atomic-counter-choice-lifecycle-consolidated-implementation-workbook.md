@@ -441,3 +441,15 @@ role mappings, compatibility checks, and automated regression/lint evidence.
 Stage F fixture recording, baseline/hash promotion, and final Stage F
 acceptance require the separate Owner-controlled manual Replay-13 evidence
 specified above. Historical artifacts remain immutable.
+
+**Stage F checkpoint F1 automated evidence — 2026-10-19:** Current-version
+assertions and Counter real-ENet predicates were renewed. The focused and full
+regression suites, architecture lint, and both real-ENet Counter mappings pass;
+the broader Network/reconnect assertion chain reaches the missing current
+Network replay input. The [F1 evidence record](../evidence/atomic-counter-stage-f1-automated-convergence-evidence.md)
+contains exact results and the remaining fixture gates. It also records a
+subsequent Owner clarification that the reserved fixtures require genuine
+Replay-format-13 recordings, without mandatory HMAC. The signed-format
+constant remains an alias and cryptographic signing remains a separate
+capability. Owner recording may proceed; Stage F is not accepted, and no
+Replay-13 fixture, baseline, or hash has been promoted.

@@ -4,6 +4,20 @@ This document is the canonical developer guide for replay recording, baseline
 candidate generation, fixture promotion, replay verification, and baseline
 maintenance.
 
+**Atomic Counter Stage F current-format checkpoint:** The existing fixture
+names and generator installation instructions below describe historical
+Replay-12 evidence. Keep those files unchanged. The current verifier requires
+genuinely Owner-recorded Replay-13 inputs named
+`replay_hot_seat_v13.json`, `replay_network_v13.json`, and
+`replay_counter_v13.json` in `tests/fixtures/baseline_traces/`. Its Hot-Seat
+oracles use distinct `baseline_trace_hot_seat_v13.jsonl` and
+`baseline_state_hash_hot_seat_v13.txt` paths. Do not run the generator with
+`--install` for this checkpoint: it still targets the historical names.
+Review the first changed trace field and canonical state-hash difference, then
+obtain separate Owner approval before installing any new oracle. The accepted
+[consolidated workbook](../architecture/implementation_workbooks/atomic-counter-choice-lifecycle-consolidated-implementation-workbook.md)
+controls this checkpoint.
+
 It documents the existing developer workflow. It does not define gameplay,
 replay semantics, network ownership, serialization architecture, or
 format-version policy. Those decisions remain with their existing architecture

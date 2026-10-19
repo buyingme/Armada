@@ -93,8 +93,9 @@ var _counter_destroyed: bool = false
 var _counter_choice_sent: bool = false
 var _counter_parent_accuracy_sent: bool = false
 var _counter_acknowledged_inspections: Dictionary = {}
-var _counter_resolve_projection_seen: bool = false
 var _counter_choice_projection_seen: bool = false
+var _counter_choice_publication_count: int = 0
+var _counter_complete_publication_seen: bool = false
 var _counter_controller_ui_seen: bool = false
 var _counter_passive_ui_seen: bool = false
 var _counter_child_seen: bool = false
@@ -1691,12 +1692,13 @@ func _capture_commanded_command(command: GameCommand, result: Dictionary) -> voi
 			var source: String = str(command.payload.get("source_attack_id", ""))
 			var step: int = int(command.payload.get("step_id", -1))
 			if source == "attack:7" \
-					and step == Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE:
-				_counter_resolve_projection_seen = true
-			if source == "attack:7" \
 					and step == Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
 					and int(command.payload.get("controller_player", -1)) == 1:
+				_counter_choice_publication_count += 1
 				_counter_choice_projection_seen = true
+				_counter_complete_publication_seen = state != null \
+						and CounterPublicationConsistency \
+								.reconstructed_state_is_consistent(state)
 			if bool(command.payload.get("final", false)) \
 					and source != "attack:7":
 				_counter_child_terminal_seen = true
@@ -2768,15 +2770,16 @@ func _advance_counter_release() -> void:
 	var local_ui_ok: bool = _counter_controller_ui_seen \
 			if local_player == 1 else _counter_passive_ui_seen
 	var completed: bool = _counter_choice_sent \
-			and _counter_resolve_projection_seen \
 			and _counter_choice_projection_seen \
+			and _counter_choice_publication_count == 1 \
+			and _counter_complete_publication_seen \
 			and local_ui_ok
 	completed = completed and (
 			(_counter_child_seen and _counter_child_terminal_seen) \
 			if _counter_choice_accept else (
 				not _counter_child_seen \
 				and _history_count(CompleteAttackCommand.TYPE) == 1 \
-				and _history_terminal_publication_count() == 1))
+				and _history_terminal_publication_count() == 0))
 	var commanding_ship: ShipInstance = state.get_ship(0, 0)
 	var composed_return: bool = state.completed_attack_inspection == null \
 			and original != null and original.activated_this_round \
@@ -2895,8 +2898,10 @@ func _counter_release_snapshot(state: GameState) -> Dictionary:
 				"attack_id", "")) if state.interaction_flow != null else "",
 		"delayed_parent_clear_rejected": _counter_delayed_clear_checked \
 				if _role == "host" and _counter_choice_accept else true,
-		"resolve_projection_seen": _counter_resolve_projection_seen,
 		"counter_projection_seen": _counter_choice_projection_seen,
+		"counter_choice_publication_count": _counter_choice_publication_count,
+		"complete_counter_publication_seen":
+				_counter_complete_publication_seen,
 		"controller_ui_seen": _counter_controller_ui_seen,
 		"passive_ui_seen": _counter_passive_ui_seen,
 		"choice_sent": _counter_choice_sent,

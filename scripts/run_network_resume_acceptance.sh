@@ -95,7 +95,7 @@ run_compatibility_hot_seat() {
 }
 run_network_replay() {
   local port="$1"
-  local replay="$PROJECT_DIR/tests/fixtures/baseline_traces/replay_network.json"
+  local replay="$PROJECT_DIR/tests/fixtures/baseline_traces/replay_network_v13.json"
   local host_home="$RUN_ROOT/home-compat-replay-host"
   local client_home="$RUN_ROOT/home-compat-replay-client"
   if [[ ! -f "$replay" ]]; then
@@ -426,7 +426,7 @@ if [[ "$RUN_BUG031_ONLY" == false && "$RUN_COMMANDED_ONLY" == false \
 fi
 HOME="$RUN_ROOT/home-assertions" "$GODOT_BIN" --headless --path "$PROJECT_DIR" --script \
   res://tests/acceptance/network_resume/assertions.gd -- --shared="$SHARED" \
-	--replay="$PROJECT_DIR/tests/fixtures/baseline_traces/replay_network.json" \
+	--replay="$PROJECT_DIR/tests/fixtures/baseline_traces/replay_network_v13.json" \
   --logs="$LOGS" \
 	--section-d-only="$RUN_SECTION_D_ONLY" --bug-031-only="$RUN_BUG031_ONLY" \
 	--commanded-squadron-only="$RUN_COMMANDED_ONLY" \

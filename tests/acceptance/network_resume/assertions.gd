@@ -70,7 +70,7 @@ func _assert_bug070_071_network(shared: String) -> bool:
 						"%s-%s-%d.json" % [scenario, role, mapping])
 				var record: Dictionary = _load_record(path)
 				if record.is_empty() or not bool(record.get("ok", false)) \
-						or int(record.get("protocol", 0)) != 11 \
+						or int(record.get("protocol", 0)) != 12 \
 						or int(record.get("canonical_installs", 0)) != 1 \
 						or int(record.get("board_releases", 0)) != 1 \
 						or int(record.get("board_entries", 0)) != (0 \
@@ -146,7 +146,7 @@ func _assert_fresh_and_reconnect(shared: String,
 			var record := _load_record(path)
 			if record.is_empty():
 				return false
-			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 11 \
+			if not bool(record.get("ok", false)) or int(record.get("protocol", 0)) != 12 \
 					or not bool(record.get("admission", false)) \
 					or int(record.get("canonical_installs", 0)) != 1 \
 					or int(record.get("board_releases", 0)) != 1 \
@@ -246,7 +246,7 @@ func _assert_counter_release_variant(shared: String, variant: String,
 							variant, choice, role, mapping])
 			var record: Dictionary = _load_record(path)
 			if record.is_empty() or not bool(record.get("ok", false)) \
-					or int(record.get("protocol", 0)) != 11 \
+					or int(record.get("protocol", 0)) != 12 \
 					or int(record.get("canonical_installs", 0)) != 1 \
 					or int(record.get("board_releases", 0)) != 1 \
 					or int(record.get("board_entries", 0)) != 1 \
@@ -267,8 +267,9 @@ func _assert_counter_release_variant(shared: String, variant: String,
 					or str(evidence.get("choice", "")) != choice \
 					or bool(evidence.get("counter_attacker_destroyed", false)) \
 							!= (variant == "destroyed") \
-					or not bool(evidence.get("resolve_projection_seen", false)) \
 					or not bool(evidence.get("counter_projection_seen", false)) \
+					or int(evidence.get("counter_choice_publication_count", 0)) != 1 \
+					or not bool(evidence.get("complete_counter_publication_seen", false)) \
 					or not bool(evidence.get("choice_sent", false)) \
 					or not bool(evidence.get("inspection_satisfied", false)) \
 					or not _contains_ordered_types(types, common_order) \
@@ -314,8 +315,7 @@ func _assert_counter_release_variant(shared: String, variant: String,
 						or not bool(evidence.get(
 								"child_inspection_consumed", false)) \
 						or not _contains_ordered_types(types, [
-							"begin_attack", "publish_attack_flow",
-							"publish_attack_flow", "roll_dice",
+							"begin_attack", "publish_attack_flow", "roll_dice",
 							"confirm_attack_dice", "commit_accuracy",
 							"resolve_damage", "complete_attack",
 							"publish_attack_flow",
@@ -329,7 +329,7 @@ func _assert_counter_release_variant(shared: String, variant: String,
 			else:
 				if int(evidence.get("begin_count", 0)) != 0 \
 						or bool(evidence.get("child_seen", false)) \
-						or int(evidence.get("terminal_count", 0)) != 1:
+						or int(evidence.get("terminal_count", 0)) != 0:
 					_fail("Counter decline lifecycle is incomplete: " + path)
 					return false
 			if role == "client" \
@@ -392,7 +392,7 @@ func _assert_bug072_attack_flow(shared: String) -> bool:
 					"bug072-%s-%d.json" % [role, mapping])
 			var record: Dictionary = _load_record(path)
 			if record.is_empty() or not bool(record.get("ok", false)) \
-					or int(record.get("protocol", 0)) != 11 \
+					or int(record.get("protocol", 0)) != 12 \
 					or int(record.get("canonical_installs", 0)) != 1 \
 					or int(record.get("board_releases", 0)) != 1 \
 					or int(record.get("board_entries", 0)) != 1 \
@@ -450,7 +450,7 @@ func _assert_bug043_stabilization(shared: String) -> bool:
 			shared.path_join("bug043-reconnect.json"))
 	for record: Dictionary in [host, initial, reconnect]:
 		if record.is_empty() or not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 11:
+				or int(record.get("protocol", 0)) != 12:
 			_fail("BUG-043 process evidence is incomplete")
 			return false
 	var host_evidence: Dictionary = host.get("bug043", {}) as Dictionary
@@ -500,7 +500,7 @@ func _assert_commanded_squadron_ordering(shared: String) -> bool:
 		if record.is_empty():
 			return false
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 11 \
+				or int(record.get("protocol", 0)) != 12 \
 				or not bool(record.get("admission", false)) \
 				or int(record.get("player_index", -1)) \
 						!= (0 if role == "host" else 1) \
@@ -591,7 +591,7 @@ func _assert_bug031_commanded_decline(shared: String) -> bool:
 		if record.is_empty():
 			return false
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 11 \
+				or int(record.get("protocol", 0)) != 12 \
 				or not bool(record.get("admission", false)) \
 				or int(record.get("canonical_installs", 0)) != 1 \
 				or int(record.get("board_releases", 0)) != 1 \
@@ -645,7 +645,7 @@ func _assert_bug031_activation_gate(shared: String) -> bool:
 		var path := shared.path_join("activation-gate-" + role + ".json")
 		var record := _load_record(path)
 		if record.is_empty() or not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 11:
+				or int(record.get("protocol", 0)) != 12:
 			_fail("BUG-031 activation gate process failed: " + path)
 			return false
 		var evidence: Dictionary = record.get("activation_gate", {}) as Dictionary
@@ -700,7 +700,7 @@ func _assert_client_end_activation(shared: String) -> bool:
 		if record.is_empty():
 			return false
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 11 \
+				or int(record.get("protocol", 0)) != 12 \
 				or not bool(record.get("admission", false)) \
 				or int(record.get("player_index", -1)) \
 						!= (0 if role == "host" else 1) \
@@ -749,7 +749,7 @@ func _assert_network_same_live_compatibility(shared: String) -> bool:
 			return false
 		var compatibility: Dictionary = record.get("compatibility", {}) as Dictionary
 		if not bool(record.get("ok", false)) \
-				or int(record.get("protocol", 0)) != 11 \
+				or int(record.get("protocol", 0)) != 12 \
 				or int(record.get("canonical_installs", 0)) != 3 \
 				or int(record.get("board_releases", 0)) != 3 \
 				or bool(record.get("resume_attempt_active", true)) \
@@ -757,8 +757,8 @@ func _assert_network_same_live_compatibility(shared: String) -> bool:
 			_fail("same-live Network named/checkpoint compatibility failed: " + path)
 			return false
 		if role == "host":
-			if int(compatibility.get("named_save_version", 0)) != 10 \
-					or int(compatibility.get("checkpoint_version", 0)) != 10 \
+			if int(compatibility.get("named_save_version", 0)) != 11 \
+					or int(compatibility.get("checkpoint_version", 0)) != 11 \
 					or not bool(compatibility.get("checkpoint_persisted", false)) \
 					or int(compatibility.get("assignment_events_after_initial", -1)) != 0:
 				_fail("same-live Network save/checkpoint version or no-assignment boundary failed: " + path)
@@ -776,8 +776,8 @@ func _assert_hot_seat_compatibility(shared: String) -> bool:
 			or int(record.get("canonical_installs", 0)) != 2 \
 			or int(record.get("assignment_events", -1)) != 0 \
 			or bool(record.get("resume_attempt_active", true)) \
-			or int(compatibility.get("named_save_version", 0)) != 10 \
-			or int(compatibility.get("checkpoint_version", 0)) != 10 \
+			or int(compatibility.get("named_save_version", 0)) != 11 \
+			or int(compatibility.get("checkpoint_version", 0)) != 11 \
 			or not bool(compatibility.get("checkpoint_persisted", false)) \
 			or compatibility.get("binding_before", {}) != compatibility.get("binding_after", {}) \
 			or int(compatibility.get("network_role", -1)) != 0 \
@@ -799,10 +799,10 @@ func _assert_network_replay_compatibility(
 		return false
 	var replay_data: Dictionary = parsed.data as Dictionary
 	var header: Dictionary = replay_data.get("header", {}) as Dictionary
-	if int(header.get("format_version", 0)) != 12 \
+	if int(header.get("format_version", 0)) != 13 \
 			or not (header.get("match_player_control_binding", {}) is Dictionary) \
 			or not (replay_data.get("commands", []) is Array):
-		_fail("Network replay artifact is not persisted replay format 12: " + replay_path)
+		_fail("Network replay artifact is not persisted replay format 13: " + replay_path)
 		return false
 	var host_hash_path := shared.path_join("network-replay-host.jsonl.state_hash")
 	var client_hash_path := shared.path_join("network-replay-client.jsonl.state_hash")
@@ -819,9 +819,9 @@ func _assert_network_replay_compatibility(
 		_fail("Network replay host log is missing.")
 		return false
 	var log_text := FileAccess.get_file_as_string(host_log)
-	if log_text.find("protocol v11") == -1 or log_text.find("Handshake from peer") == -1 \
-			or log_text.find(" v11,") == -1:
-		_fail("Network replay did not negotiate protocol 11 over live ENet.")
+	if log_text.find("protocol v12") == -1 or log_text.find("Handshake from peer") == -1 \
+			or log_text.find(" v12,") == -1:
+		_fail("Network replay did not negotiate protocol 12 over live ENet.")
 		return false
 	if log_text.to_lower().find("fresh resume") != -1 \
 			or log_text.to_lower().find("explicit side assignment") != -1:

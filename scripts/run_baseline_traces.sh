@@ -19,18 +19,20 @@
 #   ./scripts/run_baseline_traces.sh                # hot-seat only (default)
 #   ./scripts/run_baseline_traces.sh --hot-seat     # hot-seat only (explicit)
 #   ./scripts/run_baseline_traces.sh --network      # network only
-#   ./scripts/run_baseline_traces.sh --all          # both
+#   ./scripts/run_baseline_traces.sh --counter      # Counter replay only
+#   ./scripts/run_baseline_traces.sh --all          # all three
 #
 # Network requires fixtures captured manually once:
-#   - tests/fixtures/baseline_traces/replay_network.json
+#   - tests/fixtures/baseline_traces/replay_network_v13.json
 #       (the GameReplay produced by playing LS R1-R2 in network mode)
 # Network has no committed state-hash oracle yet.  The gate verifies
 # host/client equivalence and prints the observed hash for diagnosis.
 #
-# Hot-seat fixtures (already committed):
-#   - tests/fixtures/baseline_traces/replay_hot_seat_solo.json
-#   - tests/fixtures/baseline_traces/baseline_trace_hot_seat_solo.jsonl
-#   - tests/fixtures/baseline_traces/baseline_state_hash_hot_seat_solo.txt
+# Current-format inputs are Owner-recorded and approved separately. Historical
+# Replay-12 fixtures remain untouched at their original paths.
+#   - replay_hot_seat_v13.json (with approved _v13 trace/hash oracles)
+#   - replay_network_v13.json
+#   - replay_counter_v13.json (complete Counter command history)
 # ------------------------------------------------------------------------------
 set -euo pipefail
 
@@ -59,6 +61,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --hot-seat) MODE="hot-seat"; shift ;;
         --network)  MODE="network"; shift ;;
+        --counter)  MODE="counter"; shift ;;
         --all)      MODE="all"; shift ;;
         -h|--help)
             sed -n '2,25p' "$0"
@@ -98,9 +101,9 @@ diff_or_fail() {
 }
 
 run_hot_seat() {
-    local replay="$FIXTURE_DIR/replay_hot_seat_solo.json"
-    local expected="$FIXTURE_DIR/baseline_trace_hot_seat_solo.jsonl"
-    local expected_hash="$FIXTURE_DIR/baseline_state_hash_hot_seat_solo.txt"
+    local replay="$FIXTURE_DIR/replay_hot_seat_v13.json"
+    local expected="$FIXTURE_DIR/baseline_trace_hot_seat_v13.jsonl"
+    local expected_hash="$FIXTURE_DIR/baseline_state_hash_hot_seat_v13.txt"
     local actual="$TMP_DIR/hot_seat_solo.jsonl"
     if ! [[ -f "$replay" ]]; then
         echo "ERROR: missing fixture $replay" >&2
@@ -128,12 +131,12 @@ run_hot_seat() {
 }
 
 run_network() {
-    local replay="$FIXTURE_DIR/replay_network.json"
+    local replay="$FIXTURE_DIR/replay_network_v13.json"
     local actual_host="$TMP_DIR/network_host.jsonl"
     local actual_client="$TMP_DIR/network_client.jsonl"
     if ! [[ -f "$replay" ]]; then
-        echo "SKIP [network] - missing $replay (capture manually via run_network_test.sh; see docs)" >&2
-        return 0
+        echo "ERROR: missing Owner-recorded Replay-13 Network fixture $replay" >&2
+        return 1
     fi
     echo "=== Network ==="
     # Start headless host with replay loaded.
@@ -180,11 +183,36 @@ run_network() {
     return $rc
 }
 
+run_counter() {
+    local replay="$FIXTURE_DIR/replay_counter_v13.json"
+    local actual="$TMP_DIR/counter.jsonl"
+    if ! [[ -f "$replay" ]]; then
+        echo "ERROR: missing Owner-recorded Replay-13 Counter fixture $replay" >&2
+        return 1
+    fi
+    echo "=== Counter replay ==="
+    if ! "$GODOT" --headless --path "$PROJECT_DIR" \
+            --log-file "$TMP_DIR/counter_godot.log" -- \
+            --replay "$replay" --baseline-output "$actual" \
+            >"$TMP_DIR/counter.log" 2>&1; then
+        echo "FAIL [counter] - Godot process exited non-zero:" >&2
+        tail -60 "$TMP_DIR/counter.log" >&2
+        return 1
+    fi
+    if ! [[ -s "$actual" && -s "${actual}.state_hash" ]] \
+            || ! grep -q '"command_type":"counter_choice"' "$actual"; then
+        echo "FAIL [counter] - replay lacks a Counter choice or final-state evidence" >&2
+        return 1
+    fi
+    echo "PASS [counter-replay]"
+}
+
 EXIT=0
 case "$MODE" in
     hot-seat) run_hot_seat || EXIT=1 ;;
     network)  run_network || EXIT=1 ;;
-    all)      run_hot_seat || EXIT=1; run_network || EXIT=1 ;;
+    counter)  run_counter || EXIT=1 ;;
+    all)      run_hot_seat || EXIT=1; run_network || EXIT=1; run_counter || EXIT=1 ;;
 esac
 
 if [[ $EXIT -eq 0 ]]; then

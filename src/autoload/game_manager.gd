@@ -1645,6 +1645,35 @@ func submit_confirm_attack_dice(player: int,
 
 ## Submits a [CounterChoiceCommand] from the squadron owner who may resolve
 ## Counter after being attacked by a non-Counter squadron attack.
+func counter_choice_context_for_parent() -> Dictionary:
+	var state: GameState = current_game_state
+	if state == null:
+		return {}
+	var parent: CurrentAttackState = state.current_attack_state
+	var flow: InteractionFlow = state.interaction_flow
+	if parent == null or not parent.active or flow == null \
+			or parent.counter_disposition \
+					!= CurrentAttackState.COUNTER_UNDECIDED \
+			or not CounterPublicationConsistency \
+					.reconstructed_state_is_consistent(state) \
+			or flow.payload.get("attack_id") != parent.attack_id:
+		return {}
+	var counter: SquadronInstance = state.get_squadron(
+			parent.defender_player, parent.defender_index)
+	var blue: int = SquadronKeywordRuleHelper.get_keyword_value(
+			counter, SquadronKeywordRuleHelper.KEYWORD_COUNTER)
+	if blue <= 0:
+		return {}
+	return {
+		"attack_id": parent.attack_id,
+		"counter_attacker_player": parent.defender_player,
+		"counter_attacker_squadron_index": parent.defender_index,
+		"counter_target_player": parent.attacker_player,
+		"counter_target_squadron_index": parent.attacker_index,
+		"counter_dice_pool": {"BLUE": blue},
+	}
+
+
 func submit_counter_choice(player: int,
 		accepted: bool,
 		counter_context: Dictionary = {}) -> Dictionary:

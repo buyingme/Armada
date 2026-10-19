@@ -531,58 +531,18 @@ func _enqueue_counter_begin_publication(command: GameCommand,
 			or flow == null \
 			or flow.flow_type != Constants.InteractionFlow.ATTACK \
 			or flow.step_id \
-					!= Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
-			or not bool(flow.payload.get("counter_choice_accepted", false)) \
-			or int(flow.payload.get("counter_attacker_player", -1)) \
-					!= attack.attacker_player \
-			or int(flow.payload.get("counter_attacker_squadron_index", -1)) \
-					!= attack.attacker_index \
-			or int(flow.payload.get("counter_target_player", -1)) \
-					!= attack.defender_player \
-			or int(flow.payload.get("counter_target_squadron_index", -1)) \
-					!= attack.defender_index:
+					!= Constants.InteractionStep.ATTACK_DECLARE \
+			or flow.payload.get("attack_id") != attack.attack_id:
 		return
-	var flow_payload: Dictionary = {
-		"attack_id": attack.attack_id,
-		"attacker_kind": attack.attacker_kind,
-		"attacker_player": attack.attacker_player,
-		"attacker_squadron_index": attack.attacker_index,
-		"attacker_zone": attack.attacker_zone,
-		"target_kind": attack.defender_kind,
-		"defender_player": attack.defender_player,
-		"target_squadron_index": attack.defender_index,
-		"defender_zone": attack.defender_zone,
-		"attack_kind": attack.attack_kind,
-		"range_band": attack.range_band,
-		"obstructed": attack.obstructed,
-		"dice_pool": attack.dice_pool.duplicate(true),
-		"dice_results": attack.dice_results.duplicate(true),
-	}
-	var attacker: SquadronInstance = game_state.get_squadron(
-			attack.attacker_player, attack.attacker_index)
-	var defender: SquadronInstance = game_state.get_squadron(
-			attack.defender_player, attack.defender_index)
-	if attacker == null or attacker.squadron_data == null \
-			or defender == null or defender.squadron_data == null:
-		return
-	flow_payload["attacker_name"] = attacker.squadron_data.squadron_name
-	flow_payload["defender_name"] = defender.squadron_data.squadron_name
-	flow_payload["attacker_zone_name"] = ""
-	var publications: Array[PublishAttackFlowCommand] = []
-	for step: Constants.InteractionStep in [
-			Constants.InteractionStep.ATTACK_DECLARE,
+	var roll_flow: InteractionFlow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_ROLL,
-	]:
-		var child_flow: InteractionFlow = InteractionFlow.make(
-				Constants.InteractionFlow.ATTACK, step,
-				attack.attacker_player, Constants.Visibility.ALL, flow_payload)
-		var publication: PublishAttackFlowCommand = GameManager \
-				.build_publish_attack_flow_command(
-						game_state, child_flow, attack.attacker_player)
-		if publication == null:
-			return
-		publications.append(publication)
-	for publication: PublishAttackFlowCommand in publications:
+			attack.attacker_player, Constants.Visibility.ALL,
+			flow.payload.duplicate(true))
+	var publication: PublishAttackFlowCommand = GameManager \
+			.build_publish_attack_flow_command(
+					game_state, roll_flow, attack.attacker_player)
+	if publication != null:
 		_observer_followups.append(publication)
 
 

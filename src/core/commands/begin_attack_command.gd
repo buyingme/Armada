@@ -23,7 +23,9 @@ func validate(game_state: GameState) -> String:
 				str(payload.get("completed_attack_inspection_id", "")))
 	if inspection_reason != "":
 		return inspection_reason
-	if game_state.current_attack_state.active:
+	if game_state.current_attack_state.active \
+			and _canonical_attack_kind() \
+					!= SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
 		return "Another current attack is active."
 	if game_state.current_phase != Constants.GamePhase.SHIP \
 			and game_state.current_phase != Constants.GamePhase.SQUADRON:
@@ -59,6 +61,11 @@ func validate(game_state: GameState) -> String:
 func execute(game_state: GameState) -> Dictionary:
 	var inspection_id: String = str(payload.get(
 			"completed_attack_inspection_id", ""))
+	var parent_before: CurrentAttackState = game_state.current_attack_state
+	var replacing_counter_parent: bool = parent_before != null \
+			and parent_before.active \
+			and _canonical_attack_kind() \
+					== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER
 	var inspection_before: CompletedAttackInspection = \
 		game_state.completed_attack_inspection
 	var ship: ShipInstance = _tracked_attacker_ship(game_state)
@@ -116,7 +123,8 @@ func execute(game_state: GameState) -> Dictionary:
 			squadron.restore_activation_action_state(action_snapshot)
 		return {}
 	if not game_state.validate_declaration_adjacent_state():
-		game_state.set_current_attack_state(CurrentAttackState.inactive())
+		game_state.set_current_attack_state(parent_before \
+				if replacing_counter_parent else CurrentAttackState.inactive())
 		if inspection_before != null:
 			game_state.restore_completed_attack_inspection_for_rollback(
 					inspection_before)
@@ -129,6 +137,34 @@ func execute(game_state: GameState) -> Dictionary:
 		_log.debug("Begin after authoritative progress commit: %s" %
 				JSON.stringify(ship.attack_progress_snapshot()))
 	if _canonical_attack_kind() \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+		var counter_attacker: SquadronInstance = game_state.get_squadron(
+				state.attacker_player, state.attacker_index)
+		var counter_defender: SquadronInstance = game_state.get_squadron(
+				state.defender_player, state.defender_index)
+		game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+				Constants.InteractionFlow.ATTACK,
+				Constants.InteractionStep.ATTACK_DECLARE, game_state,
+				{"attacker_player": player_index}, Constants.Visibility.ALL, {
+					"attack_id": attack_id,
+					"attacker_kind": state.attacker_kind,
+					"attacker_player": state.attacker_player,
+					"attacker_squadron_index": state.attacker_index,
+					"attacker_zone": state.attacker_zone,
+					"target_kind": state.defender_kind,
+					"defender_player": state.defender_player,
+					"target_squadron_index": state.defender_index,
+					"defender_zone": state.defender_zone,
+					"attack_kind": state.attack_kind,
+					"range_band": state.range_band,
+					"obstructed": state.obstructed,
+					"dice_pool": pool.duplicate(true),
+					"dice_results": state.dice_results.duplicate(true),
+					"attacker_name": counter_attacker.squadron_data.squadron_name,
+					"defender_name": counter_defender.squadron_data.squadron_name,
+					"attacker_zone_name": "",
+				})
+	elif _canonical_attack_kind() \
 			== SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD:
 		game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 				Constants.InteractionFlow.ATTACK,
@@ -439,18 +475,36 @@ func _validate_counter_identity(game_state: GameState,
 	var flow: InteractionFlow = game_state.interaction_flow
 	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK \
 			or flow.step_id != Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
-			or not bool(flow.payload.get("counter_choice_accepted", false)):
+			or not CounterPublicationConsistency \
+					.reconstructed_state_is_consistent(game_state):
 		return "No accepted Counter attack is pending."
+	var source: Variant = payload.get("counter_source_attack_id")
+	if typeof(source) != TYPE_STRING or str(source).is_empty() \
+			or flow.payload.get("attack_id") != source:
+		return "Counter parent source identity is stale."
 	var inspection_id: String = str(payload.get(
 			"completed_attack_inspection_id", ""))
 	var inspection: CompletedAttackInspection = \
 			game_state.completed_attack_inspection
-	if inspection == null or inspection_id.is_empty() \
+	var parent: CurrentAttackState = game_state.current_attack_state
+	if parent != null and parent.active:
+		if inspection != null or not inspection_id.is_empty() \
+				or parent.counter_disposition \
+						!= CurrentAttackState.COUNTER_ACCEPTED \
+				or parent.attack_id != source \
+				or not game_state.get_distinct_controlling_principal_ids(
+						MatchPlayerControlBinding.KIND_HUMAN).is_empty() \
+				or parent.attacker_player != int(payload["defender_player"]) \
+				or parent.attacker_index != int(payload["defender_index"]) \
+				or parent.defender_player != int(payload["attacker_player"]) \
+				or parent.defender_index != int(payload["attacker_index"]):
+			return "Counter parent does not permit atomic child replacement."
+	elif inspection == null or inspection_id.is_empty() \
 			or inspection.inspection_id() != inspection_id \
 			or not inspection.is_satisfied() \
-			or typeof(flow.payload.get("attack_id")) != TYPE_STRING \
-			or inspection.source_attack_id() \
-					!= str(flow.payload.get("attack_id", "")):
+			or inspection.counter_disposition() \
+					!= CurrentAttackState.COUNTER_ACCEPTED \
+			or inspection.source_attack_id() != source:
 		return "Counter parent inspection does not match the accepted choice."
 	var expected: Dictionary = {
 		"counter_attacker_player": int(payload.get("attacker_player", -1)),

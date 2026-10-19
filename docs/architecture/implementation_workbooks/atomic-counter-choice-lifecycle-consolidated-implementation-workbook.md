@@ -1,7 +1,7 @@
 # Atomic Counter-Choice Lifecycle — Consolidated Implementation Workbook
 
-Status: **Owner ACCEPTED 2026-10-17; Stages A–C Owner ACCEPTED and Stage D
-implementation AUTHORIZED 2026-10-19; Stages E/F remain NOT AUTHORIZED.**
+Status: **Owner ACCEPTED 2026-10-17; Stages A–D Owner ACCEPTED and Stage E
+implementation AUTHORIZED 2026-10-19; Stage F remains NOT AUTHORIZED.**
 Prepared: 2026-10-17. Architecture accepted by the Project Owner after
 independent acceptance audit and targeted re-audit. The independent
 implementation-readiness audit passed without blockers. Boundary B
@@ -389,3 +389,25 @@ The [Stage C evidence](../evidence/atomic-counter-stage-c-implementation-evidenc
 records the corrected related-suite assertion count and the separate
 mapping-1 ENet rerun provenance. Stages E/F remain unauthorized. No replay
 fixture, baseline, hash, or historical Owner evidence promotion is authorized.
+
+**Stage D implementation checkpoint — 2026-10-19:** The source-bound
+single-use choice, canonical parent disposition, inspection **I** witness,
+no-**I** atomic child replacement, child Roll, inspection **J** creation, and
+bounded enclosing-route implementation are recorded in the
+[Stage D implementation evidence](../evidence/atomic-counter-stage-d-implementation-evidence.md).
+The focused Stage D gate passed; the normal-access full suite retained exactly
+the sixteen previously deferred failures. The current real-ENet acceptance
+driver reached the enclosing Ship return in mapping 0 but timed out on its
+obsolete intermediate-publication completion predicate, assigned to Stage F.
+Stage D awaits independent audit and separate Owner acceptance. Stages E/F,
+fixture recording, and baseline/hash promotion remain unauthorized.
+
+**Stage D Owner acceptance and Stage E direction — 2026-10-19:** The Owner
+accepted Stage D following independent audit PASS and separately authorized
+Stage E under this workbook: decision-equivalent recovery, exact-once
+inspection release, destroyed-original terminal behavior, legal Move/Skip and
+exhaustion, and enclosing Squadron Phase/commanded-Ship return. The
+[Stage D evidence](../evidence/atomic-counter-stage-d-implementation-evidence.md)
+records the accepted focused and full-suite results and the deferred runner
+gate. Stage F, Replay-13 fixture recording, runner renewal, and baseline/hash
+promotion remain unauthorized.

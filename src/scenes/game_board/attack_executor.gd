@@ -3662,19 +3662,19 @@ func _squadron_instance_for_token(token: SquadronToken) -> SquadronInstance:
 
 
 func _on_counter_attack_requested() -> void:
-	if _pending_counter_attacker == null or _pending_counter_target == null:
+	var context: Dictionary = GameManager.counter_choice_context_for_parent()
+	if context.is_empty():
 		return
 	GameManager.submit_counter_choice(
-			_get_counter_controller_player(), true,
-			_counter_choice_payload(true))
+			int(context["counter_attacker_player"]), true, context)
 
 
 func _on_counter_attack_skipped() -> void:
-	if _pending_counter_attacker == null or _pending_counter_target == null:
+	var context: Dictionary = GameManager.counter_choice_context_for_parent()
+	if context.is_empty():
 		return
 	GameManager.submit_counter_choice(
-			_get_counter_controller_player(), false,
-			_counter_choice_payload(true))
+			int(context["counter_attacker_player"]), false, context)
 
 
 ## Applies an accepted [CounterChoiceCommand] result on the peer that owns

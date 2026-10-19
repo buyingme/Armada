@@ -700,12 +700,11 @@ func _on_counter_attack_skipped() -> void:
 
 
 func _submit_counter_choice(accepted: bool) -> void:
-	var payload: Dictionary = _current_flow_payload()
-	var controller: int = int(payload.get(
-			CounterKeyword.PAYLOAD_CONTROLLER_PLAYER, -1))
-	if controller < 0:
+	var context: Dictionary = GameManager.counter_choice_context_for_parent()
+	if context.is_empty():
 		return
-	GameManager.submit_counter_choice(controller, accepted, payload)
+	GameManager.submit_counter_choice(
+			int(context["counter_attacker_player"]), accepted, context)
 
 
 func _on_roll_dice_pressed() -> void:

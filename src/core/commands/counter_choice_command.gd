@@ -1,8 +1,8 @@
 ## CounterChoiceCommand
 ##
-## Marker command submitted by the squadron owner who may resolve Counter.
-## The command records whether that player accepts or skips the optional
-## Counter attack; the active attack pipeline reacts to the broadcast result.
+## Source-bound command submitted by the squadron owner who may resolve Counter.
+## It commits the single-use disposition in the active parent Attack state;
+## the active attack pipeline reacts to the broadcast result.
 ##
 ## Rules Reference: RRG "Squadron Keywords" — Counter.
 class_name CounterChoiceCommand
@@ -102,15 +102,23 @@ func validate(game_state: GameState) -> String:
 	return ""
 
 
-## Echoes the choice payload and records the accepted existing Counter
-## lifecycle decision so BeginAttackCommand can validate attack kind/identity.
+## Commits the single source-scoped decision in the parent Attack owner. The
+## flow boolean is only a projection of that accepted canonical replacement.
 func execute(game_state: GameState) -> Dictionary:
+	var parent: CurrentAttackState = game_state.current_attack_state
+	var accepted: bool = bool(payload["accepted"])
+	var disposition: String = CurrentAttackState.COUNTER_ACCEPTED \
+			if accepted else CurrentAttackState.COUNTER_DECLINED
+	var replacement: CurrentAttackState = parent.with_patch({
+		"counter_disposition": disposition,
+	})
+	if replacement == null \
+			or not game_state.set_current_attack_state(replacement):
+		return {}
+	game_state.interaction_flow.payload["counter_choice_accepted"] = accepted
 	var result: Dictionary = payload.duplicate(true)
 	result.erase("accepted")
-	result[RESULT_COUNTER_ACCEPTED] = bool(payload.get("accepted", false))
-	if game_state != null and game_state.interaction_flow != null:
-		game_state.interaction_flow.payload["counter_choice_accepted"] = \
-				bool(result[RESULT_COUNTER_ACCEPTED])
+	result[RESULT_COUNTER_ACCEPTED] = accepted
 	return result
 
 

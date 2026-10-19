@@ -12,6 +12,7 @@ const H9_RULE: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
 const COMPLETED_ATTACK_INSPECTION: GDScript = preload(
 		"res://src/core/state/completed_attack_inspection.gd")
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
 
 var _log: GameLogger = GameLogger.new("CompleteAttackCommand")
 
@@ -39,6 +40,31 @@ func validate(game_state: GameState) -> String:
 		return "A completed attack inspection is already pending."
 	if attack.resolved_outcome.is_empty():
 		return "Current attack has no terminal resolved outcome."
+	var counter_parent: bool = attack.counter_disposition \
+			!= CurrentAttackState.COUNTER_UNDECIDED
+	var counter_child: bool = attack.attack_kind \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER
+	if counter_parent:
+		if not CounterPublicationConsistency \
+				.reconstructed_state_is_consistent(game_state):
+			return "Counter parent decision and publication disagree."
+		if attack.counter_disposition == CurrentAttackState.COUNTER_ACCEPTED \
+				and game_state.get_distinct_controlling_principal_ids(
+						MatchPlayerControlBinding.KIND_HUMAN).is_empty():
+			return "Accepted Counter parent requires atomic child Begin."
+		if attack.counter_disposition == CurrentAttackState.COUNTER_DECLINED \
+				and _counter_enclosing_route(game_state, attack) == null:
+			return "Counter parent has no canonical enclosing route."
+	elif game_state.interaction_flow != null \
+			and game_state.interaction_flow.flow_type \
+					== Constants.InteractionFlow.ATTACK \
+			and game_state.interaction_flow.step_id \
+					== Constants.InteractionStep.ATTACK_COUNTER_CHOICE:
+		return "Counter choice has not committed."
+	if counter_child and game_state.get_distinct_controlling_principal_ids(
+			MatchPlayerControlBinding.KIND_HUMAN).is_empty() \
+			and _counter_enclosing_route(game_state, attack) == null:
+		return "Counter child has no canonical enclosing route."
 	return ""
 
 func execute(game_state: GameState) -> Dictionary:
@@ -54,6 +80,17 @@ func execute(game_state: GameState) -> Dictionary:
 	var required_ids: Array[String] = \
 		game_state.get_distinct_controlling_principal_ids(
 				MatchPlayerControlBinding.KIND_HUMAN)
+	var counter_parent: bool = attack.counter_disposition \
+			!= CurrentAttackState.COUNTER_UNDECIDED
+	var counter_child: bool = attack.attack_kind \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER
+	var enclosing_route: InteractionFlow = null
+	if (counter_parent and attack.counter_disposition \
+			== CurrentAttackState.COUNTER_DECLINED) \
+			or (counter_child and required_ids.is_empty()):
+		enclosing_route = _counter_enclosing_route(game_state, attack)
+		if enclosing_route == null:
+			return {}
 	var inspection: CompletedAttackInspection = null
 	if not required_ids.is_empty():
 		inspection = COMPLETED_ATTACK_INSPECTION.create_from_attack(
@@ -66,6 +103,8 @@ func execute(game_state: GameState) -> Dictionary:
 				inspection):
 		game_state.set_current_attack_state(attack)
 		return {}
+	if enclosing_route != null:
+		game_state.interaction_flow = enclosing_route
 	# PAC-OD-007 retains an exhausted anti-squadron iteration while a result
 	# inspection is pending. SkipAttackCommand(squadron_done) closes it later.
 	if exhaust_squadron_iteration and inspection == null:
@@ -88,6 +127,55 @@ func execute(game_state: GameState) -> Dictionary:
 			JSON.stringify(ship.attack_progress_snapshot()),
 		])
 	return result
+
+
+## The retained original Squadron is the sole owner of its enclosing action.
+## A Counter child reverses the parent roles, so its defender is the original.
+func _counter_enclosing_route(game_state: GameState,
+		attack: CurrentAttackState) -> InteractionFlow:
+	var child: bool = attack.attack_kind \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER
+	var player: int = attack.defender_player if child else attack.attacker_player
+	var index: int = attack.defender_index if child else attack.attacker_index
+	var squadron: SquadronInstance = game_state.get_squadron(player, index)
+	if squadron == null or squadron.activated_this_round \
+			or squadron != game_state.get_active_squadron_activation() \
+			or squadron.attack_action_disposition \
+					!= SquadronInstance.ATTACK_ACTION_BEGUN \
+			or squadron.activation_id.is_empty():
+		return null
+	var context: String = squadron.activation_context
+	var route_payload: Dictionary = {
+		"squadron_index": index,
+		"activation_id": squadron.activation_id,
+		"activation_context": context,
+	}
+	if context == SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		if game_state.current_phase != Constants.GamePhase.SQUADRON \
+				or game_state.squadron_phase_controller_player != player:
+			return null
+		return FLOW_SPEC_SCRIPT.make_interaction_flow(
+				Constants.InteractionFlow.SQUADRON_ACTIVATION,
+				Constants.InteractionStep.ACTION_CHOICE, game_state,
+				{"active_player": player}, Constants.Visibility.ALL,
+				route_payload)
+	if context != SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
+			or game_state.current_phase != Constants.GamePhase.SHIP:
+		return null
+	var ship: ShipInstance = game_state.get_ship(
+			squadron.commanding_ship_player, squadron.commanding_ship_index)
+	if ship == null or ship != game_state.get_active_ship_activation() \
+			or ship.owner_player != player \
+			or ship.squadron_command_opportunity_disposition \
+					!= ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		return null
+	route_payload["ship_index"] = squadron.commanding_ship_index
+	route_payload["ship_activation_identity"] = ship.ship_activation_identity
+	return FLOW_SPEC_SCRIPT.make_interaction_flow(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.SQUADRON_STEP, game_state,
+			{"active_player": player}, Constants.Visibility.ALL,
+			route_payload)
 
 
 func _tracked_attacker_ship(game_state: GameState,

@@ -60,6 +60,8 @@ static func derive_reconstructed_resolved_attack(
 	if attack == null or not attack.active \
 			or attack.stage != CurrentAttackState.STAGE_RESOLVED:
 		return null
+	if attack.counter_disposition != CurrentAttackState.COUNTER_UNDECIDED:
+		return _derive_decided_counter_parent(game_state, attack)
 	if counter_opportunity(game_state, attack):
 		return _build_counter_publication(game_state, attack)
 	if _post_damage_decision_pending(game_state, attack):
@@ -193,7 +195,7 @@ static func _derive_followup(game_state: GameState,
 			return _build_complete_attack(attack)
 	if command.command_type == "counter_choice" \
 			and attack.stage == CurrentAttackState.STAGE_RESOLVED:
-		return _build_complete_attack(attack)
+		return _derive_decided_counter_parent(game_state, attack)
 	if command.command_type in ["resolve_immediate_effect",
 			"acknowledge_faceup_damage"] \
 			and attack.stage == CurrentAttackState.STAGE_RESOLVED \
@@ -317,10 +319,9 @@ static func _derive_inspection_release(game_state: GameState) -> GameCommand:
 	var inspection: CompletedAttackInspection = game_state.completed_attack_inspection
 	if inspection == null or not inspection.is_satisfied():
 		return null
-	var counter_begin: GameCommand = _derive_counter_inspection_release(
-			game_state, inspection)
-	if counter_begin != null:
-		return counter_begin
+	if inspection.counter_disposition() \
+			== CurrentAttackState.COUNTER_ACCEPTED:
+		return _derive_counter_inspection_release(game_state, inspection)
 	var data: Dictionary = inspection.serialize()
 	if str(data.get("attack_kind", "")) \
 			== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
@@ -404,7 +405,11 @@ static func _counter_child_activation_context_is_valid(game_state: GameState,
 static func _derive_counter_inspection_release(game_state: GameState,
 		inspection: CompletedAttackInspection) -> GameCommand:
 	var flow: InteractionFlow = game_state.interaction_flow
-	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK \
+	if inspection.counter_disposition() \
+			!= CurrentAttackState.COUNTER_ACCEPTED \
+			or not CounterPublicationConsistency \
+					.reconstructed_state_is_consistent(game_state) \
+			or flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK \
 			or flow.step_id != Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
 			or inspection.source_attack_id() \
 					!= str(flow.payload.get("attack_id", "")) \
@@ -442,10 +447,37 @@ static func _derive_counter_inspection_release(game_state: GameState,
 			or int(parent_defender.get("player", -1)) != attacker_player \
 			or int(parent_defender.get("index", -1)) != attacker_index:
 		return null
+	return _build_counter_child_begin(game_state, inspection.source_attack_id(),
+			attacker_player, attacker_index, defender_player, defender_index,
+			inspection.inspection_id())
+
+
+static func _derive_decided_counter_parent(game_state: GameState,
+		parent: CurrentAttackState) -> GameCommand:
+	if parent == null or not parent.active \
+			or parent.counter_disposition \
+					== CurrentAttackState.COUNTER_UNDECIDED \
+			or not CounterPublicationConsistency \
+					.reconstructed_state_is_consistent(game_state):
+		return null
+	if parent.counter_disposition == CurrentAttackState.COUNTER_DECLINED:
+		return _build_complete_attack(parent)
+	if not game_state.get_distinct_controlling_principal_ids(
+			MatchPlayerControlBinding.KIND_HUMAN).is_empty():
+		return _build_complete_attack(parent)
+	return _build_counter_child_begin(game_state, parent.attack_id,
+			parent.defender_player, parent.defender_index,
+			parent.attacker_player, parent.attacker_index, "")
+
+
+static func _build_counter_child_begin(game_state: GameState,
+		source_attack_id: String, attacker_player: int, attacker_index: int,
+		defender_player: int, defender_index: int,
+		inspection_id: String) -> GameCommand:
 	var entry: Dictionary = TargetingListBuilder.authoritative_attack_entry(
-			game_state,
-			attacker_player, CurrentAttackState.KIND_SQUADRON, attacker_index, -1,
-			defender_player, CurrentAttackState.KIND_SQUADRON, defender_index, -1)
+			game_state, attacker_player, CurrentAttackState.KIND_SQUADRON,
+			attacker_index, -1, defender_player,
+			CurrentAttackState.KIND_SQUADRON, defender_index, -1)
 	if entry.is_empty():
 		return null
 	return BeginAttackCommand.new(attacker_player, {
@@ -458,9 +490,10 @@ static func _derive_counter_inspection_release(game_state: GameState,
 		"defender_index": defender_index,
 		"defender_zone": -1,
 		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER,
+		"counter_source_attack_id": source_attack_id,
 		"range_band": str(entry.get("range_band", "")),
 		"obstructed": bool(entry.get("obstructed", false)),
-		"completed_attack_inspection_id": inspection.inspection_id(),
+		"completed_attack_inspection_id": inspection_id,
 	})
 
 
